@@ -1,0 +1,19 @@
+import { Inngest } from "inngest";
+
+export const inngest = new Inngest({
+  id: "truemark-clmep",
+  name: "Truemark Global CLMEP",
+});
+
+// ─── Event type catalogue ─────────────────────────────────────────────────────
+// Centralised so every function and caller uses the same event names.
+
+export const EVENTS = {
+  SEND_MEMBER_WELCOME:       "email/member.welcome",
+  SEND_ENROLMENT_CONFIRM:    "email/enrolment.confirmed",
+  SEND_EXAM_RESULT:          "email/exam.result",
+  SEND_EMAIL_VERIFICATION:   "email/verification.requested",
+  SEND_PASSWORD_RESET:       "email/password.reset.requested",
+  SCAN_UPLOAD:               "upload/scan.requested",
+  BREACH_REPORTED:           "breach/reported",
+} as const;

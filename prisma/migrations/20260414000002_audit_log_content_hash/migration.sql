@@ -1,0 +1,29 @@
+-- ISO 27001 A.8.15 — Tamper evidence: content hash on audit log rows.
+--
+-- Each row stores a SHA-256 hash of its own content (id|action|entityType|
+-- entityId|metadata|userId). If an attacker or rogue DBA issues an UPDATE
+-- on a row, the stored hash will diverge from the hash an auditor computes
+-- from the current column values, making the modification detectable.
+--
+-- Verification query (run on a read-replica or with the audit-reader role):
+--   SELECT id, action, timestamp,
+--          encode(digest(
+--            id || '|' || action || '|' || coalesce(entity_type, '') || '|' ||
+--            coalesce(entity_id, '') || '|' || coalesce(metadata, '') || '|' ||
+--            coalesce(user_id, ''), 'sha256'), 'hex') AS expected_hash,
+--          content_hash AS stored_hash,
+--          encode(digest(
+--            id || '|' || action || '|' || coalesce(entity_type, '') || '|' ||
+--            coalesce(entity_id, '') || '|' || coalesce(metadata, '') || '|' ||
+--            coalesce(user_id, ''), 'sha256'), 'hex') = content_hash AS ok
+--   FROM audit_logs
+--   WHERE content_hash IS NOT NULL
+--     AND encode(digest(
+--          id || '|' || action || '|' || coalesce(entity_type, '') || '|' ||
+--          coalesce(entity_id, '') || '|' || coalesce(metadata, '') || '|' ||
+--          coalesce(user_id, ''), 'sha256'), 'hex') != content_hash;
+--
+-- Any rows returned by the above query indicate tampered records.
+-- Rows where content_hash IS NULL are legacy rows created before this migration.
+
+ALTER TABLE "audit_logs" ADD COLUMN "content_hash" TEXT;

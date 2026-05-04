@@ -1,0 +1,1111 @@
+// Truemark Global CLMEP — Prisma Schema
+// ISO/IEC 17024 compliant personnel certification platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────────────
+
+// SQLite doesn't support native enums — using String with validation at app layer
+
+// UserRole: SUPER_ADMIN | CERTIFICATION_OFFICER | EXAMINER | TRAINER | PROCTOR | AUDITOR | ORG_MANAGER | CANDIDATE
+// AccountStatus: ACTIVE | INACTIVE | SUSPENDED | PENDING_VERIFICATION
+// CourseStatus: DRAFT | PUBLISHED | ARCHIVED
+// EnrolmentStatus: ACTIVE | COMPLETED | EXPIRED | CANCELLED
+// ExamStatus: SCHEDULED | IN_PROGRESS | COMPLETED | CANCELLED | VOIDED
+// CertificateStatus: ACTIVE | EXPIRED | SUSPENDED | REVOKED | LAPSED
+// AppealStatus: SUBMITTED | ACKNOWLEDGED | UNDER_REVIEW | RESOLVED | ESCALATED | CLOSED
+// ComplaintStatus: SUBMITTED | ACKNOWLEDGED | UNDER_REVIEW | RESOLVED | ESCALATED | CLOSED
+// DocumentStatus: DRAFT | UNDER_REVIEW | APPROVED | SUPERSEDED | ARCHIVED
+// NonConformityStatus: OPEN | IN_PROGRESS | CLOSED | VERIFIED
+// PaymentStatus: PENDING | PAID | FAILED | REFUNDED | PARTIALLY_REFUNDED
+// NotificationType: EXAM_REMINDER | CERTIFICATE_EXPIRY | ENROLMENT_CONFIRMATION | PAYMENT_CONFIRMATION | APPEAL_UPDATE | COMPLAINT_UPDATE | CPD_REMINDER | SYSTEM_ALERT | RENEWAL_REMINDER
+// ConsentPurpose: MARKETING | DIRECTORY_LISTING | RESEARCH | CPD_TRACKING | THIRD_PARTY_SHARING
+
+// ─── CORE USER & AUTH ─────────────────────────────────────────────────────────
+
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique @db.VarChar(254)
+  emailVerified      DateTime?
+  passwordHash       String?
+  firstName          String    @db.VarChar(100)
+  lastName           String    @db.VarChar(100)
+  phone              String?   @db.VarChar(30)
+  photoUrl           String?
+  role               String    @default("CANDIDATE")
+  status             String    @default("PENDING_VERIFICATION")
+  signatureUrl       String?
+  mfaEnabled         Boolean   @default(false)
+  mfaSecret          String?
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  mustChangePassword Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  accounts                Account[]
+  sessions                Session[]
+  profile                 CandidateProfile?
+  organisationMemberships OrganisationMember[]
+  enrolments              Enrolment[]
+  examAttempts            ExamAttempt[]
+  certificates            Certificate[]
+  cpdRecords              CPDRecord[]
+  cpdRecordsLogged        CPDRecord[]             @relation("CPDLogger")
+  notifications           Notification[]
+  consentRecords          ConsentRecord[]
+  dataSubjectRequests     DataSubjectRequest[]
+  auditLogs               AuditLog[]
+  appeals                 Appeal[]
+  complaints              Complaint[]
+  coiDeclarations         COIDeclaration[]
+  coursesCreated          Course[]                @relation("CourseCreator")
+  examsCreated            ExamPaper[]             @relation("ExamCreator")
+  certificationDecisions  CertificationDecision[] @relation("CertificationOfficer")
+  examGrades              ExamGrade[]             @relation("Examiner")
+  proctoredSessions       ProctoringSession[]     @relation("Proctor")
+  scormSessions           SCORMSession[]
+  customRoles             UserCustomRole[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  ipAddress    String?
+  userAgent    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expires]) // for cleanup of expired sessions
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── CANDIDATE PROFILE ────────────────────────────────────────────────────────
+
+model CandidateProfile {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  dateOfBirth       DateTime?
+  nationality       String?
+  address           String?
+  city              String?
+  country           String?
+  postalCode        String?
+  professionalTitle String?
+  employer          String?
+  linkedinUrl       String?
+  idDocumentType    String?
+  idVerifiedAt      DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // ── Candidate type (ISO 17024 applicant classification) ──────────────────
+  // INDIVIDUAL: self-registered, no org sponsor, pays own fees
+  // ORG_SPONSORED: first enrolled by ORG_MANAGER; org has full reporting visibility
+  // ORG_SELF_ENROL: org member who self-enrolled independently; org has read-only visibility
+  // Immutable once set to ORG_SPONSORED — only SUPER_ADMIN may change.
+  registrationType  String    @default("INDIVIDUAL") @map("registration_type")
+
+  // The org that sponsored this candidate. Set when ORG_MANAGER first creates
+  // enrolments for this candidate. NOT cleared if candidate later leaves the org
+  // — preserves audit trail of who sponsored the original certification.
+  sponsoringOrgId   String?   @map("sponsoring_org_id")
+  sponsoringOrg     Organisation? @relation("SponsoredCandidates", fields: [sponsoringOrgId], references: [id])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([sponsoringOrgId])
+  @@index([registrationType])
+  @@map("candidate_profiles")
+}
+
+// ─── ORGANISATION & MULTI-TENANCY ─────────────────────────────────────────────
+
+model Organisation {
+  id                 String   @id @default(cuid())
+  name               String
+  registrationNo     String?
+  country            String?
+  address            String?
+  website            String?
+  logoUrl            String?
+  description        String? // What the organisation does / their objectives
+  industry           String? // e.g. "Healthcare", "Manufacturing", "IT"
+  cacDocumentUrl     String? // Optional: Certificate of incorporation / CAC doc
+  verificationStatus String   @default("PENDING") // PENDING | VERIFIED | REJECTED
+  verificationNotes  String?
+  approvedSchemes    String? // JSON array of scheme codes available to this org
+  primaryColor       String?
+  customDomain       String?  @unique
+  isActive           Boolean  @default(true)
+  isPlatformOwner    Boolean  @default(false) // true only for TrueMark Global (the platform itself)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  members             OrganisationMember[]
+  departments         Department[]
+  purchases           Purchase[]
+  portal              OrganisationPortal?
+  sponsoredCandidates CandidateProfile[]  @relation("SponsoredCandidates")
+  enrolments          Enrolment[]
+  examAttempts        ExamAttempt[]
+  certificates        Certificate[]
+  cpdRecords          CPDRecord[]
+
+  @@map("organisations")
+}
+
+model OrganisationPortal {
+  id             String   @id @default(cuid())
+  organisationId String   @unique
+  brandName      String?
+  logoUrl        String?
+  primaryColor   String?
+  heroHeading    String?
+  customDomain   String?
+  updatedAt      DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@map("organisation_portals")
+}
+
+model OrganisationMember {
+  id             String   @id @default(cuid())
+  userId         String
+  organisationId String
+  departmentId   String?
+  role           String   @default("CANDIDATE")
+  joinedAt       DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  department   Department?  @relation(fields: [departmentId], references: [id])
+
+  @@unique([userId, organisationId])
+  @@index([organisationId]) // list all members of an org
+  @@index([departmentId])
+  @@map("organisation_members")
+}
+
+model Department {
+  id             String   @id @default(cuid())
+  organisationId String
+  name           String
+  createdAt      DateTime @default(now())
+
+  organisation Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  members      OrganisationMember[]
+
+  @@index([organisationId])
+  @@map("departments")
+}
+
+// ─── CERTIFICATION SCHEMES ────────────────────────────────────────────────────
+
+model CertificationScheme {
+  id               String   @id @default(cuid())
+  code             String   @unique @db.VarChar(50)
+  name             String   @db.VarChar(200)
+  description      String?
+  validityMonths   Int      @default(36)
+  cpdHoursRequired Int      @default(0)
+  passMark         Int      @default(70)
+  maxAttempts      Int      @default(3)
+  prerequisites    String? // JSON array of scheme codes
+  isActive         Boolean  @default(true)
+  // Cl.7.1 ISO 17024 — the governing standard version this scheme is certified under.
+  // Copied onto Certificate.standardVersion at issuance for immutable traceability.
+  standardVersion  String?  @default("ISO/IEC 17024:2012")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  courses      Course[]
+  examPapers   ExamPaper[]
+  certificates Certificate[]
+  cpdRecords   CPDRecord[]
+
+  @@map("certification_schemes")
+}
+
+// ─── COURSES & CONTENT ────────────────────────────────────────────────────────
+
+model Course {
+  id                    String    @id @default(cuid())
+  schemeId              String?
+  creatorId             String
+  title                 String    @db.VarChar(200)
+  slug                  String    @unique @db.VarChar(100)
+  description           String?
+  shortDescription      String?
+  thumbnailUrl          String?
+  status                String    @default("DRAFT")
+  price                 Float     @default(0)
+  currency              String    @default("NGN")
+  cpdHours              Float     @default(0)
+  durationHours         Float?
+  prerequisiteCourseIds String?
+  minProgressToExam     Int       @default(100)
+  version               Int       @default(1)
+  publishedAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  scheme     CertificationScheme? @relation(fields: [schemeId], references: [id])
+  creator    User                 @relation("CourseCreator", fields: [creatorId], references: [id])
+  modules    CourseModule[]
+  enrolments Enrolment[]
+
+  @@index([schemeId])
+  @@index([status])
+  @@index([creatorId])
+  @@map("courses")
+}
+
+model CourseModule {
+  id          String   @id @default(cuid())
+  courseId    String
+  title       String
+  description String?
+  order       Int
+  createdAt   DateTime @default(now())
+
+  course  Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons CourseLesson[]
+
+  @@index([courseId])
+  @@map("course_modules")
+}
+
+model CourseLesson {
+  id           String   @id @default(cuid())
+  moduleId     String
+  title        String
+  description  String?
+  contentType  String // video, pdf, scorm, text, quiz, live_session
+  contentUrl   String?
+  contentData  String? // JSON for structured content
+  durationMins Int?
+  cpdPoints    Float    @default(0)
+  order        Int
+  isPreview    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  module       CourseModule     @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progress     LessonProgress[]
+  scormPackage SCORMPackage?
+
+  @@index([moduleId])
+  @@map("course_lessons")
+}
+
+// ─── ENROLMENT & PROGRESS ─────────────────────────────────────────────────────
+
+model Enrolment {
+  id          String    @id @default(cuid())
+  userId      String
+  courseId    String
+  status      String    @default("ACTIVE")
+  progress    Float     @default(0)
+  purchaseId  String?
+  enroledAt   DateTime  @default(now())
+  completedAt DateTime?
+  expiresAt   DateTime?
+
+  // Which org context produced this enrolment (NULL = individual self-enrol)
+  organisationId     String?   @map("organisation_id")
+  // SELF = candidate enrolled themselves; ORG_ASSIGNED = ORG_MANAGER bulk-enrolled
+  registrationSource String    @default("SELF") @map("registration_source")
+
+  user           User             @relation(fields: [userId], references: [id])
+  course         Course           @relation(fields: [courseId], references: [id])
+  purchase       Purchase?        @relation(fields: [purchaseId], references: [id])
+  organisation   Organisation?    @relation(fields: [organisationId], references: [id])
+  lessonProgress LessonProgress[]
+
+  @@unique([userId, courseId])
+  @@index([userId, status])
+  @@index([courseId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([organisationId])
+  @@index([organisationId, status])
+  @@map("enrolments")
+}
+
+model LessonProgress {
+  id            String    @id @default(cuid())
+  enrolmentId   String
+  lessonId      String
+  completed     Boolean   @default(false)
+  completedAt   DateTime?
+  timeSpentSecs Int       @default(0)
+  lastPosition  Int?
+
+  enrolment Enrolment    @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+  lesson    CourseLesson @relation(fields: [lessonId], references: [id])
+
+  @@unique([enrolmentId, lessonId])
+  @@map("lesson_progress")
+}
+
+// ─── ASSESSMENT ENGINE ────────────────────────────────────────────────────────
+
+model ExamPaper {
+  id                 String   @id @default(cuid())
+  schemeId           String?
+  creatorId          String
+  title              String
+  description        String?
+  instructions       String?
+  durationMins       Int      @default(120)
+  passMark           Int      @default(70)
+  totalMarks         Int      @default(100)
+  randomiseQuestions Boolean  @default(true)
+  randomiseOptions   Boolean  @default(true)
+  allowReview        Boolean  @default(true)
+  requiresProctoring Boolean  @default(true)
+  tabSwitchLimit     Int      @default(3)
+  version            Int      @default(1)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  scheme   CertificationScheme? @relation(fields: [schemeId], references: [id])
+  creator  User                 @relation("ExamCreator", fields: [creatorId], references: [id])
+  sections ExamSection[]
+  attempts ExamAttempt[]
+
+  @@index([schemeId])
+  @@index([creatorId])
+  @@index([isActive])
+  @@map("exam_papers")
+}
+
+model ExamSection {
+  id           String  @id @default(cuid())
+  examPaperId  String
+  title        String
+  instructions String?
+  marks        Int     @default(0)
+  order        Int
+
+  examPaper ExamPaper      @relation(fields: [examPaperId], references: [id], onDelete: Cascade)
+  questions ExamQuestion[]
+
+  @@index([examPaperId])
+  @@map("exam_sections")
+}
+
+model ExamQuestion {
+  id             String   @id @default(cuid())
+  sectionId      String
+  type           String // mcq_single, mcq_multi, true_false, essay, fill_blank, drag_drop
+  text           String
+  imageUrl       String?
+  marks          Int      @default(1)
+  domain         String?
+  difficulty     String?
+  cognitiveLevel String?
+  explanation    String?
+  options        String? // JSON: [{id, text, isCorrect}]
+  correctAnswer  String?
+  isArchived     Boolean  @default(false)
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+
+  section   ExamSection    @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  responses ExamResponse[]
+
+  @@index([sectionId])
+  @@index([isArchived])
+  @@map("exam_questions")
+}
+
+// ─── EXAM ATTEMPTS & PROCTORING ───────────────────────────────────────────────
+
+model ExamAttempt {
+  id              String    @id @default(cuid())
+  userId          String
+  examPaperId     String
+  status          String    @default("SCHEDULED")
+  scheduledAt     DateTime?
+  startedAt       DateTime?
+  submittedAt     DateTime?
+  durationMins    Int?
+  rawScore        Float?
+  percentageScore Float?
+  passed          Boolean?
+  gradeReleased   Boolean   @default(false)
+  attemptNumber   Int       @default(1)
+  accommodations  String? // JSON
+  ipAddress       String?
+  createdAt       DateTime  @default(now())
+  // Retention: ISO 27001 / regulatory minimum 3 years — soft delete only, never hard delete
+  deletedAt       DateTime?
+
+  // Org context at the time of the attempt — NULL for individual candidates
+  organisationId  String?   @map("organisation_id")
+
+  user                  User                   @relation(fields: [userId], references: [id])
+  examPaper             ExamPaper              @relation(fields: [examPaperId], references: [id])
+  organisation          Organisation?          @relation(fields: [organisationId], references: [id])
+  responses             ExamResponse[]
+  grade                 ExamGrade?
+  proctoringSession     ProctoringSession?
+  certificationDecision CertificationDecision?
+
+  @@index([userId])
+  @@index([examPaperId])
+  @@index([userId, examPaperId])
+  @@index([status])
+  @@index([deletedAt])
+  @@index([organisationId])
+  @@index([organisationId, status])
+  @@map("exam_attempts")
+}
+
+model ExamResponse {
+  id           String    @id @default(cuid())
+  attemptId    String
+  questionId   String
+  responseData String? // JSON
+  isCorrect    Boolean?
+  marksAwarded Float?
+  answeredAt   DateTime?
+
+  // Cl.6.1 ISO 17024 — question snapshot for appeals reproducibility.
+  // The live ExamQuestion row may be edited or archived after the attempt;
+  // these fields preserve the exact wording, options JSON, and marks that
+  // the candidate saw so any appeals panel can reconstruct the paper.
+  questionTextSnapshot    String? // copy of ExamQuestion.text at attempt start
+  questionOptionsSnapshot String? // copy of ExamQuestion.options JSON (without isCorrect)
+  questionMarksSnapshot   Int? // copy of ExamQuestion.marks
+  questionVersionSnapshot Int? // copy of ExamQuestion.version
+
+  attempt  ExamAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question ExamQuestion @relation(fields: [questionId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@map("exam_responses")
+}
+
+model ExamGrade {
+  id              String   @id @default(cuid())
+  attemptId       String   @unique
+  examinerId      String
+  rawScore        Float
+  percentageScore Float
+  passed          Boolean
+  feedbackNotes   String?
+  blindMarking    Boolean  @default(false)
+  gradedAt        DateTime @default(now())
+
+  attempt  ExamAttempt @relation(fields: [attemptId], references: [id])
+  examiner User        @relation("Examiner", fields: [examinerId], references: [id])
+
+  @@index([examinerId])
+  @@map("exam_grades")
+}
+
+model ProctoringSession {
+  id           String    @id @default(cuid())
+  attemptId    String    @unique
+  proctorId    String?
+  recordingUrl String?
+  status       String    @default("active")
+  flagCount    Int       @default(0)
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+
+  attempt   ExamAttempt          @relation(fields: [attemptId], references: [id])
+  proctor   User?                @relation("Proctor", fields: [proctorId], references: [id])
+  incidents ProctoringIncident[]
+
+  @@index([proctorId])
+  @@map("proctoring_sessions")
+}
+
+model ProctoringIncident {
+  id          String   @id @default(cuid())
+  sessionId   String
+  type        String // no_face, multiple_faces, tab_switch, audio_anomaly, phone_detected, gaze_away
+  severity    String   @default("low")
+  description String?
+  evidenceUrl String?
+  timestamp   DateTime @default(now())
+  reviewed    Boolean  @default(false)
+  reviewNote  String?
+
+  session ProctoringSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("proctoring_incidents")
+}
+
+// ─── CERTIFICATION DECISIONS (ISO 17024 Cl.7.4) ──────────────────────────────
+
+model CertificationDecision {
+  id                     String   @id @default(cuid())
+  attemptId              String   @unique
+  certificationOfficerId String
+  decision               String // approved, rejected, referred
+  justification          String
+  decidedAt              DateTime @default(now())
+
+  attempt              ExamAttempt  @relation(fields: [attemptId], references: [id])
+  certificationOfficer User         @relation("CertificationOfficer", fields: [certificationOfficerId], references: [id])
+  certificate          Certificate?
+
+  @@index([certificationOfficerId])
+  @@map("certification_decisions")
+}
+
+// ─── CERTIFICATES ─────────────────────────────────────────────────────────────
+
+model Certificate {
+  id                String    @id @default(cuid())
+  userId            String
+  schemeId          String
+  decisionId        String    @unique
+  certificateNumber String    @unique
+  status            String    @default("ACTIVE")
+  issuedAt          DateTime  @default(now())
+  expiresAt         DateTime?
+  revokedAt         DateTime?
+  revocationReason  String?
+  pdfUrl            String?
+  openBadgeJson     String?
+  openBadgeJwt      String?
+  qrCodeUrl         String?
+
+  // Cl.7.1 ISO 17024 — immutable snapshots of the scheme details at issuance.
+  schemeNameSnapshot        String?
+  schemeCodeSnapshot        String?
+  standardVersion           String?
+  // Cl.9.1 ISO 17024 — snapshot of the sponsoring org name at issuance so the
+  // certificate remains interpretable even if the org is later renamed/dissolved.
+  sponsoringOrgNameSnapshot String?   @map("sponsoring_org_name_snapshot")
+  examPaperTitleSnapshot    String?   @map("exam_paper_title_snapshot")
+  candidateEmployerSnapshot String?   @map("candidate_employer_snapshot")
+
+  // Org under whose sponsorship this certificate was issued. NULL for INDIVIDUAL.
+  organisationId  String?   @map("organisation_id")
+
+  // Retention: ISO 17024 Cl.9.5 minimum 7 years — soft delete only, never hard delete.
+  // Physical deletion is blocked at the DB level (REVOKE DELETE on certificates FROM app_role).
+  deletedAt DateTime?
+
+  user         User                  @relation(fields: [userId], references: [id])
+  scheme       CertificationScheme   @relation(fields: [schemeId], references: [id])
+  decision     CertificationDecision @relation(fields: [decisionId], references: [id])
+  organisation Organisation?         @relation(fields: [organisationId], references: [id])
+  renewals     CertificateRenewal[]
+
+  @@index([userId])
+  @@index([schemeId])
+  @@index([status, expiresAt])
+  @@index([deletedAt])
+  @@index([organisationId, status])
+  @@map("certificates")
+}
+
+model CertificateRenewal {
+  id             String   @id @default(cuid())
+  certificateId  String
+  renewedAt      DateTime @default(now())
+  newExpiresAt   DateTime
+  cpdHoursLogged Float    @default(0)
+  examAttemptId  String?
+  notes          String?
+
+  certificate Certificate @relation(fields: [certificateId], references: [id])
+
+  @@index([certificateId])
+  @@map("certificate_renewals")
+}
+
+// ─── CPD MODULE ───────────────────────────────────────────────────────────────
+
+model CPDRecord {
+  id           String    @id @default(cuid())
+  userId       String
+  schemeId     String?
+  title        String
+  type         String // course_completion, conference, self_study, work_experience, publication
+  hoursLogged  Float
+  activityDate DateTime
+  evidenceUrl  String?
+  status       String    @default("pending")
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  reviewNote   String?
+  createdAt    DateTime  @default(now())
+
+  // Org context — NULL for INDIVIDUAL. Set when ORG_MANAGER logs CPD on behalf
+  // of an ORG_SPONSORED candidate (loggedBy = 'ORG_MANAGER') or when a sponsored
+  // candidate logs their own CPD (loggedBy = 'SELF').
+  organisationId   String?   @map("organisation_id")
+  // Who created this record: the candidate themselves or their ORG_MANAGER
+  loggedBy         String    @default("SELF") @map("logged_by")
+  loggedByUserId   String?   @map("logged_by_user_id")
+
+  user         User                 @relation(fields: [userId], references: [id])
+  scheme       CertificationScheme? @relation(fields: [schemeId], references: [id])
+  organisation Organisation?        @relation(fields: [organisationId], references: [id])
+  loggedByUser User?                @relation("CPDLogger", fields: [loggedByUserId], references: [id])
+
+  @@index([userId])
+  @@index([schemeId])
+  @@index([status])
+  @@index([organisationId, status])
+  @@map("cpd_records")
+}
+
+// ─── PAYMENTS & PURCHASES ─────────────────────────────────────────────────────
+
+model Purchase {
+  id                 String    @id @default(cuid())
+  userId             String?
+  organisationId     String?
+  courseId           String?
+  stripePaymentId    String?   @unique
+  stripeInvoiceId    String?
+  paystackReference  String?   @unique
+  paystackAccessCode String?
+  amount             Float
+  currency           String    @default("NGN")
+  status             String    @default("PENDING")
+  description        String?
+  metadata           String? // JSON
+  receiptUrl         String?
+  paidAt             DateTime?
+  refundedAt         DateTime?
+  createdAt          DateTime  @default(now())
+
+  organisation Organisation? @relation(fields: [organisationId], references: [id])
+  enrolments   Enrolment[]
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([status])
+  @@map("purchases")
+}
+
+// ─── APPEALS & COMPLAINTS ─────────────────────────────────────────────────────
+
+model Appeal {
+  id           String    @id @default(cuid())
+  reference    String    @unique
+  userId       String
+  type         String // exam_result, certification_decision, misconduct_finding, other
+  subjectId    String?
+  description  String
+  evidenceUrls String?
+  status       String    @default("SUBMITTED")
+  assignedTo   String?
+  resolution   String?
+  resolvedAt   DateTime?
+  dueAt        DateTime? // ISO 17024 Cl.7.9 — 28-day SLA from submission
+  submittedAt  DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([dueAt]) // SLA monitoring
+  @@map("appeals")
+}
+
+model Complaint {
+  id           String    @id @default(cuid())
+  reference    String    @unique
+  userId       String?
+  name         String?
+  email        String?
+  type         String
+  description  String
+  evidenceUrls String?
+  status       String    @default("SUBMITTED")
+  assignedTo   String?
+  resolution   String?
+  resolvedAt   DateTime?
+  submittedAt  DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("complaints")
+}
+
+// ─── COI DECLARATION (ISO 17024 Cl.5) ────────────────────────────────────────
+
+model COIDeclaration {
+  id              String   @id @default(cuid())
+  userId          String
+  declarationText String
+  hasConflict     Boolean  @default(false)
+  conflictDetails String?
+  declaredAt      DateTime @default(now())
+  expiresAt       DateTime
+
+  user User @relation(fields: [userId], references: [id])
+
+  // Composite index: COI check at cert issuance queries WHERE userId=? AND hasConflict=true AND expiresAt > now()
+  @@index([userId, expiresAt])
+  @@map("coi_declarations")
+}
+
+// ─── PRIVACY & GDPR ───────────────────────────────────────────────────────────
+
+model ConsentRecord {
+  id          String    @id @default(cuid())
+  userId      String
+  purpose     String // MARKETING | DIRECTORY_LISTING | RESEARCH | CPD_TRACKING | THIRD_PARTY_SHARING
+  granted     Boolean
+  ipAddress   String?
+  userAgent   String?
+  grantedAt   DateTime  @default(now())
+  withdrawnAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, purpose]) // deduplicated consent lookup per purpose
+  @@map("consent_records")
+}
+
+model DataSubjectRequest {
+  id              String    @id @default(cuid())
+  userId          String
+  type            String // access, erasure, rectification, portability, restriction
+  status          String    @default("pending")
+  notes           String?
+  exportUrl       String?
+  legalHold       Boolean   @default(false)
+  legalHoldReason String?
+  submittedAt     DateTime  @default(now())
+  dueAt           DateTime
+  resolvedAt      DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@index([dueAt]) // overdue DSR monitoring
+  @@map("data_subject_requests")
+}
+
+model BreachIncident {
+  id                   String    @id @default(cuid())
+  title                String
+  description          String
+  severity             String
+  affectedUsers        Int?
+  dataTypesAffected    String?
+  reportedToAuthority  Boolean   @default(false)
+  authorityReportedAt  DateTime?
+  candidatesNotified   Boolean   @default(false)
+  candidatesNotifiedAt DateTime?
+  status               String    @default("open")
+  resolvedAt           DateTime?
+  discoveredAt         DateTime  @default(now())
+  createdBy            String?
+
+  @@index([status])
+  @@index([discoveredAt])
+  @@map("breach_incidents")
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+
+model Notification {
+  id      String    @id @default(cuid())
+  userId  String
+  type    String
+  title   String
+  message String
+  link    String?
+  read    Boolean   @default(false)
+  readAt  DateTime?
+  sentAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read]) // unread count + notification bell query
+  @@index([sentAt])
+  @@map("notifications")
+}
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  channel   String // email, sms, in_app
+  recipient String
+  subject   String?
+  body      String
+  status    String // sent, failed, bounced
+  sentAt    DateTime @default(now())
+  metadata  String?
+
+  @@index([userId])
+  @@index([sentAt])
+  @@map("notification_logs")
+}
+
+// ─── DOCUMENT MANAGEMENT (ISO 9001 Cl.7.5) ───────────────────────────────────
+
+model Document {
+  id          String   @id @default(cuid())
+  title       String
+  type        String // policy, procedure, exam_paper, scheme, form, report
+  description String?
+  accessLevel String   @default("internal")
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  versions DocumentVersion[]
+
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id           String    @id @default(cuid())
+  documentId   String
+  version      String
+  status       String    @default("DRAFT")
+  fileUrl      String?
+  changeNotes  String?
+  approvedBy   String?
+  approvedAt   DateTime?
+  supersededAt DateTime?
+  createdBy    String
+  createdAt    DateTime  @default(now())
+
+  document Document @relation(fields: [documentId], references: [id])
+
+  @@index([documentId])
+  @@index([status])
+  @@map("document_versions")
+}
+
+// ─── NONCONFORMITY TRACKER (ISO 9001 Cl.8.7) ─────────────────────────────────
+
+model NonConformity {
+  id          String    @id @default(cuid())
+  reference   String    @unique
+  type        String
+  description String
+  rootCause   String?
+  status      String    @default("OPEN")
+  reportedBy  String
+  assignedTo  String?
+  dueDate     DateTime?
+  closedAt    DateTime?
+  verifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  correctiveActions CorrectiveAction[]
+
+  @@index([status])
+  @@index([assignedTo])
+  @@map("non_conformities")
+}
+
+model CorrectiveAction {
+  id              String    @id @default(cuid())
+  nonConformityId String
+  action          String
+  assignedTo      String
+  dueDate         DateTime
+  completedAt     DateTime?
+  effectiveness   String?
+  createdAt       DateTime  @default(now())
+
+  nonConformity NonConformity @relation(fields: [nonConformityId], references: [id])
+
+  @@index([nonConformityId])
+  @@map("corrective_actions")
+}
+
+// ─── AUDIT LOG (ISO 27001 A.8.15 — Append-Only) ──────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  entityType  String?
+  entityId    String?
+  metadata    String? // JSON
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime @default(now())
+  // ISO 27001 A.8.15 tamper evidence — SHA-256(id|action|entityType|entityId|metadata|timestamp)
+  // Allows offline verification that no row has been silently modified.
+  contentHash String? @map("content_hash")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([timestamp])
+  @@index([entityType, entityId]) // lookup audit trail for a specific entity
+  @@map("audit_logs")
+}
+
+// ─── SCORM ENGINE ─────────────────────────────────────────────────────────────
+
+model SCORMPackage {
+  id          String   @id @default(cuid())
+  lessonId    String?  @unique
+  title       String
+  version     String   @default("1.2") // "1.2" or "2004"
+  launchUrl   String // relative path within package e.g. "story.html"
+  packagePath String // filesystem path to extracted content dir
+  manifestRaw String? // raw imsmanifest.xml
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  lesson   CourseLesson?  @relation(fields: [lessonId], references: [id])
+  sessions SCORMSession[]
+
+  @@map("scorm_packages")
+}
+
+model SCORMSession {
+  id               String   @id @default(cuid())
+  userId           String
+  packageId        String
+  completionStatus String   @default("not attempted") // not attempted/incomplete/completed/passed/failed
+  successStatus    String? // passed/failed/unknown (2004 only)
+  scoreRaw         Float?
+  scoreMin         Float?
+  scoreMax         Float?
+  totalTime        String? // accumulated HH:MM:SS
+  suspendData      String? // up to 64 KB bookmark data
+  entry            String   @default("ab-initio") // ab-initio or resume
+  cmiData          String? // full JSON snapshot of all CMI values
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user    User         @relation(fields: [userId], references: [id])
+  package SCORMPackage @relation(fields: [packageId], references: [id])
+
+  @@unique([userId, packageId])
+  @@index([packageId]) // list all learner sessions for a package
+  @@map("scorm_sessions")
+}
+
+// ─── PERMISSION MATRIX ───────────────────────────────────────────────────────
+
+model Permission {
+  id          String   @id @default(cuid())
+  resource    String   // e.g. "courses"
+  action      String   // e.g. "read" | "create" | "update" | "delete" | "manage"
+  label       String   // e.g. "View Courses"
+  description String?
+  category    String   // grouping for the matrix UI
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model CustomRole {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isSystem    Boolean  @default(false) // true = maps to a built-in role, cannot be deleted
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+  userRoles       UserCustomRole[]
+
+  @@map("custom_roles")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       CustomRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserCustomRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+  assignedBy String?
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role CustomRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_custom_roles")
+}
+
+// ─── PLATFORM SETTINGS ────────────────────────────────────────────────────────
+// Key-value store for operator-configurable platform values.
+// Keys used for certificates:
+//   cert_director_name          — Director of Certification display name
+//   cert_director_signature_url — URL/path to director signature image
+
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("platform_settings")
+}

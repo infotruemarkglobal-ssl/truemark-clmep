@@ -39,3 +39,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Source maps — uploaded to Sentry then deleted by deleteSourceMapsAfterUpload.
+# Listed here as defence-in-depth: if a build step doesn't run withSentryConfig
+# (e.g. a manual next build without the Sentry plugin) the maps still won't be
+# committed or pushed. The /.next/ entry above already covers the normal build
+# output; these catch any stray maps generated elsewhere.
+*.js.map
+*.js.map.gz
+
+/src/generated/prisma
+
+# Private file uploads (served via /api/files/url, not statically)
+private-uploads/

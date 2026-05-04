@@ -1,0 +1,101 @@
+-- ─── Least-privilege database roles ──────────────────────────────────────────
+--
+-- ISO 27001 A.8.2 / CIS Control 6 — Principle of least privilege.
+--
+-- This file must be run ONCE by a DBA with superuser rights (not via
+-- `prisma migrate deploy`, which runs as the application role).
+-- Run manually: psql $DIRECT_URL -f this_file.sql
+--
+-- CONTEXT
+-- ───────
+-- Neon creates one owner role (neondb_owner) that has full DDL rights and
+-- DELETE on all tables. The application should NOT run as neondb_owner.
+-- This script creates a restricted application role (app_role) and a
+-- read-only audit role (audit_reader_role).
+--
+-- ARCHITECTURE
+--   neondb_owner  — superuser, used only for migrations (DIRECT_URL)
+--   app_role      — runtime role used by DATABASE_URL; SELECT/INSERT/UPDATE only;
+--                   no DELETE on audit_logs or certificates; no DDL
+--   audit_reader  — SELECT-only on audit_logs, used by audit dashboards
+--                   or external SIEM connectors (never in the app process)
+--
+-- STEP 1: Create the application role
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Replace '<strong-random-password>' with a generated secret (openssl rand -base64 32).
+-- Store it in your secrets manager and set DATABASE_URL to use this role.
+
+-- CREATE ROLE app_role LOGIN PASSWORD '<strong-random-password>';
+-- GRANT CONNECT ON DATABASE neondb TO app_role;
+
+-- STEP 2: Grant schema usage
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GRANT USAGE ON SCHEMA public TO app_role;
+
+-- STEP 3: Grant SELECT, INSERT, UPDATE on all application tables
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO app_role;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO app_role;
+
+-- STEP 4: Grant sequence usage (required for CUID / serial PKs)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_role;
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO app_role;
+
+-- STEP 5: Revoke DELETE from the application role on retention-critical tables
+-- ─────────────────────────────────────────────────────────────────────────────
+-- These tables have regulatory retention periods; hard deletes are forbidden.
+--   audit_logs    — ISO 27001 A.8.15, 6-year minimum
+--   certificates  — ISO 17024 Cl.9.5, 7-year minimum
+--   exam_attempts — regulatory 3-year minimum
+
+-- REVOKE DELETE ON TABLE audit_logs    FROM app_role;
+-- REVOKE DELETE ON TABLE certificates  FROM app_role;
+-- REVOKE DELETE ON TABLE exam_attempts FROM app_role;
+
+-- STEP 6: Revoke all DDL (already implicit — app_role has no SUPERUSER or CREATEDB)
+-- The following explicit revokes are belt-and-suspenders.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- REVOKE CREATE ON SCHEMA public FROM app_role;
+
+-- STEP 7: Create the audit-reader role (SELECT-only on audit_logs)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- CREATE ROLE audit_reader LOGIN PASSWORD '<different-strong-random-password>';
+-- GRANT CONNECT ON DATABASE neondb TO audit_reader;
+-- GRANT USAGE ON SCHEMA public TO audit_reader;
+-- GRANT SELECT ON TABLE audit_logs TO audit_reader;
+-- This role should be used by the /audit dashboard API route and any SIEM integration.
+-- It must NOT be the same credentials as app_role or neondb_owner.
+
+-- STEP 8: Update DATABASE_URL
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Change DATABASE_URL (the pooled connection string) to authenticate as app_role:
+--   DATABASE_URL="postgresql://app_role:<password>@<host-pooler>.neon.tech/neondb?pgbouncer=true&sslmode=require"
+-- Keep DIRECT_URL pointing at neondb_owner (for prisma migrate deploy only):
+--   DIRECT_URL="postgresql://neondb_owner:<password>@<host>.neon.tech/neondb?sslmode=require"
+--
+-- Neon Serverless Note: prisma.config.ts already routes CLI commands through
+-- DIRECT_URL, so migrations continue to run as neondb_owner regardless of
+-- what DATABASE_URL is set to. ✓
+
+-- STEP 9: Verify (run after applying)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- SELECT grantee, table_name, privilege_type
+-- FROM information_schema.role_table_grants
+-- WHERE grantee IN ('app_role', 'audit_reader')
+-- ORDER BY table_name, privilege_type;
+--
+-- The following must NOT appear for app_role:
+--   DELETE on audit_logs / certificates / exam_attempts
+--   CREATE on public schema
+--
+-- STEP 10: Neon branch isolation
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Each Neon branch (main, staging, dev) gets its own connection credentials.
+-- Never share production credentials with dev/staging branches.
+-- Configure IP allowlist on the production branch:
+--   Neon Console → Project → Settings → IP Allow → add your NAT gateway CIDRs
+--   or Vercel's outbound IP ranges (see: vercel.com/docs/security/deployment-protection/methods)
+--
+-- Confirm: production DATABASE_URL must differ from staging DATABASE_URL.
+-- Use separate secret manager entries: e.g. DATABASE_URL_PROD vs DATABASE_URL_STAGING.
