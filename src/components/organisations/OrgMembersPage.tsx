@@ -54,23 +54,71 @@ type Course = {
 
 type Department = { id: string; name: string };
 
+type SeatPool = {
+  id: string;
+  courseId: string;
+  courseTitle: string;
+  courseSlug: string;
+  totalSeats: number;
+  usedSeats: number;
+  expiresAt: string | null;
+  assignedUserIds: string[];
+};
+
 type AddMode = "add" | "create";
+type Tab = "members" | "seats";
 
 export default function OrgMembersPage({
   org,
   members: initialMembers,
   courses,
   departments,
+  seatPools: initialSeatPools,
 }: {
   org: { id: string; name: string };
   members: Member[];
   courses: Course[];
   departments: Department[];
+  seatPools: SeatPool[];
 }) {
   const router = useRouter();
+  const [tab, setTab] = useState<Tab>("members");
   const [members, setMembers] = useState(initialMembers);
+  const [seatPools, setSeatPools] = useState(initialSeatPools);
   const [search, setSearch] = useState("");
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
+
+  // Seat assignment state
+  const [assignSeat, setAssignSeat] = useState<SeatPool | null>(null);
+  const [assignUserId, setAssignUserId] = useState("");
+  const [seatAssigning, setSeatAssigning] = useState(false);
+
+  async function handleAssignSeat() {
+    if (!assignSeat || !assignUserId) return;
+    setSeatAssigning(true);
+    try {
+      const res = await fetch("/api/organisations/seats/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seatId: assignSeat.id, userId: assignUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Assignment failed"); return; }
+      toast.success("Seat assigned and member enrolled.");
+      setSeatPools((prev) =>
+        prev.map((p) =>
+          p.id === assignSeat.id
+            ? { ...p, usedSeats: p.usedSeats + 1, assignedUserIds: [...p.assignedUserIds, assignUserId] }
+            : p,
+        ),
+      );
+      setAssignSeat(null);
+      setAssignUserId("");
+      router.refresh();
+    } finally {
+      setSeatAssigning(false);
+    }
+  }
 
   // Add/create member dialog
   const [showDialog, setShowDialog] = useState(false);
@@ -210,16 +258,139 @@ export default function OrgMembersPage({
             {org.name} — {members.length} member{members.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button
-          onClick={() => { setAddMode("add"); setShowDialog(true); }}
-          className="gap-2"
-          title="Add an existing user or create a new account and invite them by email"
-        >
-          <UserPlus className="w-4 h-4" />
-          Add Member
-        </Button>
+        {tab === "members" && (
+          <Button
+            onClick={() => { setAddMode("add"); setShowDialog(true); }}
+            className="gap-2"
+            title="Add an existing user or create a new account and invite them by email"
+          >
+            <UserPlus className="w-4 h-4" />
+            Add Member
+          </Button>
+        )}
       </div>
 
+      {/* Tab strip */}
+      <div className="flex gap-1 border-b border-slate-200">
+        {(["members", "seats"] as Tab[]).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={cn(
+              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition",
+              tab === t
+                ? "border-primary text-primary"
+                : "border-transparent text-slate-500 hover:text-slate-700",
+            )}
+          >
+            {t === "members" ? "Members" : `Assign Seats${seatPools.length > 0 ? ` (${seatPools.length})` : ""}`}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Assign Seats tab ── */}
+      {tab === "seats" && (
+        <div className="space-y-4">
+          {seatPools.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 flex flex-col items-center gap-3 text-center">
+              <Award className="w-10 h-10 text-slate-200" />
+              <p className="font-medium text-slate-600">No seat pools yet</p>
+              <p className="text-sm text-slate-400">
+                Purchase course seats from the{" "}
+                <button type="button" className="underline hover:text-slate-600" onClick={() => router.push("/courses")}>
+                  course catalogue
+                </button>{" "}
+                to assign members.
+              </p>
+            </div>
+          ) : (
+            seatPools.map((pool) => {
+              const available = pool.totalSeats - pool.usedSeats;
+              const eligible = members.filter(
+                (m) => !pool.assignedUserIds.includes(m.user.id),
+              );
+              return (
+                <div key={pool.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">{pool.courseTitle}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {pool.usedSeats} / {pool.totalSeats} seats used
+                        {pool.expiresAt && ` · Expires ${new Date(pool.expiresAt).toLocaleDateString()}`}
+                      </p>
+                    </div>
+                    <span className={cn(
+                      "text-xs font-semibold px-2.5 py-1 rounded-full shrink-0",
+                      available > 0 ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500",
+                    )}>
+                      {available} available
+                    </span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full mb-4">
+                    <div
+                      className="h-1.5 bg-primary rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (pool.usedSeats / pool.totalSeats) * 100)}%` }}
+                    />
+                  </div>
+
+                  {available > 0 && (
+                    assignSeat?.id === pool.id ? (
+                      <div className="flex items-center gap-2 mt-2">
+                        <select
+                          value={assignUserId}
+                          onChange={(e) => setAssignUserId(e.target.value)}
+                          className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 bg-transparent focus:outline-none focus:ring-2 focus:ring-ring/50"
+                        >
+                          <option value="">Select member…</option>
+                          {eligible.map((m) => (
+                            <option key={m.user.id} value={m.user.id}>
+                              {m.user.firstName} {m.user.lastName}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          size="sm"
+                          onClick={handleAssignSeat}
+                          disabled={!assignUserId || seatAssigning}
+                          className="gap-2 shrink-0"
+                        >
+                          {seatAssigning ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserCheck className="w-3 h-3" />}
+                          Assign
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setAssignSeat(null); setAssignUserId(""); }}
+                          className="shrink-0"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setAssignSeat(pool); setAssignUserId(""); }}
+                        className="gap-2"
+                        disabled={eligible.length === 0}
+                        title={eligible.length === 0 ? "All members already assigned" : undefined}
+                      >
+                        <UserCheck className="w-3 h-3" /> Assign a Seat
+                      </Button>
+                    )
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* ── Members tab ── */}
+      {tab === "members" && <>
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -602,6 +773,7 @@ export default function OrgMembersPage({
           </div>
         </div>
       )}
+      </> /* end members tab */}
     </div>
   );
 }

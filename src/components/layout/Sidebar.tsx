@@ -16,7 +16,7 @@ type NavSection = { heading?: string; items: NavItem[] };
 
 // ── Per-role navigation maps ──────────────────────────────────────────────────
 
-const ALL_ROLES: UserRole[] = ["SUPER_ADMIN","CERTIFICATION_OFFICER","EXAMINER","TRAINER","PROCTOR","AUDITOR","ORG_MANAGER","CANDIDATE"];
+const ALL_ROLES: UserRole[] = ["SUPER_ADMIN","CERTIFICATION_OFFICER","EXAMINER","TRAINER","PROCTOR","AUDITOR","ORG_MANAGER","CANDIDATE","SUPPORT_AGENT"];
 
 const CORE: NavSection = {
   items: [
@@ -46,6 +46,7 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Support",
       items: [
+        { label: "My Tickets",    href: "/support",      icon: MessageSquare },
         { label: "Appeals",       href: "/appeals",      icon: Scale },
       ],
     },
@@ -108,7 +109,8 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Support",
       items: [
-        { label: "Appeals", href: "/appeals", icon: Scale },
+        { label: "My Tickets",  href: "/support",  icon: MessageSquare },
+        { label: "Appeals",     href: "/appeals",  icon: Scale },
       ],
     },
     PROFILE_SECTION,
@@ -179,6 +181,7 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
         { label: "Certification Decisions", href: "/manage/decisions", icon: BadgeCheck  },
         { label: "Certificates",          href: "/certificates",     icon: Award         },
         { label: "Appeals",               href: "/appeals",          icon: Scale         },
+        { label: "Support Queue",         href: "/support",          icon: MessageSquare },
       ],
     },
     {
@@ -201,6 +204,16 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
       heading: "System",
       items: [
         { label: "Settings", href: "/settings", icon: Settings },
+      ],
+    },
+    PROFILE_SECTION,
+  ],
+  SUPPORT_AGENT: [
+    CORE,
+    {
+      heading: "Support",
+      items: [
+        { label: "Support Queue", href: "/support", icon: MessageSquare },
       ],
     },
     PROFILE_SECTION,

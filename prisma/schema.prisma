@@ -13,7 +13,7 @@ datasource db {
 
 // SQLite doesn't support native enums — using String with validation at app layer
 
-// UserRole: SUPER_ADMIN | CERTIFICATION_OFFICER | EXAMINER | TRAINER | PROCTOR | AUDITOR | ORG_MANAGER | CANDIDATE
+// UserRole: SUPER_ADMIN | CERTIFICATION_OFFICER | EXAMINER | TRAINER | PROCTOR | AUDITOR | ORG_MANAGER | CANDIDATE | SUPPORT_AGENT
 // AccountStatus: ACTIVE | INACTIVE | SUSPENDED | PENDING_VERIFICATION
 // CourseStatus: DRAFT | PUBLISHED | ARCHIVED
 // EnrolmentStatus: ACTIVE | COMPLETED | EXPIRED | CANCELLED
@@ -73,6 +73,12 @@ model User {
   proctoredSessions       ProctoringSession[]     @relation("Proctor")
   scormSessions           SCORMSession[]
   customRoles             UserCustomRole[]
+  cart                    Cart?
+  seatAssignments         SeatAssignment[]        @relation("AssignedToUser")
+  assignedSeats           SeatAssignment[]        @relation("AssignedBy")
+  supportTickets          SupportTicket[]         @relation("TicketCreator")
+  assignedTickets         SupportTicket[]         @relation("AssignedTickets")
+  ticketMessages          TicketMessage[]
 
   @@map("users")
 }
@@ -173,6 +179,7 @@ model Organisation {
   logoUrl            String?
   description        String? // What the organisation does / their objectives
   industry           String? // e.g. "Healthcare", "Manufacturing", "IT"
+  size               String? // e.g. "1-10", "11-50", "51-200", "201-500", "500+"
   cacDocumentUrl     String? // Optional: Certificate of incorporation / CAC doc
   verificationStatus String   @default("PENDING") // PENDING | VERIFIED | REJECTED
   verificationNotes  String?
@@ -193,6 +200,8 @@ model Organisation {
   examAttempts        ExamAttempt[]
   certificates        Certificate[]
   cpdRecords          CPDRecord[]
+  courseSeats         CourseSeat[]
+  supportTickets      SupportTicket[]
 
   @@map("organisations")
 }
@@ -293,10 +302,12 @@ model Course {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  scheme     CertificationScheme? @relation(fields: [schemeId], references: [id])
-  creator    User                 @relation("CourseCreator", fields: [creatorId], references: [id])
-  modules    CourseModule[]
-  enrolments Enrolment[]
+  scheme      CertificationScheme? @relation(fields: [schemeId], references: [id])
+  creator     User                 @relation("CourseCreator", fields: [creatorId], references: [id])
+  modules     CourseModule[]
+  enrolments  Enrolment[]
+  cartItems   CartItem[]
+  courseSeats CourseSeat[]
 
   @@index([schemeId])
   @@index([status])
@@ -364,6 +375,7 @@ model Enrolment {
   purchase       Purchase?        @relation(fields: [purchaseId], references: [id])
   organisation   Organisation?    @relation(fields: [organisationId], references: [id])
   lessonProgress LessonProgress[]
+  seatAssignment SeatAssignment?
 
   @@unique([userId, courseId])
   @@index([userId, status])
@@ -713,11 +725,13 @@ model Purchase {
   courseId           String?
   stripePaymentId    String?   @unique
   stripeInvoiceId    String?
+  stripeSessionId    String?   @unique
   paystackReference  String?   @unique
   paystackAccessCode String?
   amount             Float
   currency           String    @default("NGN")
   status             String    @default("PENDING")
+  seats              Int       @default(1)
   description        String?
   metadata           String? // JSON
   receiptUrl         String?
@@ -727,6 +741,7 @@ model Purchase {
 
   organisation Organisation? @relation(fields: [organisationId], references: [id])
   enrolments   Enrolment[]
+  courseSeats  CourseSeat[]
 
   @@index([userId])
   @@index([courseId])
@@ -1093,6 +1108,121 @@ model UserCustomRole {
 
   @@id([userId, roleId])
   @@map("user_custom_roles")
+}
+
+// ─── SUPPORT TICKETS ──────────────────────────────────────────────────────────
+
+model SupportTicket {
+  id             String          @id @default(cuid())
+  ticketNumber   String          @unique
+  userId         String
+  user           User            @relation("TicketCreator", fields: [userId], references: [id])
+  organisationId String?
+  organisation   Organisation?   @relation(fields: [organisationId], references: [id])
+  subject        String
+  category       String          // BILLING | TECHNICAL | ACCOUNT | EXAM | CERTIFICATION | GENERAL
+  priority       String          @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  status         String          @default("OPEN")   // OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  assignedToId   String?
+  assignedTo     User?           @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  messages       TicketMessage[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  resolvedAt     DateTime?
+  closedAt       DateTime?
+
+  @@index([userId])
+  @@index([organisationId])
+  @@index([status])
+  @@index([assignedToId])
+  @@map("support_tickets")
+}
+
+model TicketMessage {
+  id         String        @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  content    String        @db.Text
+  isInternal Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+
+  @@index([ticketId])
+  @@map("ticket_messages")
+}
+
+// ─── SEAT-BASED ENROLMENT ─────────────────────────────────────────────────────
+
+model CourseSeat {
+  id             String    @id @default(cuid())
+  organisationId String
+  courseId       String
+  purchaseId     String
+  totalSeats     Int
+  usedSeats      Int       @default(0)
+  expiresAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organisation Organisation    @relation(fields: [organisationId], references: [id])
+  course       Course           @relation(fields: [courseId], references: [id])
+  purchase     Purchase         @relation(fields: [purchaseId], references: [id])
+  assignments  SeatAssignment[]
+
+  @@unique([organisationId, courseId, purchaseId])
+  @@index([organisationId])
+  @@index([courseId])
+  @@map("course_seats")
+}
+
+model SeatAssignment {
+  id           String    @id @default(cuid())
+  seatId       String
+  userId       String
+  assignedById String
+  assignedAt   DateTime  @default(now())
+  enrolmentId  String?   @unique
+
+  seat       CourseSeat @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  user       User       @relation("AssignedToUser", fields: [userId], references: [id])
+  assignedBy User       @relation("AssignedBy", fields: [assignedById], references: [id])
+  enrolment  Enrolment? @relation(fields: [enrolmentId], references: [id])
+
+  @@unique([seatId, userId])
+  @@index([seatId])
+  @@index([userId])
+  @@map("seat_assignments")
+}
+
+// ─── SHOPPING CART ────────────────────────────────────────────────────────────
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  courseId  String
+  seats     Int      @default(1)
+  unitPrice Decimal  @db.Decimal(10, 2)
+  addedAt   DateTime @default(now())
+
+  cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, courseId])
+  @@index([cartId])
+  @@index([courseId])
+  @@map("cart_items")
 }
 
 // ─── PLATFORM SETTINGS ────────────────────────────────────────────────────────

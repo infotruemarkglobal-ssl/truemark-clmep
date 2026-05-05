@@ -52,10 +52,12 @@ export default function CoursePlayer({
   course,
   enrolment,
   examPaperId,
+  userRole = "CANDIDATE",
 }: {
   course: Course;
   enrolment: Enrolment;
   examPaperId: string | null;
+  userRole?: string;
 }) {
   const router = useRouter();
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
@@ -64,6 +66,10 @@ export default function CoursePlayer({
   );
   const [savingProgress, setSavingProgress] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
+  const [inCart, setInCart] = useState(false);
+  const [seats, setSeats] = useState(1);
+  const isOrgManager = userRole === "ORG_MANAGER";
 
   const handleEnrol = useCallback(async () => {
     setEnrolling(true);
@@ -91,6 +97,28 @@ export default function CoursePlayer({
       setEnrolling(false);
     }
   }, [course.id, router]);
+
+  const handleAddToCart = useCallback(async () => {
+    setAddingToCart(true);
+    try {
+      const res = await fetch("/api/cart/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId: course.id, seats }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not add to cart");
+        return;
+      }
+      setInCart(true);
+      toast.success("Added to cart");
+    } catch {
+      toast.error("Something went wrong");
+    } finally {
+      setAddingToCart(false);
+    }
+  }, [course.id, seats]);
 
   const isEnrolled = !!enrolment;
   const completedLessonIds = new Set(
@@ -154,18 +182,57 @@ export default function CoursePlayer({
                     </span>
                   )}
                 </div>
-                <Button
-                  onClick={handleEnrol}
-                  disabled={enrolling}
-                  size="sm"
-                  className="gap-2"
-                >
-                  {course.price === 0 ? (
-                    <><Gift className="w-4 h-4" />{enrolling ? "Enrolling…" : "Enrol Free"}</>
-                  ) : (
-                    <><ShoppingCart className="w-4 h-4" />{enrolling ? "Redirecting…" : "Enrol Now"}</>
-                  )}
-                </Button>
+
+                {course.price === 0 ? (
+                  <Button onClick={handleEnrol} disabled={enrolling} size="sm" className="gap-2">
+                    <Gift className="w-4 h-4" />
+                    {enrolling ? "Enrolling…" : "Enrol Free"}
+                  </Button>
+                ) : inCart ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => router.push("/cart")}
+                    className="gap-2 border-primary text-primary hover:bg-primary/10"
+                  >
+                    <ShoppingCart className="w-4 h-4" /> View Cart
+                  </Button>
+                ) : (
+                  <div className="flex flex-col items-end gap-2">
+                    {isOrgManager && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-slate-500">Seats:</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          value={seats}
+                          onChange={(e) => setSeats(Math.max(1, Math.min(500, Number(e.target.value))))}
+                          className="w-16 text-sm border border-slate-200 rounded-lg px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-ring/50"
+                        />
+                      </div>
+                    )}
+                    <Button
+                      onClick={handleAddToCart}
+                      disabled={addingToCart}
+                      size="sm"
+                      className="gap-2"
+                    >
+                      {addingToCart
+                        ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Adding…</>
+                        : <><ShoppingCart className="w-4 h-4" /> Add to Cart</>
+                      }
+                    </Button>
+                    <button
+                      onClick={handleEnrol}
+                      disabled={enrolling}
+                      className="text-xs text-slate-400 hover:text-slate-600 underline disabled:opacity-50"
+                    >
+                      {enrolling ? "Redirecting…" : "Buy now →"}
+                    </button>
+                  </div>
+                )}
+
                 <button
                   onClick={() => router.push("/courses")}
                   className="text-xs text-slate-400 hover:text-slate-600 underline"

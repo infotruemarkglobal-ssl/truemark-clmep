@@ -26,11 +26,17 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(organisations);
 }
 
+const ORG_SIZES = ["1-10", "11-50", "51-200", "201-500", "500+"] as const;
+
 const schema = z.object({
   name: z.string().min(2),
   registrationNo: z.string().optional(),
-  country: z.string().optional(),
+  country: z.string().min(1, "Country is required"),
   website: z.string().url().optional().or(z.literal("")),
+  description: z.string().max(500).optional(),
+  industry: z.string().min(1, "Industry is required"),
+  size: z.enum(ORG_SIZES).optional(),
+  cacDocumentUrl: z.string().url().optional().or(z.literal("")),
   // Optional org manager to create alongside the org
   managerFirstName: z.string().min(1).optional(),
   managerLastName: z.string().min(1).optional(),
@@ -53,7 +59,7 @@ export async function POST(req: NextRequest) {
   const body = schema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
 
-  const { name, registrationNo, country, website, managerFirstName, managerLastName, managerEmail } = body.data;
+  const { name, registrationNo, country, website, description, industry, size, cacDocumentUrl, managerFirstName, managerLastName, managerEmail } = body.data;
 
   // Validate: if any manager field provided, all must be present
   const hasManager = managerFirstName || managerLastName || managerEmail;
@@ -65,10 +71,33 @@ export async function POST(req: NextRequest) {
     data: {
       name,
       registrationNo: registrationNo ?? null,
-      country: country ?? null,
+      country,
       website: website || null,
+      description: description ?? null,
+      industry,
+      size: size ?? null,
+      cacDocumentUrl: cacDocumentUrl || null,
     },
   });
+
+  // Recommend courses matching the industry — store IDs in approvedSchemes
+  const recommendedCourses = await db.course.findMany({
+    where: {
+      status: "PUBLISHED",
+      OR: [
+        { title: { contains: industry, mode: "insensitive" } },
+        { description: { contains: industry, mode: "insensitive" } },
+      ],
+    },
+    select: { id: true },
+    take: 10,
+  });
+  if (recommendedCourses.length > 0) {
+    await db.organisation.update({
+      where: { id: org.id },
+      data: { approvedSchemes: JSON.stringify(recommendedCourses.map((c) => c.id)) },
+    });
+  }
 
   revalidateTag(CACHE_TAGS.org, {});
 

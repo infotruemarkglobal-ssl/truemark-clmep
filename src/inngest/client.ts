@@ -14,6 +14,10 @@ export const EVENTS = {
   SEND_EXAM_RESULT:          "email/exam.result",
   SEND_EMAIL_VERIFICATION:   "email/verification.requested",
   SEND_PASSWORD_RESET:       "email/password.reset.requested",
+  SEND_SEAT_ASSIGNED:        "email/seat.assigned",
+  SEND_TICKET_CREATED:       "email/ticket.created",
+  SEND_TICKET_REPLY:         "email/ticket.reply",
+  SEND_TICKET_RESOLVED:      "email/ticket.resolved",
   SCAN_UPLOAD:               "upload/scan.requested",
   BREACH_REPORTED:           "breach/reported",
 } as const;

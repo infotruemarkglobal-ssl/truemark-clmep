@@ -22,7 +22,7 @@ export default async function Page() {
 
   const orgId = membership.organisationId;
 
-  const [org, members, courses, departments] = await Promise.all([
+  const [org, members, courses, departments, seatPools] = await Promise.all([
     db.organisation.findUnique({
       where: { id: orgId },
       select: { id: true, name: true },
@@ -72,6 +72,14 @@ export default async function Page() {
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
+    db.courseSeat.findMany({
+      where: { organisationId: orgId },
+      include: {
+        course: { select: { id: true, title: true, slug: true } },
+        assignments: { select: { userId: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
   if (!org) redirect("/dashboard");
@@ -112,6 +120,16 @@ export default async function Page() {
         schemeName: c.scheme?.name ?? null,
       }))}
       departments={departments}
+      seatPools={seatPools.map((s) => ({
+        id: s.id,
+        courseId: s.courseId,
+        courseTitle: s.course.title,
+        courseSlug: s.course.slug,
+        totalSeats: s.totalSeats,
+        usedSeats: s.usedSeats,
+        expiresAt: s.expiresAt?.toISOString() ?? null,
+        assignedUserIds: s.assignments.map((a) => a.userId),
+      }))}
     />
   );
 }

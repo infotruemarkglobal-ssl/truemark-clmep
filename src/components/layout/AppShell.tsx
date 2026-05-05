@@ -8,18 +8,19 @@ import Sidebar from "@/components/layout/Sidebar";
 export default function AppShell({
   session,
   notificationBadge,
+  cartBadge,
   children,
 }: {
   session: Session;
-  /** Streamed-in badge node from a Suspense-wrapped server component in the layout. */
   notificationBadge?: React.ReactNode;
+  cartBadge?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <TopNav session={session} onMenuClick={() => setSidebarOpen(true)} notificationBadge={notificationBadge} />
+      <TopNav session={session} onMenuClick={() => setSidebarOpen(true)} notificationBadge={notificationBadge} cartBadge={cartBadge} />
 
       <div className="flex pt-16 min-h-screen">
         <Sidebar

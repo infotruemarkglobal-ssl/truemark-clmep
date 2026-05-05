@@ -98,6 +98,7 @@ export default async function CourseDetailPage({
         course={serialisedCourse}
         enrolment={enrolment}
         examPaperId={examEligible ? examPaper!.id : null}
+        userRole={session?.user.role ?? "CANDIDATE"}
       />
     </>
   );

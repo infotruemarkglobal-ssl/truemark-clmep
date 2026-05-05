@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Menu, Bell, ChevronDown, LogOut, Settings, User, Award } from "lucide-react";
+import { Menu, Bell, ShoppingCart, ChevronDown, LogOut, Settings, User, Award } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TruemarkLogoColour } from "@/components/TruemarkLogo";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ const ROLE_BADGE: Record<string, string> = {
   AUDITOR: "bg-slate-100 text-slate-700",
   ORG_MANAGER: "bg-indigo-100 text-indigo-700",
   CANDIDATE: "bg-emerald-100 text-emerald-700",
+  SUPPORT_AGENT: "bg-teal-100 text-teal-700",
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -30,17 +31,19 @@ const ROLE_LABEL: Record<string, string> = {
   AUDITOR: "Auditor",
   ORG_MANAGER: "Org Manager",
   CANDIDATE: "Candidate",
+  SUPPORT_AGENT: "Support Agent",
 };
 
 export default function TopNav({
   session,
   onMenuClick,
   notificationBadge,
+  cartBadge,
 }: {
   session: Session;
   onMenuClick: () => void;
-  /** Pre-rendered badge node from a server component — streams in via Suspense. */
   notificationBadge?: React.ReactNode;
+  cartBadge?: React.ReactNode;
 }) {
   const router = useRouter();
   const { user } = session;
@@ -91,6 +94,17 @@ export default function TopNav({
 
         {/* Right: notification bell + user menu */}
         <div className="flex items-center gap-2">
+
+          {/* Cart */}
+          <button
+            type="button"
+            onClick={() => router.push("/cart")}
+            className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+            aria-label="Shopping cart"
+          >
+            <ShoppingCart className="w-5 h-5" />
+            {cartBadge}
+          </button>
 
           {/* Notifications */}
           <button
