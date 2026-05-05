@@ -1,5 +1,6 @@
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { cacheQuery, CACHE_TAGS } from "@/lib/cache";
 import Link from "next/link";
 import {
   Users, Award, FileText, AlertTriangle, TrendingUp,
@@ -46,16 +47,28 @@ export default async function AdminDashboard({ role }: { role: UserRole }) {
     pendingExamPapers,
     activeExamSessions,
   ] = await Promise.all([
-    isAdminish ? db.user.count({ where: { status: "ACTIVE" } }) : Promise.resolve(0),
-    (isAdminish || isAuditor) ? db.certificate.count({ where: { status: "ACTIVE" } }) : Promise.resolve(0),
-    (isAdminish) ? db.certificationDecision.count({ where: { decision: "referred" } }) : Promise.resolve(0),
-    (isAdminish || isAuditor) ? db.appeal.count({ where: { status: { in: ["SUBMITTED", "UNDER_REVIEW"] } } }) : Promise.resolve(0),
-    (isTrainer || isAdminish) ? db.course.count({ where: { status: "PUBLISHED" } }) : Promise.resolve(0),
-    isExaminer ? db.examPaper.count({ where: { isActive: true } }) : Promise.resolve(0),
+    isAdminish
+      ? cacheQuery(() => db.user.count({ where: { status: "ACTIVE" } }), [`admin-dash-users-${role}`], [CACHE_TAGS.user], 30)
+      : Promise.resolve(0),
+    (isAdminish || isAuditor)
+      ? cacheQuery(() => db.certificate.count({ where: { status: "ACTIVE" } }), [`admin-dash-certs-${role}`], [CACHE_TAGS.certificate], 30)
+      : Promise.resolve(0),
+    isAdminish
+      ? cacheQuery(() => db.certificationDecision.count({ where: { decision: "referred" } }), [`admin-dash-decisions-${role}`], [CACHE_TAGS.certificate], 30)
+      : Promise.resolve(0),
+    (isAdminish || isAuditor)
+      ? cacheQuery(() => db.appeal.count({ where: { status: { in: ["SUBMITTED", "UNDER_REVIEW"] } } }), [`admin-dash-appeals-${role}`], [CACHE_TAGS.compliance], 30)
+      : Promise.resolve(0),
+    (isTrainer || isAdminish)
+      ? cacheQuery(() => db.course.count({ where: { status: "PUBLISHED" } }), [`admin-dash-courses-${role}`], [CACHE_TAGS.course], 30)
+      : Promise.resolve(0),
+    isExaminer
+      ? cacheQuery(() => db.examPaper.count({ where: { isActive: true } }), [`admin-dash-exams-${role}`], [CACHE_TAGS.exam], 30)
+      : Promise.resolve(0),
     isProctor
-      ? db.proctoringSession.count({ where: { status: "active" } })
+      ? cacheQuery(() => db.proctoringSession.count({ where: { status: "active" } }), [`admin-dash-proctoring-${role}`], [CACHE_TAGS.exam], 30)
       : isExaminer
-      ? db.examAttempt.count({ where: { status: "IN_PROGRESS" } })
+      ? cacheQuery(() => db.examAttempt.count({ where: { status: "IN_PROGRESS" } }), [`admin-dash-attempts-${role}`], [CACHE_TAGS.exam], 30)
       : Promise.resolve(0),
   ]);
 

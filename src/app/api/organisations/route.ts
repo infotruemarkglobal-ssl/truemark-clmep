@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
@@ -6,6 +7,7 @@ import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
 import { inngest, EVENTS } from "@/inngest/client";
+import { CACHE_TAGS } from "@/lib/cache";
 
 const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
 
@@ -67,6 +69,8 @@ export async function POST(req: NextRequest) {
       website: website || null,
     },
   });
+
+  revalidateTag(CACHE_TAGS.org, {});
 
   await auditLog({
     userId: session.user.id,

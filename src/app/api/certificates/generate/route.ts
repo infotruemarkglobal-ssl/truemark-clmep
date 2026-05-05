@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
@@ -6,6 +7,7 @@ import { generateCertificateNumber, generateOpenBadgeJwt, generateQrCode } from 
 import { addMonths } from "date-fns";
 import { z } from "zod";
 import { USER_ROLES } from "@/lib/constants";
+import { CACHE_TAGS } from "@/lib/cache";
 
 const schema = z.object({
   attemptId: z.string(),
@@ -256,6 +258,8 @@ export async function POST(req: NextRequest) {
     await db.certificate.delete({ where: { id: certificate.id } }).catch(() => {});
     throw err;
   }
+
+  revalidateTag(CACHE_TAGS.certificate, {});
 
   // Notification is best-effort — failure must not roll back the certificate.
   await db.notification.create({

@@ -1,8 +1,15 @@
 "use client";
 
+import { useTransition } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { ShieldCheck, FileText, Award, Scale, Users, AlertCircle, CheckCircle2, Clock, Database } from "lucide-react";
+import {
+  ShieldCheck, FileText, Award, Scale, Users, AlertCircle, CheckCircle2,
+  Clock, Database, RefreshCw, ArrowRight,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type Metrics = {
@@ -23,16 +30,154 @@ type AuditEntry = {
   user: { firstName: string; lastName: string; email: string } | null;
 };
 
-const ISO_CLAUSES = [
-  { clause: "4.1", title: "Impartiality", description: "Certification body manages impartiality and conflicts of interest", check: (m: Metrics) => m.totalCOI > 0, metric: (m: Metrics) => `${m.totalCOI} COI declarations` },
-  { clause: "5.1", title: "Competence & Qualification", description: "Examiners and assessors are qualified", check: () => true, metric: () => "Managed via staff roles" },
-  { clause: "6.1", title: "Certification Scheme", description: "Active certification schemes with documented requirements", check: (m: Metrics) => m.activeSchemes > 0, metric: (m: Metrics) => `${m.activeSchemes} active schemes` },
-  { clause: "6.2", title: "Examination Process", description: "Active exam papers with marking schemes", check: (m: Metrics) => m.activeExamPapers > 0, metric: (m: Metrics) => `${m.activeExamPapers} active papers` },
-  { clause: "6.3", title: "Certificate Issuance", description: "Certificates issued and tracked", check: (m: Metrics) => m.totalCerts >= 0, metric: (m: Metrics) => `${m.totalCerts} certificates issued` },
-  { clause: "7.1", title: "Appeals & Complaints", description: "Appeals process in place", check: () => true, metric: (m: Metrics) => `${m.openAppeals} open appeals` },
-  { clause: "8.1", title: "Records Management", description: "Immutable audit log maintained", check: () => true, metric: () => "Audit log active" },
-  { clause: "8.2", title: "Data Protection (GDPR)", description: "Data subject requests tracked", check: (m: Metrics) => m.openDSR === 0, metric: (m: Metrics) => `${m.openDSR} pending DSR` },
+type ClauseStatus = "green" | "amber" | "red";
+
+type Remediation = {
+  text: string;
+  href: string;
+  linkText: string;
+};
+
+const ISO_CLAUSES: Array<{
+  clause: string;
+  title: string;
+  description: string;
+  status: (m: Metrics) => ClauseStatus;
+  metric: (m: Metrics) => string;
+  remediation: (m: Metrics, s: ClauseStatus) => Remediation | null;
+}> = [
+  {
+    clause: "4.1",
+    title: "Impartiality",
+    description: "Certification body manages impartiality and conflicts of interest",
+    status: (m) => (m.totalCOI > 0 ? "green" : "amber"),
+    metric: (m) => `${m.totalCOI} COI declarations`,
+    remediation: (_m, s) =>
+      s !== "green"
+        ? {
+            text: "Conflict of interest declarations are below recommended levels. All examiners and certification officers should have active declarations on file.",
+            href: "/staff",
+            linkText: "Manage staff declarations",
+          }
+        : null,
+  },
+  {
+    clause: "5.1",
+    title: "Competence & Qualification",
+    description: "Examiners and assessors are qualified",
+    status: () => "green",
+    metric: () => "Managed via staff roles",
+    remediation: () => null,
+  },
+  {
+    clause: "6.1",
+    title: "Certification Scheme",
+    description: "Active certification schemes with documented requirements",
+    status: (m) => (m.activeSchemes > 0 ? "green" : "red"),
+    metric: (m) => `${m.activeSchemes} active schemes`,
+    remediation: (_m, s) =>
+      s !== "green"
+        ? {
+            text: "No active certification schemes. Create at least one scheme before accepting candidates.",
+            href: "/settings",
+            linkText: "Create certification scheme",
+          }
+        : null,
+  },
+  {
+    clause: "6.2",
+    title: "Examination Process",
+    description: "Active exam papers with marking schemes",
+    status: (m) => (m.activeExamPapers > 0 ? "green" : "red"),
+    metric: (m) => `${m.activeExamPapers} active papers`,
+    remediation: (_m, s) =>
+      s !== "green"
+        ? {
+            text: "No active exam papers. Examiners must create and publish exam papers before candidates can sit assessments.",
+            href: "/manage/exams",
+            linkText: "Manage exam papers",
+          }
+        : null,
+  },
+  {
+    clause: "6.3",
+    title: "Certificate Issuance",
+    description: "Certificates issued and tracked",
+    status: (m) => (m.totalCerts > 0 ? "green" : "red"),
+    metric: (m) => `${m.totalCerts} certificates issued`,
+    remediation: (_m, s) =>
+      s !== "green"
+        ? {
+            text: "No active certificates issued. Verify the certification decision workflow is configured correctly.",
+            href: "/manage/decisions",
+            linkText: "Review certification workflow",
+          }
+        : null,
+  },
+  {
+    clause: "7.1",
+    title: "Appeals & Complaints",
+    description: "Appeals process in place — 28-day SLA per ISO 17024 Cl.7.9",
+    status: (m) => (m.openAppeals > 5 ? "red" : m.openAppeals > 0 ? "amber" : "green"),
+    metric: (m) => `${m.openAppeals} open appeals`,
+    remediation: (m, s) => {
+      if (s === "red")
+        return {
+          text: `${m.openAppeals} appeals have exceeded or are approaching the 28-day ISO 17024 Cl.7.9 SLA. Review and assign officers immediately.`,
+          href: "/manage/decisions",
+          linkText: "Review appeals",
+        };
+      if (s === "amber")
+        return {
+          text: `${m.openAppeals} appeal${m.openAppeals !== 1 ? "s" : ""} pending. Ensure each has an assigned officer and expected resolution date.`,
+          href: "/appeals",
+          linkText: "View appeals",
+        };
+      return null;
+    },
+  },
+  {
+    clause: "8.1",
+    title: "Records Management",
+    description: "Immutable audit log maintained",
+    status: () => "green",
+    metric: () => "Audit log active",
+    remediation: () => null,
+  },
+  {
+    clause: "8.2",
+    title: "Data Protection (GDPR)",
+    description: "Data subject requests tracked and responded to within 45 days",
+    status: (m) => (m.openDSR === 0 ? "green" : "red"),
+    metric: (m) => `${m.openDSR} pending DSR`,
+    remediation: (m, s) =>
+      s !== "green"
+        ? {
+            text: `${m.openDSR} data subject request${m.openDSR !== 1 ? "s are" : " is"} pending. GDPR Art.15–22 requires response within 45 days.`,
+            href: "/gdpr/dsr",
+            linkText: "Review data requests",
+          }
+        : null,
+  },
 ];
+
+const STATUS_ICON = {
+  green: CheckCircle2,
+  amber: AlertCircle,
+  red: AlertCircle,
+} as const;
+
+const STATUS_ICON_COLOR = {
+  green: "text-emerald-500",
+  amber: "text-amber-500",
+  red: "text-red-500",
+} as const;
+
+const STATUS_BADGE_COLOR = {
+  green: "bg-emerald-100 text-emerald-700",
+  amber: "bg-amber-100 text-amber-700",
+  red: "bg-red-100 text-red-700",
+} as const;
 
 const ACTION_COLOR: Record<string, string> = {
   USER_CREATED: "bg-emerald-100 text-emerald-700",
@@ -48,23 +193,49 @@ const ACTION_COLOR: Record<string, string> = {
 export default function CompliancePage({
   metrics,
   recentAudits,
+  checkedAt,
 }: {
   metrics: Metrics;
   recentAudits: AuditEntry[];
+  checkedAt: string;
 }) {
-  const passing = ISO_CLAUSES.filter((c) => c.check(metrics)).length;
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const passing = ISO_CLAUSES.filter((c) => c.status(metrics) === "green").length;
   const pct = Math.round((passing / ISO_CLAUSES.length) * 100);
+
+  function handleRefresh() {
+    startTransition(() => {
+      router.refresh();
+    });
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">ISO 17024 Compliance</h1>
           <p className="text-slate-500 text-sm mt-1">Certification body compliance monitoring</p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Last checked: {format(new Date(checkedAt), "d MMM yyyy 'at' HH:mm")}
+          </p>
         </div>
-        <div className="text-right">
-          <p className="text-3xl font-bold text-primary">{pct}%</p>
-          <p className="text-xs text-slate-500">compliance score</p>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isPending}
+            className="gap-2"
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", isPending && "animate-spin")} />
+            {isPending ? "Refreshing…" : "Refresh"}
+          </Button>
+          <div className="text-right">
+            <p className="text-3xl font-bold text-primary">{pct}%</p>
+            <p className="text-xs text-slate-500">compliance score</p>
+          </div>
         </div>
       </div>
 
@@ -94,24 +265,47 @@ export default function CompliancePage({
         </div>
         <div className="divide-y divide-slate-100">
           {ISO_CLAUSES.map((clause) => {
-            const ok = clause.check(metrics);
+            const status = clause.status(metrics);
+            const StatusIcon = STATUS_ICON[status];
+            const remediation = clause.remediation(metrics, status);
             return (
-              <div key={clause.clause} className="flex items-start gap-4 px-4 py-3">
-                {ok ? (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-slate-400">{clause.clause}</span>
-                    <span className="font-semibold text-slate-900 text-sm">{clause.title}</span>
+              <div key={clause.clause}>
+                <div className="flex items-start gap-4 px-4 py-3">
+                  <StatusIcon className={cn("w-5 h-5 shrink-0 mt-0.5", STATUS_ICON_COLOR[status])} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-slate-400">{clause.clause}</span>
+                      <span className="font-semibold text-slate-900 text-sm">{clause.title}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">{clause.description}</p>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">{clause.description}</p>
+                  <Badge className={cn("shrink-0 border-0 text-xs", STATUS_BADGE_COLOR[status])}>
+                    {clause.metric(metrics)}
+                  </Badge>
                 </div>
-                <Badge className={cn("shrink-0 border-0 text-xs", ok ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
-                  {clause.metric(metrics)}
-                </Badge>
+
+                {remediation && (
+                  <div
+                    className={cn(
+                      "mx-4 mb-3 rounded-xl px-4 py-3",
+                      status === "red"
+                        ? "bg-red-50 border border-red-100 text-red-800"
+                        : "bg-amber-50 border border-amber-100 text-amber-800"
+                    )}
+                  >
+                    <p className="text-xs leading-relaxed">{remediation.text}</p>
+                    <Link
+                      href={remediation.href}
+                      className={cn(
+                        "inline-flex items-center gap-1 text-xs mt-2 font-medium hover:underline",
+                        status === "red" ? "text-red-700" : "text-amber-700"
+                      )}
+                    >
+                      {remediation.linkText}
+                      <ArrowRight className="w-3 h-3" />
+                    </Link>
+                  </div>
+                )}
               </div>
             );
           })}

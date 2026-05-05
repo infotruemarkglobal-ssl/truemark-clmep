@@ -1,18 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import { cacheQuery, CACHE_TAGS } from "@/lib/cache";
 import { Building2, CheckCircle2, Clock, XCircle, Users } from "lucide-react";
 
 export const metadata: Metadata = { title: "Manage Organisations — TrueMark Platform" };
 
-async function getOrganisations() {
-  return db.organisation.findMany({
-    where: { isPlatformOwner: false },
-    include: {
-      _count: { select: { members: true, enrolments: true, purchases: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+function getOrganisations() {
+  return cacheQuery(
+    () => db.organisation.findMany({
+      where: { isPlatformOwner: false },
+      include: {
+        _count: { select: { members: true, enrolments: true, purchases: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    ["platform-organisations"],
+    [CACHE_TAGS.org],
+    60,
+  );
 }
 
 function VerificationBadge({ status }: { status: string }) {

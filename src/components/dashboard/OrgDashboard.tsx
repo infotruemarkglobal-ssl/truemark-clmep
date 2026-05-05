@@ -1,5 +1,6 @@
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { cacheQuery, CACHE_TAGS } from "@/lib/cache";
 import { Users, Award, TrendingUp, BookOpen, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
@@ -19,35 +20,55 @@ export default async function OrgDashboard() {
 
   const [memberCount, enrolmentCount, certCount, enrolments] = await Promise.all([
     orgId
-      ? db.organisationMember.count({ where: { organisationId: orgId } })
+      ? cacheQuery(
+          () => db.organisationMember.count({ where: { organisationId: orgId } }),
+          [`org-dash-members-${orgId}`],
+          [CACHE_TAGS.org],
+          30,
+        )
       : Promise.resolve(0),
 
     orgId
-      ? db.enrolment.count({
-          where: {
-            status: "ACTIVE",
-            user: { organisationMemberships: { some: { organisationId: orgId } } },
-          },
-        })
+      ? cacheQuery(
+          () => db.enrolment.count({
+            where: {
+              status: "ACTIVE",
+              user: { organisationMemberships: { some: { organisationId: orgId } } },
+            },
+          }),
+          [`org-dash-enrolments-${orgId}`],
+          [CACHE_TAGS.course, CACHE_TAGS.org],
+          30,
+        )
       : Promise.resolve(0),
 
     orgId
-      ? db.certificate.count({
-          where: {
-            status: "ACTIVE",
-            user: { organisationMemberships: { some: { organisationId: orgId } } },
-          },
-        })
+      ? cacheQuery(
+          () => db.certificate.count({
+            where: {
+              status: "ACTIVE",
+              user: { organisationMemberships: { some: { organisationId: orgId } } },
+            },
+          }),
+          [`org-dash-certs-${orgId}`],
+          [CACHE_TAGS.certificate, CACHE_TAGS.org],
+          30,
+        )
       : Promise.resolve(0),
 
     orgId
-      ? db.enrolment.findMany({
-          where: {
-            status: "ACTIVE",
-            user: { organisationMemberships: { some: { organisationId: orgId } } },
-          },
-          select: { progress: true },
-        })
+      ? cacheQuery(
+          () => db.enrolment.findMany({
+            where: {
+              status: "ACTIVE",
+              user: { organisationMemberships: { some: { organisationId: orgId } } },
+            },
+            select: { progress: true },
+          }),
+          [`org-dash-progress-${orgId}`],
+          [CACHE_TAGS.course, CACHE_TAGS.org],
+          30,
+        )
       : Promise.resolve([]),
   ]);
 

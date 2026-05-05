@@ -1,5 +1,6 @@
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { cacheQuery, CACHE_TAGS } from "@/lib/cache";
 import Link from "next/link";
 import { BookOpen, FileText, Award, Clock, TrendingUp, AlertCircle, ChevronRight, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,28 +14,48 @@ export default async function CandidateDashboard() {
   const firstName = session!.user.name?.split(" ")[0] ?? "there";
 
   const [enrolments, certificates, examAttempts, cpdAggregate] = await Promise.all([
-    db.enrolment.findMany({
-      where: { userId, status: "ACTIVE" },
-      include: { course: { select: { title: true, slug: true, thumbnailUrl: true, cpdHours: true } } },
-      orderBy: { enroledAt: "desc" },
-      take: 4,
-    }),
-    db.certificate.findMany({
-      where: { userId },
-      include: { scheme: { select: { name: true, code: true } } },
-      orderBy: { issuedAt: "desc" },
-      take: 3,
-    }),
-    db.examAttempt.findMany({
-      where: { userId },
-      include: { examPaper: { select: { title: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 3,
-    }),
-    db.cPDRecord.aggregate({
-      where: { userId, status: { in: ["APPROVED", "PENDING"] } },
-      _sum: { hoursLogged: true },
-    }),
+    cacheQuery(
+      () => db.enrolment.findMany({
+        where: { userId, status: "ACTIVE" },
+        include: { course: { select: { title: true, slug: true, thumbnailUrl: true, cpdHours: true } } },
+        orderBy: { enroledAt: "desc" },
+        take: 4,
+      }),
+      [`candidate-enrolments-${userId}`],
+      [CACHE_TAGS.course],
+      30,
+    ),
+    cacheQuery(
+      () => db.certificate.findMany({
+        where: { userId },
+        include: { scheme: { select: { name: true, code: true } } },
+        orderBy: { issuedAt: "desc" },
+        take: 3,
+      }),
+      [`candidate-certificates-${userId}`],
+      [CACHE_TAGS.certificate],
+      30,
+    ),
+    cacheQuery(
+      () => db.examAttempt.findMany({
+        where: { userId },
+        include: { examPaper: { select: { title: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 3,
+      }),
+      [`candidate-exam-attempts-${userId}`],
+      [CACHE_TAGS.exam],
+      30,
+    ),
+    cacheQuery(
+      () => db.cPDRecord.aggregate({
+        where: { userId, status: { in: ["APPROVED", "PENDING"] } },
+        _sum: { hoursLogged: true },
+      }),
+      [`candidate-cpd-${userId}`],
+      [CACHE_TAGS.course],
+      30,
+    ),
   ]);
 
   const cpdHours = Math.round((cpdAggregate._sum.hoursLogged ?? 0) * 10) / 10;

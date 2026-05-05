@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   Search, Plus, Shield, ChevronDown, CheckCircle2,
   XCircle, Clock, MoreHorizontal, User, Mail, Phone,
-  Edit2, Trash2, ShieldCheck, UserX,
+  Edit2, Trash2, ShieldCheck, UserX, Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,7 @@ type StaffUser = {
   lastLoginAt: string | null;
   createdAt: string;
   phone: string | null;
+  organisation?: { id: string; name: string } | null;
 };
 
 const ROLES = [
@@ -64,17 +66,32 @@ export default function StaffManagement({
   const [users, setUsers] = useState(initialUsers);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const [orgFilter, setOrgFilter] = useState("");
   const [loading, setLoading] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState({ firstName: "", lastName: "", email: "", role: "CANDIDATE", password: "", phone: "" });
   const [creating, setCreating] = useState(false);
 
+  // Derive unique org list from loaded users for the filter dropdown.
+  const availableOrgs = useMemo(() => {
+    const seen = new Set<string>();
+    const orgs: { id: string; name: string }[] = [];
+    for (const u of users) {
+      if (u.organisation && !seen.has(u.organisation.id)) {
+        seen.add(u.organisation.id);
+        orgs.push(u.organisation);
+      }
+    }
+    return orgs.sort((a, b) => a.name.localeCompare(b.name));
+  }, [users]);
+
   const filteredUsers = users.filter((u) => {
     const q = search.toLowerCase();
     const matchSearch = !q || u.firstName.toLowerCase().includes(q) || u.lastName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
     const matchRole = !roleFilter || u.role === roleFilter;
-    return matchSearch && matchRole;
+    const matchOrg = !orgFilter || u.organisation?.id === orgFilter;
+    return matchSearch && matchRole && matchOrg;
   });
 
   async function fetchUsers() {
@@ -149,6 +166,9 @@ export default function StaffManagement({
     }
   }
 
+  // Column count changes when the org column is visible (super admin only).
+  const colCount = isSuperAdmin ? 7 : 6;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -171,7 +191,7 @@ export default function StaffManagement({
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
           <Input
@@ -191,6 +211,18 @@ export default function StaffManagement({
             {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         )}
+        {isSuperAdmin && availableOrgs.length > 0 && (
+          <select
+            value={orgFilter}
+            onChange={(e) => setOrgFilter(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="">All organisations</option>
+            {availableOrgs.map((o) => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+        )}
         {!isOrgManager && (
           <Button variant="outline" onClick={fetchUsers} disabled={loading}>
             {loading ? "Loading…" : "Search"}
@@ -205,6 +237,9 @@ export default function StaffManagement({
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">User</th>
+                {isSuperAdmin && (
+                  <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider hidden sm:table-cell">Organisation</th>
+                )}
                 <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider hidden md:table-cell">Role</th>
                 <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider">Status</th>
                 <th className="text-left px-4 py-3 font-semibold text-slate-600 text-xs uppercase tracking-wider hidden lg:table-cell">MFA</th>
@@ -215,7 +250,7 @@ export default function StaffManagement({
             <tbody>
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={colCount} className="px-4 py-12 text-center text-slate-400">
                     <User className="w-10 h-10 mx-auto mb-3 opacity-30" />
                     <p>No users found</p>
                   </td>
@@ -247,6 +282,21 @@ export default function StaffManagement({
                           </div>
                         </div>
                       </td>
+                      {isSuperAdmin && (
+                        <td className="px-4 py-3 hidden sm:table-cell">
+                          {user.organisation ? (
+                            <Link
+                              href={`/organisations/${user.organisation.id}`}
+                              className="flex items-center gap-1.5 text-sm text-primary hover:underline min-w-0"
+                            >
+                              <Building2 className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                              <span className="truncate">{user.organisation.name}</span>
+                            </Link>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
+                      )}
                       <td className="px-4 py-3 hidden md:table-cell">
                         <Badge className={cn("border-0 text-xs", roleConf.color)}>{roleConf.label}</Badge>
                       </td>

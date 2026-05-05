@@ -25,20 +25,25 @@ export default async function Page() {
   const STAFF_ROLES = [USER_ROLES.AUDITOR, USER_ROLES.EXAMINER, USER_ROLES.TRAINER];
   const isStaff = (STAFF_ROLES as string[]).includes(session.user.role);
 
-  const documents = await db.document.findMany({
-    where: isAdmin
-      ? undefined
-      : isStaff
-      ? { accessLevel: { in: ["public", "candidate", "internal"] } }
-      : { accessLevel: { in: ["public", "candidate"] } },
-    orderBy: { createdAt: "desc" },
-    include: {
-      versions: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
+  const documents = await db.document
+    .findMany({
+      where: isAdmin
+        ? undefined
+        : isStaff
+        ? { accessLevel: { in: ["public", "candidate", "internal"] } }
+        : { accessLevel: { in: ["public", "candidate"] } },
+      orderBy: { createdAt: "desc" },
+      include: {
+        versions: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
       },
-    },
-  });
+    })
+    .catch((err: unknown) => {
+      console.error("[documents/page] db.document.findMany failed:", err);
+      return [] as Awaited<ReturnType<typeof db.document.findMany<{ include: { versions: true } }>>>;
+    });
 
   const serialised = documents.map((d) => ({
     id: d.id,

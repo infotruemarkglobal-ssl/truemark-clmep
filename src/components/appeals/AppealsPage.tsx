@@ -32,6 +32,18 @@ type ExamAttempt = {
   submittedAt: string | null;
 };
 
+function parseEvidenceUrls(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((u): u is string => typeof u === "string" && u.length > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   SUBMITTED: { label: "Submitted", color: "bg-blue-100 text-blue-700", icon: Clock },
   UNDER_REVIEW: { label: "Under Review", color: "bg-amber-100 text-amber-700", icon: AlertCircle },
@@ -196,6 +208,7 @@ export default function AppealsPage({
             {filtered.map((appeal) => {
               const statusConf = STATUS_CONFIG[appeal.status] ?? STATUS_CONFIG.SUBMITTED;
               const StatusIcon = statusConf.icon;
+              const evidenceLinks = parseEvidenceUrls(appeal.evidenceUrls);
               return (
                 <div key={appeal.id} className="p-4 hover:bg-slate-50 transition">
                   <div className="flex items-start justify-between gap-4">
@@ -220,6 +233,22 @@ export default function AppealsPage({
                         <p className="text-xs text-slate-500 mt-1 italic">
                           Resolution: {appeal.resolution}
                         </p>
+                      )}
+                      {evidenceLinks.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-2 items-center">
+                          <span className="text-xs text-slate-400">Evidence:</span>
+                          {evidenceLinks.map((url, i) => (
+                            <a
+                              key={i}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline transition"
+                            >
+                              Link {i + 1}
+                            </a>
+                          ))}
+                        </div>
                       )}
                     </div>
                     <div className="text-right shrink-0">
@@ -363,9 +392,29 @@ export default function AppealsPage({
           <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl">
             <h3 className="font-bold text-slate-900 text-lg mb-1">Review Appeal</h3>
             <p className="text-sm text-slate-500 mb-5">{showResolveModal.reference}</p>
-            <div className="bg-slate-50 rounded-xl p-4 mb-4">
+            <div className="bg-slate-50 rounded-xl p-4 mb-4 space-y-2">
               <p className="text-xs text-slate-500 mb-1 font-medium uppercase tracking-wide">Appellant&apos;s Description</p>
               <p className="text-sm text-slate-700">{showResolveModal.description}</p>
+              {(() => {
+                const links = parseEvidenceUrls(showResolveModal.evidenceUrls);
+                if (links.length === 0) return null;
+                return (
+                  <div className="flex flex-wrap gap-2 items-center pt-1">
+                    <span className="text-xs text-slate-400">Evidence:</span>
+                    {links.map((url, i) => (
+                      <a
+                        key={i}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline transition"
+                      >
+                        Link {i + 1}
+                      </a>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
             <div className="space-y-4">
               <div>

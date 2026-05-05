@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { cacheQuery, CACHE_TAGS } from "@/lib/cache";
 import CertificateList from "@/components/certificates/CertificateList";
 
 export const metadata: Metadata = { title: "My Certificates" };
@@ -10,14 +11,19 @@ export default async function CertificatesPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const certificates = await db.certificate.findMany({
-    where: { userId: session.user.id, deletedAt: null },
-    orderBy: { issuedAt: "desc" },
-    include: {
-      scheme: { select: { name: true, code: true, validityMonths: true } },
-      renewals: { select: { id: true } },
-    },
-  });
+  const certificates = await cacheQuery(
+    () => db.certificate.findMany({
+      where: { userId: session.user.id, deletedAt: null },
+      orderBy: { issuedAt: "desc" },
+      include: {
+        scheme: { select: { name: true, code: true, validityMonths: true } },
+        renewals: { select: { id: true } },
+      },
+    }),
+    [`user-certificates-${session.user.id}`],
+    [CACHE_TAGS.certificate],
+    60,
+  );
 
   const serialised = certificates.map((c) => ({
     id: c.id,

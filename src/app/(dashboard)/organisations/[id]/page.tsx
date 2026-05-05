@@ -24,36 +24,79 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     if (!membership) redirect("/dashboard");
   }
 
-  const org = await db.organisation.findUnique({
-    where: { id },
-    include: {
-      members: {
+  // Run all primary queries in parallel — org notFound check gates the secondary
+  // user/course resolution for payment history below.
+  const [org, assignableCourses, purchases, certCount, activeEnrolments, completedEnrolments, totalPayments] =
+    await Promise.all([
+      db.organisation.findUnique({
+        where: { id },
         include: {
-          user: {
-            select: {
-              id: true, firstName: true, lastName: true, email: true,
-              role: true, status: true, lastLoginAt: true,
-              enrolments: {
-                select: { courseId: true, status: true, progress: true },
+          members: {
+            include: {
+              user: {
+                select: {
+                  id: true, firstName: true, lastName: true, email: true,
+                  role: true, status: true, lastLoginAt: true,
+                  enrolments: {
+                    select: { courseId: true, status: true, progress: true },
+                  },
+                },
               },
+              department: { select: { id: true, name: true } },
             },
+            orderBy: { joinedAt: "desc" },
           },
-          department: { select: { id: true, name: true } },
+          departments: { select: { id: true, name: true } },
         },
-        orderBy: { joinedAt: "desc" },
-      },
-      departments: { select: { id: true, name: true } },
-    },
-  });
+      }),
+      // Published courses available for bulk assignment to org members
+      db.course.findMany({
+        where: { status: "PUBLISHED" },
+        select: { id: true, title: true, slug: true, cpdHours: true, scheme: { select: { code: true } } },
+        orderBy: { title: "asc" },
+      }),
+      // Last 10 purchases for this org — user names resolved via secondary lookup below
+      db.purchase.findMany({
+        where: { organisationId: id },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        select: {
+          id: true, amount: true, currency: true, status: true,
+          description: true, paystackReference: true,
+          paidAt: true, createdAt: true, userId: true, courseId: true,
+        },
+      }),
+      // Certificates issued under this org's sponsorship (ISO 17024 Cl.9.5)
+      db.certificate.count({ where: { organisationId: id, status: "ACTIVE", deletedAt: null } }),
+      db.enrolment.count({ where: { organisationId: id, status: "ACTIVE" } }),
+      db.enrolment.count({ where: { organisationId: id, status: "COMPLETED" } }),
+      db.purchase.count({ where: { organisationId: id } }),
+    ]);
 
   if (!org) notFound();
 
-  // Get published courses for assignment
-  const courses = await db.course.findMany({
-    where: { status: "PUBLISHED" },
-    select: { id: true, title: true, slug: true, cpdHours: true, scheme: { select: { code: true } } },
-    orderBy: { title: "asc" },
-  });
+  // Resolve individual payer names and course titles for the payment history tab.
+  // Purchase has no Prisma user/course relations so we batch-fetch separately.
+  const payerIds = [...new Set(purchases.flatMap((p) => (p.userId ? [p.userId] : [])))];
+  const paymentCourseIds = [...new Set(purchases.flatMap((p) => (p.courseId ? [p.courseId] : [])))];
+
+  const [payerUsers, paymentCourses] = await Promise.all([
+    payerIds.length
+      ? db.user.findMany({
+          where: { id: { in: payerIds } },
+          select: { id: true, firstName: true, lastName: true, email: true },
+        })
+      : Promise.resolve([]),
+    paymentCourseIds.length
+      ? db.course.findMany({
+          where: { id: { in: paymentCourseIds } },
+          select: { id: true, title: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const payerMap = new Map(payerUsers.map((u) => [u.id, u]));
+  const paymentCourseMap = new Map(paymentCourses.map((c) => [c.id, c]));
 
   const serialised = {
     id: org.id,
@@ -89,7 +132,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     })),
   };
 
-  const serialisedCourses = courses.map((c) => ({
+  const serialisedCourses = assignableCourses.map((c) => ({
     id: c.id,
     title: c.title,
     slug: c.slug,
@@ -97,10 +140,28 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     schemeCode: c.scheme?.code ?? null,
   }));
 
+  const serialisedPayments = purchases.map((p) => ({
+    id: p.id,
+    amount: p.amount,
+    currency: p.currency,
+    status: p.status,
+    description: p.description,
+    paystackReference: p.paystackReference,
+    date: (p.paidAt ?? p.createdAt).toISOString(),
+    payer: p.userId ? (payerMap.get(p.userId) ?? null) : null,
+    courseTitle: p.courseId ? (paymentCourseMap.get(p.courseId)?.title ?? null) : null,
+  }));
+
   return (
     <OrgDetailPage
       org={serialised}
       isAdmin={session.user.role !== USER_ROLES.ORG_MANAGER}
+      courses={serialisedCourses}
+      payments={serialisedPayments}
+      certCount={certCount}
+      activeEnrolments={activeEnrolments}
+      completedEnrolments={completedEnrolments}
+      totalPayments={totalPayments}
     />
   );
 }

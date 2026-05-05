@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { inngest, EVENTS } from "@/inngest/client";
 import { z } from "zod";
+import { CACHE_TAGS } from "@/lib/cache";
 
 const schema = z.object({ courseId: z.string() });
 
@@ -80,6 +82,8 @@ export async function POST(req: NextRequest) {
       update: {},
     });
   }
+
+  revalidateTag(CACHE_TAGS.course, {});
 
   await auditLog({
     userId: session.user.id,
