@@ -35,8 +35,14 @@ export async function POST(req: NextRequest) {
   });
   if (!managerMembership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // Check capacity
-  if (seat.usedSeats >= seat.totalSeats) {
+  // Atomically increment only if capacity remains — prevents race conditions on concurrent requests
+  const seatUpdated = await db.$executeRaw`
+    UPDATE "course_seats"
+    SET "usedSeats" = "usedSeats" + 1
+    WHERE id = ${seatId}
+    AND "usedSeats" < "totalSeats"
+  `
+  if (seatUpdated === 0) {
     return NextResponse.json({ error: "No seats remaining in this pool" }, { status: 409 });
   }
 
@@ -85,11 +91,6 @@ export async function POST(req: NextRequest) {
       assignedById: session.user.id,
       enrolmentId: enrolment.id,
     },
-  });
-
-  await db.courseSeat.update({
-    where: { id: seatId },
-    data: { usedSeats: { increment: 1 } },
   });
 
   // In-app notification for the assigned member

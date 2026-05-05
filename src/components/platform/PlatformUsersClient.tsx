@@ -81,6 +81,12 @@ export default function PlatformUsersClient({ users: initialUsers, currentUserId
   const [users, setUsers] = useState<PlatformUser[]>(initialUsers);
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [pendingRoleChange, setPendingRoleChange] = useState<{
+    userId: string;
+    userName: string;
+    oldRole: string;
+    newRole: string;
+  } | null>(null);
 
   const byRole = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -213,7 +219,14 @@ export default function PlatformUsersClient({ users: initialUsers, currentUserId
                         ) : (
                           <select
                             value={u.role}
-                            onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                            onChange={(e) =>
+                              setPendingRoleChange({
+                                userId: u.id,
+                                userName: `${u.firstName} ${u.lastName}`,
+                                oldRole: u.role,
+                                newRole: e.target.value,
+                              })
+                            }
                             className="text-sm border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-ring/50 cursor-pointer"
                           >
                             {INTERNAL_ROLES.map((r) => (
@@ -260,6 +273,49 @@ export default function PlatformUsersClient({ users: initialUsers, currentUserId
         onOpenChange={setInviteOpen}
         onCreated={(user) => setUsers((cur) => [user, ...cur])}
       />
+
+      {/* Role Change Confirmation Dialog */}
+      <Dialog
+        open={pendingRoleChange !== null}
+        onOpenChange={(open) => { if (!open) setPendingRoleChange(null); }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change Role</DialogTitle>
+            <DialogDescription>
+              Change{" "}
+              <span className="font-medium text-slate-900">{pendingRoleChange?.userName}</span>
+              {"'s role from "}
+              <span className="font-medium text-slate-900">
+                {ROLE_LABELS[pendingRoleChange?.oldRole ?? ""] ?? pendingRoleChange?.oldRole}
+              </span>
+              {" to "}
+              <span className="font-medium text-slate-900">
+                {ROLE_LABELS[pendingRoleChange?.newRole ?? ""] ?? pendingRoleChange?.newRole}
+              </span>
+              {"? This will immediately affect their access to the platform."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPendingRoleChange(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (pendingRoleChange) {
+                  handleRoleChange(pendingRoleChange.userId, pendingRoleChange.newRole);
+                  setPendingRoleChange(null);
+                }
+              }}
+            >
+              Confirm Change
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

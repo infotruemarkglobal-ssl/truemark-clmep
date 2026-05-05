@@ -49,40 +49,69 @@ export async function POST(req: NextRequest) {
 
   const paidAt = new Date();
 
-  for (const purchase of purchases) {
-    // Mark paid
-    await db.purchase.update({
-      where: { id: purchase.id },
-      data: { status: "PAID", paidAt, stripeSessionId: session.id },
-    });
+  try {
+    for (const purchase of purchases) {
+      const meta = purchase.metadata
+        ? (JSON.parse(purchase.metadata) as { courseId?: string; seats?: number; cartId?: string })
+        : {};
+      const courseId = purchase.courseId ?? meta.courseId;
+      const seats = purchase.seats ?? meta.seats ?? 1;
 
-    const meta = purchase.metadata ? (JSON.parse(purchase.metadata) as { courseId?: string; seats?: number; cartId?: string }) : {};
-    const courseId = purchase.courseId ?? meta.courseId;
-    const seats = purchase.seats ?? meta.seats ?? 1;
-
-    if (!courseId) continue;
-
-    if (seats > 1 && organisationId) {
-      // Bulk purchase → create CourseSeat pool
-      const existing = await db.courseSeat.findFirst({
-        where: { organisationId, courseId, purchaseId: purchase.id },
-      });
-      if (!existing) {
-        await db.courseSeat.create({
-          data: { organisationId, courseId, purchaseId: purchase.id, totalSeats: seats },
+      if (!courseId) {
+        await db.purchase.update({
+          where: { id: purchase.id },
+          data: { status: "PAID", paidAt, stripeSessionId: session.id },
         });
+        continue;
       }
-    } else {
-      // Single seat → create Enrolment directly
-      await db.enrolment.upsert({
-        where: { userId_courseId: { userId, courseId } },
-        create: { userId, courseId, purchaseId: purchase.id, status: "ACTIVE", progress: 0,
-          organisationId: organisationId || undefined,
-          registrationSource: organisationId ? "ORG_ASSIGNED" : "SELF",
-        },
-        update: { status: "ACTIVE", progress: 0, completedAt: null, purchaseId: purchase.id },
-      });
+
+      if (seats > 1 && organisationId) {
+        // Bulk purchase → mark paid + create CourseSeat pool atomically
+        const existing = await db.courseSeat.findFirst({
+          where: { organisationId, courseId, purchaseId: purchase.id },
+        });
+        if (!existing) {
+          await db.$transaction([
+            db.purchase.update({
+              where: { id: purchase.id },
+              data: { status: "PAID", paidAt, stripeSessionId: session.id },
+            }),
+            db.courseSeat.create({
+              data: { organisationId, courseId, purchaseId: purchase.id, totalSeats: seats },
+            }),
+          ]);
+        } else {
+          await db.purchase.update({
+            where: { id: purchase.id },
+            data: { status: "PAID", paidAt, stripeSessionId: session.id },
+          });
+        }
+      } else {
+        // Single seat → mark paid + enrol atomically
+        await db.$transaction([
+          db.purchase.update({
+            where: { id: purchase.id },
+            data: { status: "PAID", paidAt, stripeSessionId: session.id },
+          }),
+          db.enrolment.upsert({
+            where: { userId_courseId: { userId, courseId } },
+            create: {
+              userId,
+              courseId,
+              purchaseId: purchase.id,
+              status: "ACTIVE",
+              progress: 0,
+              organisationId: organisationId || undefined,
+              registrationSource: organisationId ? "ORG_ASSIGNED" : "SELF",
+            },
+            update: { status: "ACTIVE", progress: 0, completedAt: null, purchaseId: purchase.id },
+          }),
+        ]);
+      }
     }
+  } catch (err) {
+    console.error("[stripe/webhook] transaction failed:", err);
+    return NextResponse.json({ error: "Transaction failed" }, { status: 500 });
   }
 
   // Notify the buyer
