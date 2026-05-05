@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { headers } from "next/headers";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -24,11 +25,18 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Calling headers() opts this layout—and every page nested inside it—into
+  // dynamic rendering. Without this, Next.js may statically pre-render pages at
+  // build time before any request exists, producing HTML with no nonce on script
+  // tags. The proxy generates a per-request nonce and sets it in the CSP response
+  // header, so if the page is static the nonce in the header won't match the
+  // (absent) nonce in the script tags, blocking all JavaScript.
+  await headers();
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <head />
