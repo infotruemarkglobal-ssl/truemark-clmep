@@ -87,6 +87,8 @@ export default function ExamInterface({
   const [showViolationWarning, setShowViolationWarning] = useState(false);
   const [lastViolationType, setLastViolationType] = useState<string>("Tab switch");
   const tabViolationsRef = useRef(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const isPausedRef = useRef(false);
 
   // ── Camera proctoring ─────────────────────────────────────────────────────
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -114,24 +116,32 @@ export default function ExamInterface({
     if (secondsLeft <= 0) { handleSubmit(true); return; }
     // Thresholds at which the timer value is announced to screen readers (seconds)
     const ANNOUNCE_AT = [1800, 900, 300, 60]; // 30 min, 15 min, 5 min, 1 min
-    const id = setInterval(() => setSecondsLeft((s) => {
-      if (s <= 1) { clearInterval(id); handleSubmit(true); return 0; }
-      const next = s - 1;
-      for (const threshold of ANNOUNCE_AT) {
-        if (next === threshold && !announcedThresholdsRef.current.has(threshold)) {
-          announcedThresholdsRef.current.add(threshold);
-          const label = threshold === 1800 ? "30 minutes" : threshold === 900 ? "15 minutes" : threshold === 300 ? "5 minutes" : "1 minute";
-          setTimerAnnouncement(`${label} remaining`);
+    const id = setInterval(() => {
+      if (isPausedRef.current) return;
+      setSecondsLeft((s) => {
+        if (s <= 1) { clearInterval(id); handleSubmit(true); return 0; }
+        const next = s - 1;
+        for (const threshold of ANNOUNCE_AT) {
+          if (next === threshold && !announcedThresholdsRef.current.has(threshold)) {
+            announcedThresholdsRef.current.add(threshold);
+            const label = threshold === 1800 ? "30 minutes" : threshold === 900 ? "15 minutes" : threshold === 300 ? "5 minutes" : "1 minute";
+            setTimerAnnouncement(`${label} remaining`);
+          }
         }
-      }
-      return next;
-    }), 1000);
+        return next;
+      });
+    }, 1000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Consolidated violation recorder ──────────────────────────────────────
-  const recordViolation = useCallback((type: string, label: string, details: string) => {
+  const recordViolation = useCallback((
+    type: string,
+    label: string,
+    details: string,
+    opts?: { noPause?: boolean },
+  ) => {
     const newCount = tabViolationsRef.current + 1;
     tabViolationsRef.current = newCount;
     setTabViolations(newCount);
@@ -168,12 +178,10 @@ export default function ExamInterface({
     if (newCount >= tabSwitchLimit) {
       toast.error(`Exam terminated: ${newCount} proctoring violations exceeded the limit of ${tabSwitchLimit}.`, { duration: 8000 });
       handleSubmitRef.current(true);
-    } else {
+    } else if (!opts?.noPause) {
+      isPausedRef.current = true;
+      setIsPaused(true);
       setShowViolationWarning(true);
-      toast.warning(
-        `${label} detected (${newCount}/${tabSwitchLimit}). Exam terminates at ${tabSwitchLimit} violations.`,
-        { duration: 6000 }
-      );
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examState.proctoringSessionId, tabSwitchLimit]);
@@ -318,16 +326,7 @@ export default function ExamInterface({
         setCameraStatus("active");
       } catch {
         setCameraStatus("denied");
-        toast.error("Camera access denied. Camera monitoring is required for this exam.", { duration: 8000 });
-        fetch("/api/exams/proctoring/incident", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            proctoringSessionId: examState.proctoringSessionId,
-            type: "camera_denied",
-            details: "Candidate denied camera access",
-          }),
-        }).catch(() => {});
+        recordViolation("camera_denied", "Camera access denied", "Candidate denied camera access", { noPause: true });
       }
     }
 
@@ -336,7 +335,7 @@ export default function ExamInterface({
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, [requiresProctoring, examState.proctoringSessionId]);
+  }, [requiresProctoring, examState.proctoringSessionId, recordViolation]);
 
   // ── Load face-api.js models once camera is active ────────────────────────
   useEffect(() => {
@@ -418,7 +417,7 @@ export default function ExamInterface({
           noFaceStreakRef.current++;
           setFaceStatus("absent");
           if (noFaceStreakRef.current === 3) { // 9 s consecutive
-            recordViolation("no_face", "Candidate not visible",
+            recordViolation("face_not_visible", "Candidate not visible",
               "No face detected in camera frame for 9+ seconds");
           }
         } else {
@@ -644,7 +643,9 @@ export default function ExamInterface({
           aria-label={`Time remaining: ${timerDisplay}`}
           className={cn(
             "flex items-center gap-2 px-4 py-1.5 rounded-xl font-mono font-bold text-lg transition",
-            timerWarning
+            isPaused
+              ? "bg-amber-900/60 text-amber-300"
+              : timerWarning
               ? "bg-red-900/60 text-red-300"
               : "bg-slate-800 text-white"
           )}
@@ -668,7 +669,7 @@ export default function ExamInterface({
       {/* ── Main exam area ── */}
       <div className="flex flex-1 overflow-hidden">
         {/* Question panel */}
-        <main className="flex-1 overflow-y-auto p-6 lg:p-10">
+        <main className={cn("flex-1 overflow-y-auto p-6 lg:p-10", isPaused && "pointer-events-none select-none opacity-50")}>
           {/* Question counter */}
           <div className="flex items-center justify-between mb-6">
             <span className="text-slate-400 text-sm">
@@ -988,7 +989,23 @@ export default function ExamInterface({
         </aside>
       </div>
 
-      {/* ── Violation warning modal ── */}
+      {/* ── Camera-denied persistent banner ── */}
+      {requiresProctoring && cameraStatus === "denied" && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-red-950 border-t-2 border-red-700 px-4 py-3 flex items-center gap-3">
+          <CameraOff className="w-5 h-5 text-red-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-red-200">Camera access denied — violation recorded</p>
+            <p className="text-xs text-red-400 mt-0.5">
+              Proctored exams require camera access. This has been recorded as a violation.
+              {tabSwitchLimit - tabViolations > 0
+                ? ` Violations remaining before termination: ${tabSwitchLimit - tabViolations}.`
+                : " Your exam will be terminated."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Violation warning modal (exam paused) ── */}
       {showViolationWarning && (
         <div
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
@@ -1006,27 +1023,39 @@ export default function ExamInterface({
                 <AlertTriangle className="w-6 h-6 text-red-400" />
               </div>
               <div>
-                <h3 id="violation-dialog-title" className="font-bold text-white text-lg">Proctoring Violation</h3>
+                <h3 id="violation-dialog-title" className="font-bold text-white text-lg">Exam Paused — Violation Detected</h3>
                 <p className="text-slate-400 text-sm mt-1">
                   <strong className="text-red-300">{lastViolationType}</strong> detected — violation {tabViolations} of {tabSwitchLimit}.
                 </p>
                 <p className="text-slate-500 text-xs mt-1.5">
-                  {tabSwitchLimit - tabViolations > 0
-                    ? `${tabSwitchLimit - tabViolations} more violation${tabSwitchLimit - tabViolations !== 1 ? "s" : ""} will automatically terminate your exam.`
-                    : "Your exam has been automatically submitted."}
+                  {tabSwitchLimit - tabViolations} more violation{tabSwitchLimit - tabViolations !== 1 ? "s" : ""} will automatically terminate your exam.
                 </p>
                 <p className="text-slate-600 text-xs mt-1">
                   Violations include: switching browser tabs, switching to other applications, pressing the back button, or covering the camera.
                 </p>
               </div>
             </div>
-            <Button
-              ref={violationModalBtnRef}
-              className="w-full bg-red-600 hover:bg-red-700"
-              onClick={() => setShowViolationWarning(false)}
-            >
-              I Understand — Return to Exam
-            </Button>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1 border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                onClick={() => handleSubmitRef.current(true)}
+                disabled={submitting}
+              >
+                End Exam Now
+              </Button>
+              <Button
+                ref={violationModalBtnRef}
+                className="flex-1 bg-red-600 hover:bg-red-700"
+                onClick={() => {
+                  setShowViolationWarning(false);
+                  isPausedRef.current = false;
+                  setIsPaused(false);
+                }}
+              >
+                Resume Exam
+              </Button>
+            </div>
           </div>
         </div>
       )}
