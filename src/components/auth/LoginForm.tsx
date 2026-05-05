@@ -5,8 +5,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { loginWithCredentials } from "@/app/(auth)/login/actions";
 import { Eye, EyeOff, ArrowRight, User, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,6 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export default function LoginForm() {
-  const router = useRouter();
   const [tab, setTab] = useState<LoginTab>("individual");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -46,20 +45,12 @@ export default function LoginForm() {
   async function onSubmit(data: FormData) {
     setLoading(true);
     try {
-      const result = await signIn("credentials", {
-        email: data.email,
-        password: data.password,
-        redirect: false,
-      });
-
+      const result = await loginWithCredentials(data.email, data.password);
+      // result is only defined when auth failed — successful login triggers a
+      // server-side redirect to /dashboard (React navigates automatically).
       if (result?.error) {
         toast.error(ERROR_MESSAGES[result.error] ?? ERROR_MESSAGES.CredentialsSignin);
-        return;
       }
-
-      toast.success("Welcome back!");
-      router.push("/dashboard");
-      router.refresh();
     } catch {
       toast.error("Something went wrong. Please try again.");
     } finally {
