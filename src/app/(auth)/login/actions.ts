@@ -2,6 +2,7 @@
 
 import { signIn } from "@/lib/auth";
 import { AuthError } from "next-auth";
+import { redirect } from "next/navigation";
 
 /**
  * Server action for credentials login.
@@ -14,19 +15,33 @@ import { AuthError } from "next-auth";
  *   A server action bypasses CSRF entirely (Next.js protects server actions
  *   via its own Origin/Host check) and runs the auth flow directly on the server.
  *
+ * Why redirect: false + manual redirect():
+ *   Without redirect: false, NextAuth internally calls redirect(absoluteCallbackUrl)
+ *   which throws NEXT_REDIRECT. The client-side try/catch in LoginForm catches this
+ *   throw BEFORE React's server-action layer converts it to navigation, so the user
+ *   sees "Something went wrong" even on a successful login.
+ *   With redirect: false, NextAuth returns the callback URL string instead of
+ *   throwing. We then call redirect("/dashboard") ourselves — that NEXT_REDIRECT
+ *   is thrown from the server action body (outside any try/catch), so React's
+ *   runtime intercepts it cleanly and navigates the client.
+ *
  * Return contract:
  *   - { error: string }  →  auth failed; error is one of the ERROR_MESSAGES keys
- *   - undefined          →  never actually returned; successful auth throws
- *                           NEXT_REDIRECT which React handles as navigation
+ *   - never              →  successful auth calls redirect("/dashboard") which
+ *                           throws NEXT_REDIRECT; React handles navigation
  */
 export async function loginWithCredentials(
   email: string,
   password: string
 ): Promise<{ error: string } | undefined> {
   try {
+    // redirect: false makes signIn() return the callback URL string on success
+    // instead of throwing NEXT_REDIRECT. This keeps the throw outside the
+    // try/catch so React can intercept it for navigation (see above).
     await signIn("credentials", {
       email,
       password,
+      redirect: false,
       redirectTo: "/dashboard",
     });
   } catch (error) {
@@ -39,10 +54,9 @@ export async function loginWithCredentials(
         ?.err?.message;
       return { error: cause ?? error.type };
     }
-    // Rethrow everything else — critically, this includes the NEXT_REDIRECT thrown
-    // by redirect("/dashboard") on successful login. React's server-action layer
-    // intercepts it and navigates the client. If we catch it here, login silently
-    // succeeds with no navigation.
     throw error;
   }
+  // Reached only on successful auth. redirect() throws NEXT_REDIRECT outside
+  // the try/catch, so React's server-action runtime intercepts it and navigates.
+  redirect("/dashboard");
 }

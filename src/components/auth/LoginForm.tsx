@@ -46,12 +46,23 @@ export default function LoginForm() {
     setLoading(true);
     try {
       const result = await loginWithCredentials(data.email, data.password);
-      // result is only defined when auth failed — successful login triggers a
-      // server-side redirect to /dashboard (React navigates automatically).
+      // result is only defined when auth failed — successful login throws
+      // NEXT_REDIRECT from the server action which React converts to navigation.
       if (result?.error) {
         toast.error(ERROR_MESSAGES[result.error] ?? ERROR_MESSAGES.CredentialsSignin);
       }
-    } catch {
+    } catch (error) {
+      // If the server action called redirect() (successful login), React's
+      // runtime converts it to navigation. In some Next.js versions this
+      // surfaces as a caught error before navigation completes — swallow it.
+      if (
+        error instanceof Error &&
+        "digest" in error &&
+        typeof (error as Error & { digest?: string }).digest === "string" &&
+        (error as Error & { digest: string }).digest.startsWith("NEXT_REDIRECT")
+      ) {
+        return;
+      }
       toast.error("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
