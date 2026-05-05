@@ -190,7 +190,24 @@ export async function proxy(req: NextRequest) {
   }
 
   // ── Session check ─────────────────────────────────────────────────────────
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  // NextAuth v5 (Auth.js) renamed the session cookie from "next-auth.session-token"
+  // (v4) to "authjs.session-token" (v5 HTTP) / "__Secure-authjs.session-token"
+  // (v5 HTTPS/production). getToken() defaults to the old v4 name, so without
+  // an explicit cookieName it always returns null in v5, causing an infinite
+  // redirect loop: proxy→login (307) ↔ login page auth()→dashboard (303).
+  // The salt must match the cookie name (Auth.js v5 uses PBKDF2 keyed by the
+  // cookie name as salt when encrypting the JWT payload).
+  const isProdEnv = process.env.NODE_ENV === "production";
+  const cookieName = isProdEnv
+    ? "__Secure-authjs.session-token"
+    : "authjs.session-token";
+  const token = await getToken({
+    req,
+    secret: process.env.AUTH_SECRET,
+    cookieName,
+    secureCookie: isProdEnv,
+    salt: cookieName,
+  });
 
   // ── Unauthenticated request ───────────────────────────────────────────────
   if (!token) {
