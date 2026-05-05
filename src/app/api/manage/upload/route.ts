@@ -6,6 +6,9 @@ import { uploadFile, getFileUrl } from "@/lib/storage";
 import { inngest, EVENTS } from "@/inngest/client";
 import { rateLimit } from "@/lib/rate-limit";
 
+// Large file uploads (video ≤ 500 MB) can take up to 60s on slow connections.
+export const maxDuration = 60; // seconds
+
 const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.TRAINER];
 
 const ALLOWED_TYPES: Record<string, { mime: string[]; maxMb: number; dir: string }> = {
