@@ -23,7 +23,7 @@
 --
 -- FORCE ROW LEVEL SECURITY
 -- ─────────────────────────
--- Without FORCE, the database owner (neondb_owner) bypasses RLS entirely
+-- Without FORCE, the database owner (postgres) bypasses RLS entirely
 -- — making the whole feature pointless. FORCE makes the owner obey the
 -- same policies as every other role. The bypass rule above keeps migrations
 -- and admin queries working.

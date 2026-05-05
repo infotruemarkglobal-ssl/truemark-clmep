@@ -8,13 +8,13 @@
 --
 -- CONTEXT
 -- ───────
--- Neon creates one owner role (neondb_owner) that has full DDL rights and
--- DELETE on all tables. The application should NOT run as neondb_owner.
+-- Neon creates one owner role (postgres) that has full DDL rights and
+-- DELETE on all tables. The application should NOT run as postgres.
 -- This script creates a restricted application role (app_role) and a
 -- read-only audit role (audit_reader_role).
 --
 -- ARCHITECTURE
---   neondb_owner  — superuser, used only for migrations (DIRECT_URL)
+--   postgres  — superuser, used only for migrations (DIRECT_URL)
 --   app_role      — runtime role used by DATABASE_URL; SELECT/INSERT/UPDATE only;
 --                   no DELETE on audit_logs or certificates; no DDL
 --   audit_reader  — SELECT-only on audit_logs, used by audit dashboards
@@ -65,17 +65,17 @@
 -- GRANT USAGE ON SCHEMA public TO audit_reader;
 -- GRANT SELECT ON TABLE audit_logs TO audit_reader;
 -- This role should be used by the /audit dashboard API route and any SIEM integration.
--- It must NOT be the same credentials as app_role or neondb_owner.
+-- It must NOT be the same credentials as app_role or postgres.
 
 -- STEP 8: Update DATABASE_URL
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Change DATABASE_URL (the pooled connection string) to authenticate as app_role:
 --   DATABASE_URL="postgresql://app_role:<password>@<host-pooler>.neon.tech/neondb?pgbouncer=true&sslmode=require"
--- Keep DIRECT_URL pointing at neondb_owner (for prisma migrate deploy only):
---   DIRECT_URL="postgresql://neondb_owner:<password>@<host>.neon.tech/neondb?sslmode=require"
+-- Keep DIRECT_URL pointing at postgres (for prisma migrate deploy only):
+--   DIRECT_URL="postgresql://postgres:<password>@<host>.neon.tech/neondb?sslmode=require"
 --
 -- Neon Serverless Note: prisma.config.ts already routes CLI commands through
--- DIRECT_URL, so migrations continue to run as neondb_owner regardless of
+-- DIRECT_URL, so migrations continue to run as postgres regardless of
 -- what DATABASE_URL is set to. ✓
 
 -- STEP 9: Verify (run after applying)

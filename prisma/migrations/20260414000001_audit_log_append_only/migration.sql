@@ -10,8 +10,8 @@
 -- legitimately updates or deletes audit log rows (none does as of this migration).
 --
 -- Step 1: Revoke destructive permissions from the application role on audit_logs.
--- Replace 'neondb_owner' with your actual Neon/Postgres application role name.
-REVOKE UPDATE, DELETE, TRUNCATE ON TABLE audit_logs FROM neondb_owner;
+-- Replace 'postgres' with your actual Neon/Postgres application role name.
+REVOKE UPDATE, DELETE, TRUNCATE ON TABLE audit_logs FROM postgres;
 
 -- Step 2: Grant a separate audit-reader role SELECT-only access (for the
 -- Auditor role UI queries and management reports).
