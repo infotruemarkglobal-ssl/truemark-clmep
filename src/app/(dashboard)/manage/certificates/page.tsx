@@ -7,7 +7,7 @@ import ManageCertificatesPage from "@/components/manage/ManageCertificatesPage";
 
 export const metadata: Metadata = { title: "Manage Certificates" };
 
-const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
+const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.AUDITOR];
 
 export default async function Page({
   searchParams,
@@ -57,6 +57,7 @@ export default async function Page({
       certificates={serialised}
       nextCursor={nextCursor}
       currentStatus={status ?? null}
+      isReadOnly={session.user.role === USER_ROLES.AUDITOR}
     />
   );
 }

@@ -4,6 +4,7 @@ import { getCachedSession as auth } from "@/lib/auth";
 import CandidateDashboard from "@/components/dashboard/CandidateDashboard";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
 import OrgDashboard from "@/components/dashboard/OrgDashboard";
+import SupportAgentDashboard from "@/components/dashboard/SupportAgentDashboard";
 import DashboardLoading from "../loading";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -21,6 +22,8 @@ export default async function DashboardPage() {
     ["SUPER_ADMIN", "CERTIFICATION_OFFICER", "EXAMINER", "TRAINER", "PROCTOR", "AUDITOR"].includes(role)
   ) {
     dashboard = <AdminDashboard role={role as import("@/lib/constants").UserRole} />;
+  } else if (role === "SUPPORT_AGENT") {
+    dashboard = <SupportAgentDashboard />;
   } else {
     dashboard = <CandidateDashboard />;
   }

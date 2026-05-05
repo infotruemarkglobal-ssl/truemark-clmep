@@ -71,9 +71,8 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Exams",
       items: [
-        { label: "Exam Papers",   href: "/manage/exams", icon: ClipboardList },
-        { label: "Exam Sessions", href: "/exams",        icon: FileText      },
-        { label: "Documents",     href: "/documents",    icon: FolderOpen    },
+        { label: "Exam Papers & Grading", href: "/manage/exams", icon: ClipboardList },
+        { label: "Documents",             href: "/documents",    icon: FolderOpen    },
       ],
     },
     PROFILE_SECTION,
@@ -84,7 +83,7 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Monitoring",
       items: [
-        { label: "Exam Sessions", href: "/exams", icon: Eye },
+        { label: "Live Monitoring", href: "/proctor", icon: Eye },
       ],
     },
     PROFILE_SECTION,
@@ -129,8 +128,8 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Records",
       items: [
-        { label: "Certificates", href: "/certificates", icon: Award      },
-        { label: "Documents",    href: "/documents",    icon: FolderOpen },
+        { label: "Certificate Records", href: "/manage/certificates", icon: Award      },
+        { label: "Documents",           href: "/documents",           icon: FolderOpen },
       ],
     },
     PROFILE_SECTION,
@@ -141,9 +140,10 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Certification",
       items: [
-        { label: "Decisions",         href: "/manage/decisions", icon: BadgeCheck    },
-        { label: "Certificates",      href: "/certificates",     icon: Award         },
-        { label: "Appeals",           href: "/appeals",          icon: Scale         },
+        { label: "Decisions",           href: "/manage/decisions",     icon: BadgeCheck    },
+        { label: "Manage Certificates", href: "/manage/certificates",  icon: Award         },
+        { label: "Manage Complaints",   href: "/manage/complaints",    icon: MessageSquare },
+        { label: "Appeals",             href: "/appeals",              icon: Scale         },
       ],
     },
     {
@@ -178,17 +178,17 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
         { label: "Courses",               href: "/manage/courses",   icon: BookOpen      },
         { label: "Exam Papers",           href: "/manage/exams",     icon: ClipboardList },
         { label: "SCORM Packages",        href: "/manage/scorm",     icon: Package       },
-        { label: "Certification Decisions", href: "/manage/decisions", icon: BadgeCheck  },
-        { label: "Certificates",          href: "/certificates",     icon: Award         },
-        { label: "Appeals",               href: "/appeals",          icon: Scale         },
-        { label: "Support Queue",         href: "/support",          icon: MessageSquare },
+        { label: "Certification Decisions", href: "/manage/decisions",      icon: BadgeCheck    },
+        { label: "Manage Certificates",   href: "/manage/certificates",  icon: Award         },
+        { label: "Manage Complaints",     href: "/manage/complaints",    icon: MessageSquare },
+        { label: "Appeals",               href: "/appeals",              icon: Scale         },
+        { label: "Support Queue",         href: "/support",              icon: MessageSquare },
       ],
     },
     {
       heading: "People & Organisations",
       items: [
-        { label: "Staff",          href: "/staff",         icon: Users     },
-        { label: "Client Orgs",   href: "/organisations", icon: Building2 },
+        { label: "Staff", href: "/staff", icon: Users },
       ],
     },
     {
@@ -214,6 +214,13 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
       heading: "Support",
       items: [
         { label: "Support Queue", href: "/support", icon: MessageSquare },
+      ],
+    },
+    {
+      heading: "Users & Orgs",
+      items: [
+        { label: "User Lookup",   href: "/platform/users", icon: Users     },
+        { label: "Organisations", href: "/organisations",  icon: Building2 },
       ],
     },
     PROFILE_SECTION,
@@ -288,7 +295,7 @@ export default function Sidebar({
               Questions about your results or certification? Submit an appeal.
             </p>
             <Link
-              href="/appeals"
+              href="/support"
               onClick={onClose}
               className="block w-full bg-primary text-white py-2 rounded-lg text-xs font-medium hover:bg-primary/90 transition text-center"
             >

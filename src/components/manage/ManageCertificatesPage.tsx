@@ -40,10 +40,12 @@ export default function ManageCertificatesPage({
   certificates,
   nextCursor,
   currentStatus,
+  isReadOnly = false,
 }: {
   certificates: Certificate[];
   nextCursor: string | null;
   currentStatus: string | null;
+  isReadOnly?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -208,26 +210,28 @@ export default function ManageCertificatesPage({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-xs"
-                          disabled={downloading === cert.id}
-                          onClick={() => handleDownload(cert.id, cert.certificateNumber)}
-                        >
-                          <Download className="w-3.5 h-3.5 mr-1" />
-                          {downloading === cert.id ? "…" : "PDF"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => router.push(`/certificates/${cert.id}`)}
-                        >
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
+                      {!isReadOnly && (
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            disabled={downloading === cert.id}
+                            onClick={() => handleDownload(cert.id, cert.certificateNumber)}
+                          >
+                            <Download className="w-3.5 h-3.5 mr-1" />
+                            {downloading === cert.id ? "…" : "PDF"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => router.push(`/certificates/${cert.id}`)}
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
