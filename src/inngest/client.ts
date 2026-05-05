@@ -18,6 +18,7 @@ export const EVENTS = {
   SEND_TICKET_CREATED:       "email/ticket.created",
   SEND_TICKET_REPLY:         "email/ticket.reply",
   SEND_TICKET_RESOLVED:      "email/ticket.resolved",
+  SEND_ADMIN_PASSWORD_RESET: "email/admin.password.reset",
   SCAN_UPLOAD:               "upload/scan.requested",
   BREACH_REPORTED:           "breach/reported",
 } as const;

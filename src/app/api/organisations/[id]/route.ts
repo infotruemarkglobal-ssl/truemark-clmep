@@ -35,19 +35,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await params;
-  const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.ORG_MANAGER];
-  if (!(ALLOWED as string[]).includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Only the ORG_MANAGER of this specific org may edit it.
+  // SUPER_ADMIN and CERTIFICATION_OFFICER have read-only access to org profiles.
+  if (session.user.role !== USER_ROLES.ORG_MANAGER) {
+    return NextResponse.json({ error: "Forbidden — only the Organisation Manager can edit this profile" }, { status: 403 });
   }
 
-  // ORG_MANAGER can only update their own org
-  if (session.user.role === USER_ROLES.ORG_MANAGER) {
-    const membership = await db.organisationMember.findUnique({
-      where: { userId_organisationId: { userId: session.user.id, organisationId: id } },
-    });
-    if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const { id } = await params;
+
+  // Verify this ORG_MANAGER is a member of the target org
+  const membership = await db.organisationMember.findUnique({
+    where: { userId_organisationId: { userId: session.user.id, organisationId: id } },
+  });
+  if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const schema = z.object({
     name: z.string().min(2).optional(),
@@ -69,18 +69,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = schema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
 
-  // Whitelist the fields each role may write — new schema fields are denied by default.
+  // Whitelist the fields ORG_MANAGER may write — admin-only fields (verificationStatus etc.) are stripped.
   const ORG_MANAGER_FIELDS = new Set([
     "name", "registrationNo", "country", "address",
     "website", "description", "industry", "logoUrl", "cacDocumentUrl",
   ]);
   const parsed = body.data as Record<string, unknown>;
-  const updateData: Record<string, unknown> =
-    session.user.role === USER_ROLES.SUPER_ADMIN
-      ? { ...parsed }
-      : Object.fromEntries(
-          Object.entries(parsed).filter(([k]) => ORG_MANAGER_FIELDS.has(k)),
-        );
+  const updateData: Record<string, unknown> = Object.fromEntries(
+    Object.entries(parsed).filter(([k]) => ORG_MANAGER_FIELDS.has(k)),
+  );
 
   if (updateData.approvedSchemes !== undefined) {
     updateData.approvedSchemes = JSON.stringify(updateData.approvedSchemes);

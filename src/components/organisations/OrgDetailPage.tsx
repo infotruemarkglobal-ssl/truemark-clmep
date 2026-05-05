@@ -289,7 +289,12 @@ export default function OrgDetailPage({
           </p>
         </div>
 
-        {!editing ? (
+        {isAdmin ? (
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-500 max-w-sm">
+            <ShieldCheck className="w-4 h-4 shrink-0 text-slate-400" />
+            <span>Read-only view. Contact the Organisation Manager to make changes.</span>
+          </div>
+        ) : !editing ? (
           <Button
             variant="outline"
             onClick={() => setEditing(true)}

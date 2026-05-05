@@ -239,7 +239,7 @@ export default function PlatformUsersClient({ users: initialUsers, currentUserId
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Link
-                          href={`/staff?userId=${u.id}`}
+                          href={`/platform/users/${u.id}`}
                           className="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition"
                         >
                           View
