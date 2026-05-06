@@ -79,6 +79,12 @@ model User {
   supportTickets          SupportTicket[]         @relation("TicketCreator")
   assignedTickets         SupportTicket[]         @relation("AssignedTickets")
   ticketMessages          TicketMessage[]
+  schemeApplications      SchemeApplication[]
+  reviewedApplications    SchemeApplication[]   @relation("ApplicationReviewer")
+  ledAudits               InternalAudit[]        @relation("LeadAuditor")
+  reportedNonConformities NonConformity[]        @relation("NCReporter")
+  assignedNonConformities NonConformity[]        @relation("NCAssignee")
+  certTermsAcks           CertificateTermsAck[]
 
   @@map("users")
 }
@@ -271,10 +277,23 @@ model CertificationScheme {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  // Eligibility requirements (ISO 17024 Cl.6.1)
+  eligibilityEnabled      Boolean  @default(false)
+  minAgeYears             Int?
+  minExperienceYears      Int?
+  requiredQualifications  String?  // JSON array of required qualifications
+  requiredPriorCerts      String?  // JSON array of scheme codes required
+  requiresDocuments       Boolean  @default(false)
+  requiresEmployerLetter  Boolean  @default(false)
+  requiresIdDocument      Boolean  @default(false)
+  eligibilityNotes        String?
+  autoApproveMinutes      Int      @default(60)
+
   courses      Course[]
   examPapers   ExamPaper[]
   certificates Certificate[]
   cpdRecords   CPDRecord[]
+  applications SchemeApplication[]
 
   @@map("certification_schemes")
 }
@@ -308,6 +327,7 @@ model Course {
   enrolments  Enrolment[]
   cartItems   CartItem[]
   courseSeats CourseSeat[]
+  applications SchemeApplication[]
 
   @@index([schemeId])
   @@index([status])
@@ -369,6 +389,14 @@ model Enrolment {
   organisationId     String?   @map("organisation_id")
   // SELF = candidate enrolled themselves; ORG_ASSIGNED = ORG_MANAGER bulk-enrolled
   registrationSource String    @default("SELF") @map("registration_source")
+
+  // Application process (ISO 17024 Cl.6.2)
+  applicationStatus     String    @default("APPROVED") @map("application_status")
+  // values: PENDING_REVIEW | APPROVED | REJECTED
+  applicationRef        String?   @unique @map("application_ref")
+  applicationNotes      String?   @map("application_notes")
+  applicationReviewedAt DateTime? @map("application_reviewed_at")
+  applicationReviewedBy String?   @map("application_reviewed_by")
 
   user           User             @relation(fields: [userId], references: [id])
   course         Course           @relation(fields: [courseId], references: [id])
@@ -655,6 +683,7 @@ model Certificate {
   decision     CertificationDecision @relation(fields: [decisionId], references: [id])
   organisation Organisation?         @relation(fields: [organisationId], references: [id])
   renewals     CertificateRenewal[]
+  termsAcks    CertificateTermsAck[]
 
   @@index([userId])
   @@index([schemeId])
@@ -951,23 +980,28 @@ model DocumentVersion {
 // ─── NONCONFORMITY TRACKER (ISO 9001 Cl.8.7) ─────────────────────────────────
 
 model NonConformity {
-  id          String    @id @default(cuid())
-  reference   String    @unique
-  type        String
-  description String
-  rootCause   String?
-  status      String    @default("OPEN")
-  reportedBy  String
-  assignedTo  String?
-  dueDate     DateTime?
-  closedAt    DateTime?
-  verifiedAt  DateTime?
-  createdAt   DateTime  @default(now())
+  id            String    @id @default(cuid())
+  reference     String    @unique
+  type          String
+  description   String
+  rootCause     String?
+  status        String    @default("OPEN")
+  reportedById  String?
+  assignedToId  String?
+  auditId       String?
+  dueDate       DateTime?
+  closedAt      DateTime?
+  verifiedAt    DateTime?
+  createdAt     DateTime  @default(now())
 
+  reportedByUser    User?          @relation("NCReporter", fields: [reportedById], references: [id])
+  assignedToUser    User?          @relation("NCAssignee", fields: [assignedToId], references: [id])
+  audit             InternalAudit? @relation(fields: [auditId], references: [id])
   correctiveActions CorrectiveAction[]
 
   @@index([status])
-  @@index([assignedTo])
+  @@index([assignedToId])
+  @@index([auditId])
   @@map("non_conformities")
 }
 
@@ -1238,4 +1272,89 @@ model PlatformSetting {
   updatedBy String?
 
   @@map("platform_settings")
+}
+
+// ─── SCHEME APPLICATIONS (ISO 17024 Cl.6.2) ──────────────────────────────────
+
+model SchemeApplication {
+  id       String @id @default(cuid())
+  userId   String
+  schemeId String
+  courseId String
+  status   String @default("PENDING")
+  // PENDING | APPROVED | REJECTED | AUTO_APPROVED
+
+  // Self-declarations
+  declaredAge           Boolean @default(false)
+  declaredExperience    Int?
+  declaredQualification String?
+  priorCertNumbers      String? // JSON array of cert numbers declared
+
+  // Document uploads
+  idDocumentUrl       String?
+  qualificationDocUrl String?
+  employerLetterUrl   String?
+
+  // Legal declaration
+  legalDeclarationAt DateTime?
+  legalDeclarationIp String?
+
+  // Review
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+  autoApprovedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User                @relation(fields: [userId], references: [id])
+  scheme     CertificationScheme @relation(fields: [schemeId], references: [id])
+  course     Course              @relation(fields: [courseId], references: [id])
+  reviewedBy User?               @relation("ApplicationReviewer", fields: [reviewedById], references: [id])
+
+  @@index([userId, schemeId])
+  @@map("scheme_applications")
+}
+
+// ─── INTERNAL AUDITS (ISO 17024 Cl.8) ────────────────────────────────────────
+
+model InternalAudit {
+  id            String    @id @default(cuid())
+  reference     String    @unique
+  title         String
+  scope         String
+  auditType     String    @default("INTERNAL")
+  // INTERNAL | EXTERNAL | SURVEILLANCE
+  status        String    @default("PLANNED")
+  // PLANNED | IN_PROGRESS | COMPLETED | CANCELLED
+  plannedDate   DateTime
+  completedAt   DateTime?
+  leadAuditorId String
+  findings      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  leadAuditor     User            @relation("LeadAuditor", fields: [leadAuditorId], references: [id])
+  nonConformities NonConformity[]
+
+  @@index([status])
+  @@index([leadAuditorId])
+  @@map("internal_audits")
+}
+
+// ─── CERTIFICATE TERMS ACKNOWLEDGEMENT ───────────────────────────────────────
+
+model CertificateTermsAck {
+  id            String      @id @default(cuid())
+  certificateId String
+  userId        String
+  acknowledgedAt DateTime   @default(now())
+  ipAddress     String?
+
+  certificate Certificate @relation(fields: [certificateId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@unique([certificateId, userId])
+  @@map("certificate_terms_acks")
 }
