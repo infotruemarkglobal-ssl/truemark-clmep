@@ -67,10 +67,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   await auditLog({
     userId: session.user.id,
-    action: "APPEAL_UPDATED",
+    action: "APPEAL_STATUS_UPDATED",
     entityType: "Appeal",
     entityId: id,
-    metadata: { status: body.data.status, resolution: body.data.resolution },
+    metadata: {
+      previousStatus: appeal.status,
+      newStatus: body.data.status,
+      resolution: body.data.resolution ?? null,
+    },
   });
 
   return NextResponse.json(updated);

@@ -7,13 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { formatDistanceToNow, format } from "date-fns";
+import OnboardingChecklist from "@/components/dashboard/OnboardingChecklist";
 
 export default async function CandidateDashboard() {
   const session = await auth();
   const userId = session!.user.id;
   const firstName = session!.user.name?.split(" ")[0] ?? "there";
 
-  const [enrolments, certificates, examAttempts, cpdAggregate] = await Promise.all([
+  const [enrolments, certificates, examAttempts, cpdAggregate, userProfile] = await Promise.all([
     cacheQuery(
       () => db.enrolment.findMany({
         where: { userId, status: "ACTIVE" },
@@ -56,9 +57,21 @@ export default async function CandidateDashboard() {
       [CACHE_TAGS.course],
       30,
     ),
+    db.user.findUnique({
+      where: { id: userId },
+      select: { phone: true, emailVerified: true },
+    }),
   ]);
 
   const cpdHours = Math.round((cpdAggregate._sum.hoursLogged ?? 0) * 10) / 10;
+
+  const onboarding = {
+    hasPhone: !!userProfile?.phone,
+    emailVerified: !!userProfile?.emailVerified,
+    hasEnrolment: enrolments.length > 0,
+    hasExamAttempt: examAttempts.length > 0,
+    hasCertificate: certificates.length > 0,
+  };
 
   const activeCerts = certificates.filter((c) => c.status === "ACTIVE");
   const expiringSoon = certificates.filter((c) => {
@@ -76,6 +89,9 @@ export default async function CandidateDashboard() {
         </h1>
         <p className="text-slate-500 mt-1">Here&apos;s your certification progress at a glance.</p>
       </div>
+
+      {/* Onboarding checklist */}
+      <OnboardingChecklist {...onboarding} />
 
       {/* Expiry alert */}
       {expiringSoon.length > 0 && (

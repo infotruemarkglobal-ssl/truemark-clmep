@@ -10,6 +10,14 @@ import {
   Lock, Unlock, CheckCircle2, XCircle, Clock, Building2, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -79,33 +87,38 @@ function ConfirmDialog({
   onCancel: () => void;
   loading: boolean;
 }) {
-  if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
-        <div className="flex items-start gap-4 mb-5">
-          <div className={cn("w-12 h-12 rounded-full flex items-center justify-center shrink-0",
-            destructive ? "bg-red-100" : "bg-amber-100")}>
-            <AlertTriangle className={cn("w-6 h-6", destructive ? "text-red-600" : "text-amber-600")} />
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <div className="flex items-start gap-4">
+            <div className={cn(
+              "w-12 h-12 rounded-full flex items-center justify-center shrink-0",
+              destructive ? "bg-red-100" : "bg-amber-100",
+            )}>
+              <AlertTriangle className={cn("w-6 h-6", destructive ? "text-red-600" : "text-amber-600")} />
+            </div>
+            <div>
+              <DialogTitle className="font-bold text-slate-900 text-lg">{title}</DialogTitle>
+              <DialogDescription className="text-slate-500 text-sm mt-1">{body}</DialogDescription>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-slate-900 text-lg">{title}</h3>
-            <p className="text-slate-500 text-sm mt-1">{body}</p>
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <Button variant="outline" className="flex-1" onClick={onCancel} disabled={loading}>Cancel</Button>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={onCancel} disabled={loading}>
+            Cancel
+          </Button>
           <Button
-            className={cn("flex-1 gap-2", destructive && "bg-red-600 hover:bg-red-700 text-white")}
+            className={cn("gap-2", destructive && "bg-red-600 hover:bg-red-700 text-white")}
             onClick={onConfirm}
             disabled={loading}
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             {loading ? "Working…" : confirmLabel}
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
