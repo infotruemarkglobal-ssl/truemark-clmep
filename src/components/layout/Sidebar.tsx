@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, BookOpen, FileText, Award, Users, Building2,
-  BarChart3, ShieldCheck, ClipboardList, FolderOpen, MessageSquare,
+  BarChart3, Shield, ShieldCheck, ClipboardList, FolderOpen, MessageSquare,
   Settings, HelpCircle, X, TrendingUp, Package, BadgeCheck, Bell,
   UserCircle, Eye, Scale, Crown, CreditCard, KeyRound, ClipboardCheck,
 } from "lucide-react";
@@ -183,6 +183,7 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
         { label: "Applications",          href: "/manage/applications",  icon: ClipboardList },
         { label: "Certification Decisions", href: "/manage/decisions",   icon: BadgeCheck    },
         { label: "Manage Certificates",   href: "/manage/certificates",  icon: Award         },
+        { label: "Certification Schemes", href: "/manage/schemes",       icon: Shield        },
         { label: "Manage Complaints",     href: "/manage/complaints",    icon: MessageSquare },
         { label: "Appeals",               href: "/appeals",              icon: Scale         },
         { label: "Support Queue",         href: "/support",              icon: MessageSquare },

@@ -2,7 +2,7 @@ import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { cacheQuery, CACHE_TAGS } from "@/lib/cache";
 import Link from "next/link";
-import { BookOpen, FileText, Award, Clock, TrendingUp, AlertCircle, ChevronRight, CheckCircle2 } from "lucide-react";
+import { BookOpen, FileText, Award, Clock, TrendingUp, AlertCircle, ChevronRight, CheckCircle2, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -131,6 +131,17 @@ export default async function CandidateDashboard() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Public registry quick links */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
+        <span>Public services:</span>
+        <Link href="/registry" className="inline-flex items-center gap-1 text-primary hover:underline font-medium">
+          Public Certificate Register <ExternalLink className="w-3 h-3" />
+        </Link>
+        <Link href="/verify/TG-2025-00000000" className="inline-flex items-center gap-1 text-slate-500 hover:text-primary hover:underline">
+          Verify a certificate <ExternalLink className="w-3 h-3" />
+        </Link>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

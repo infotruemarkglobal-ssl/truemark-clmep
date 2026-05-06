@@ -57,8 +57,24 @@ export default function LoginPage() {
         </div>
 
         {/* ── Right form panel ── */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <LoginForm />
+        <div>
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <LoginForm />
+          </div>
+          {/* Public service links — accessible without an account */}
+          <p className="text-center text-xs text-white/40 mt-4 space-x-3">
+            <a href="/verify/TG-2025-00000000" className="hover:text-white/70 transition-colors">
+              Verify a certificate
+            </a>
+            <span aria-hidden="true">·</span>
+            <a href="/registry" className="hover:text-white/70 transition-colors">
+              Certificate Register
+            </a>
+            <span aria-hidden="true">·</span>
+            <a href="/about" className="hover:text-white/70 transition-colors">
+              About TrueMark Global
+            </a>
+          </p>
         </div>
       </div>
     </div>
