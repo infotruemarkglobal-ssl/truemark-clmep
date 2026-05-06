@@ -241,7 +241,7 @@ export default function CertificateVerification({
             <span>Truemark Global Certification Registry · ISO/IEC 17024:2012 Accredited</span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            For enquiries: <a href="mailto:certificates@truemark.global" className="text-primary hover:underline">certificates@truemark.global</a>
+            For enquiries: <a href="mailto:certificates@truemarkglobal.com" className="text-primary hover:underline">certificates@truemarkglobal.com</a>
           </p>
         </div>
       </div>

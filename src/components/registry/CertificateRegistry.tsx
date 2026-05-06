@@ -212,10 +212,10 @@ export default function CertificateRegistry({ entries, schemes }: Props) {
             confirm a person&apos;s certification status is published, in accordance with applicable
             data protection legislation. For enquiries:{" "}
             <a
-              href="mailto:certificates@truemark.global"
+              href="mailto:certificates@truemarkglobal.com"
               className="text-blue-600 hover:underline"
             >
-              certificates@truemark.global
+              certificates@truemarkglobal.com
             </a>
           </p>
         </footer>

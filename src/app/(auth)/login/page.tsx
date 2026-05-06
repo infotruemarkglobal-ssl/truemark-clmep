@@ -22,7 +22,7 @@ export default function LoginPage() {
         {/* ── Left branding ── */}
         <div className="text-white space-y-6 hidden lg:block">
           <div className="flex items-center gap-3 mb-8">
-            <TruemarkLogo className="w-12 h-12" />
+            <TruemarkLogo className="w-12 h-12 rounded-lg overflow-hidden" />
             <div>
               <h1 className="text-2xl font-bold">Truemark Global</h1>
               <p className="text-emerald-200 text-sm">Standards &amp; Solutions Limited</p>
@@ -62,16 +62,16 @@ export default function LoginPage() {
             <LoginForm />
           </div>
           {/* Public service links — accessible without an account */}
-          <p className="text-center text-xs text-white/40 mt-4 space-x-3">
-            <a href="/verify/TG-2025-00000000" className="hover:text-white/70 transition-colors">
+          <p className="text-center text-xs text-gray-200 mt-4 space-x-3">
+            <a href="/verify/TG-2025-00000000" className="hover:text-white hover:underline transition-colors">
               Verify a certificate
             </a>
             <span aria-hidden="true">·</span>
-            <a href="/registry" className="hover:text-white/70 transition-colors">
+            <a href="/registry" className="hover:text-white hover:underline transition-colors">
               Certificate Register
             </a>
             <span aria-hidden="true">·</span>
-            <a href="/about" className="hover:text-white/70 transition-colors">
+            <a href="/about" className="hover:text-white hover:underline transition-colors">
               About TrueMark Global
             </a>
           </p>
