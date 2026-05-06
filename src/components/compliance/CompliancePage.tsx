@@ -18,6 +18,7 @@ type Metrics = {
   totalCerts: number;
   openAppeals: number;
   totalCOI: number;
+  coiUnderReview: number;
   openDSR: number;
   openNonConformities: number;
   overdueActions: number;
@@ -310,7 +311,7 @@ export default function CompliancePage({
           { label: "Exam Papers", value: metrics.activeExamPapers, icon: Database, color: "text-blue-600" },
           { label: "Certificates", value: metrics.totalCerts, icon: Award, color: "text-emerald-600" },
           { label: "Open Appeals", value: metrics.openAppeals, icon: Scale, color: metrics.openAppeals > 5 ? "text-red-600" : "text-amber-600" },
-          { label: "COI Declarations", value: metrics.totalCOI, icon: Users, color: "text-slate-700" },
+          { label: "COI Under Review", value: metrics.coiUnderReview, icon: Users, color: metrics.coiUnderReview > 0 ? "text-amber-600" : "text-slate-700" },
           { label: "Pending DSR", value: metrics.openDSR, icon: AlertCircle, color: metrics.openDSR > 0 ? "text-amber-600" : "text-emerald-600" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-center">

@@ -835,6 +835,7 @@ model COIDeclaration {
   declarationText String
   hasConflict     Boolean  @default(false)
   conflictDetails String?
+  status          String   @default("ACTIVE") // ACTIVE | UNDER_REVIEW | RESOLVED
   declaredAt      DateTime @default(now())
   expiresAt       DateTime
 
@@ -842,6 +843,7 @@ model COIDeclaration {
 
   // Composite index: COI check at cert issuance queries WHERE userId=? AND hasConflict=true AND expiresAt > now()
   @@index([userId, expiresAt])
+  @@index([status])
   @@map("coi_declarations")
 }
 

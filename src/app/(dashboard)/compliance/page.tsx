@@ -15,8 +15,6 @@ export default async function Page() {
   const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.AUDITOR];
   if (!(ALLOWED as string[]).includes(session.user.role)) redirect("/dashboard");
 
-  // NOTE: COIDeclaration has no `status` field — counting all declarations is the
-  // best proxy available until a review workflow is added to the model.
   const [
     activeSchemes,
     activeExamPapers,
@@ -24,6 +22,7 @@ export default async function Page() {
     openAppeals,
     recentAudits,
     totalCOI,
+    coiUnderReview,
     openDSR,
     openNonConformities,
     overdueActions,
@@ -39,6 +38,7 @@ export default async function Page() {
       include: { user: { select: { firstName: true, lastName: true, email: true } } },
     }),
     cacheQuery(() => db.cOIDeclaration.count(), ["compliance-coi"], [CACHE_TAGS.compliance], 300),
+    cacheQuery(() => db.cOIDeclaration.count({ where: { status: "UNDER_REVIEW" } }), ["compliance-coi-review"], [CACHE_TAGS.compliance], 300),
     cacheQuery(() => db.dataSubjectRequest.count({ where: { status: "pending" } }), ["compliance-dsr"], [CACHE_TAGS.compliance], 300),
     cacheQuery(() => db.nonConformity.count({ where: { status: "OPEN" } }), ["compliance-nc-open"], [CACHE_TAGS.compliance], 300),
     cacheQuery(() => db.correctiveAction.count({ where: { completedAt: null, dueDate: { lt: new Date() } } }), ["compliance-ca-overdue"], [CACHE_TAGS.compliance], 300),
@@ -62,6 +62,7 @@ export default async function Page() {
         totalCerts,
         openAppeals,
         totalCOI,
+        coiUnderReview,
         openDSR,
         openNonConformities,
         overdueActions,

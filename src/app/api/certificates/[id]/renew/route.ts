@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { generateCertificateNumber, generateOpenBadgeJwt, generateQrCode } from "@/lib/certificates";
 import { USER_ROLES, RENEWAL_WARNINGS_DAYS } from "@/lib/constants";
-import { addMonths, addDays } from "date-fns";
+import { addMonths, addDays, subMonths } from "date-fns";
 
 const OFFICER_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
 
@@ -32,7 +32,7 @@ export async function GET(
       ...(!isOfficer ? { userId: session.user.id } : {}),
     },
     include: {
-      scheme: { select: { id: true, name: true, code: true, validityMonths: true, cpdHoursRequired: true } },
+      scheme: { select: { id: true, name: true, code: true, validityMonths: true, cpdHoursRequired: true, passMark: true } },
       user: { select: { id: true, firstName: true, lastName: true, email: true } },
       renewals: { orderBy: { renewedAt: "desc" }, take: 1 },
     },
@@ -55,6 +55,26 @@ export async function GET(
   const cpdRequired = cert.scheme.cpdHoursRequired;
   const cpdMet = cpdHoursLogged >= cpdRequired;
 
+  // ISO 17024 Cl.6.8 — check if scheme requires a recent passed examination for renewal.
+  // Convention: passMark > 0 signals the scheme is examination-based.
+  // Candidates must have passed an exam within the last (validityMonths/2) months.
+  const examRequired = cert.scheme.passMark > 0 && cert.scheme.validityMonths > 0;
+  let examMet = true;
+  const examWindowMonths = examRequired ? Math.ceil(cert.scheme.validityMonths / 2) : null;
+  if (examRequired && examWindowMonths) {
+    const examWindowStart = subMonths(new Date(), examWindowMonths);
+    const recentPassed = await db.examAttempt.count({
+      where: {
+        userId: cert.userId,
+        status: "COMPLETED",
+        passed: true,
+        createdAt: { gte: examWindowStart },
+        examPaper: { schemeId: cert.schemeId },
+      },
+    });
+    examMet = recentPassed > 0;
+  }
+
   // Renewal window: ACTIVE certs within 180 days of expiry, or EXPIRED certs
   const now = new Date();
   const windowOpensAt = cert.expiresAt ? addDays(cert.expiresAt, -RENEWAL_WINDOW_DAYS) : null;
@@ -62,12 +82,12 @@ export async function GET(
     ? now >= windowOpensAt! || cert.status === "EXPIRED"
     : cert.status === "EXPIRED";
 
-  const canIssue = inRenewalWindow && cpdMet && !["REVOKED", "SUSPENDED"].includes(cert.status);
-  // ISO 17024 Cl.6.8 — candidates must meet CPD hours before requesting renewal.
-  // When cpdHoursRequired = 0 the scheme has no CPD gate, so canRequest stays true.
+  const canIssue = inRenewalWindow && cpdMet && examMet && !["REVOKED", "SUSPENDED"].includes(cert.status);
+  // ISO 17024 Cl.6.8 — candidates must meet CPD hours and exam requirement before requesting renewal.
   const canRequest = inRenewalWindow
     && !["REVOKED", "SUSPENDED"].includes(cert.status)
-    && (cpdRequired === 0 || cpdMet);
+    && (cpdRequired === 0 || cpdMet)
+    && examMet;
 
   return NextResponse.json({
     certificate: {
@@ -84,6 +104,11 @@ export async function GET(
       logged: cpdHoursLogged,
       met: cpdMet,
       measuredSince: cpdSince.toISOString(),
+    },
+    exam: {
+      required: examRequired,
+      met: examMet,
+      windowMonths: examWindowMonths,
     },
     renewal: {
       windowOpensAt: windowOpensAt?.toISOString() ?? null,
@@ -135,7 +160,7 @@ export async function POST(
       ...(!isOfficer ? { userId: session.user.id } : {}),
     },
     include: {
-      scheme: { select: { id: true, name: true, code: true, validityMonths: true, cpdHoursRequired: true, standardVersion: true } },
+      scheme: { select: { id: true, name: true, code: true, validityMonths: true, cpdHoursRequired: true, passMark: true, standardVersion: true } },
       user: { select: { id: true, firstName: true, lastName: true, email: true } },
       renewals: { orderBy: { renewedAt: "desc" }, take: 1 },
     },
@@ -179,6 +204,29 @@ export async function POST(
           {
             error: `CPD requirement not met. Required: ${cert.scheme.cpdHoursRequired}h, logged: ${cpdLogged}h.`,
             shortfall: cert.scheme.cpdHoursRequired - cpdLogged,
+          },
+          { status: 422 },
+        );
+      }
+    }
+
+    // ISO 17024 Cl.6.8 — examination re-sit requirement for renewal
+    if (cert.scheme.passMark > 0 && cert.scheme.validityMonths > 0) {
+      const windowMonths = Math.ceil(cert.scheme.validityMonths / 2);
+      const examWindowStart = subMonths(new Date(), windowMonths);
+      const recentPassed = await db.examAttempt.count({
+        where: {
+          userId: cert.userId,
+          status: "COMPLETED",
+          passed: true,
+          createdAt: { gte: examWindowStart },
+          examPaper: { schemeId: cert.schemeId },
+        },
+      });
+      if (recentPassed === 0) {
+        return NextResponse.json(
+          {
+            error: `A new examination is required for renewal. You must pass an examination for ${cert.scheme.name} within the last ${windowMonths} months.`,
           },
           { status: 422 },
         );

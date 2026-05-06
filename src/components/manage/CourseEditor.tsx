@@ -7,6 +7,7 @@ import {
   BookOpen, Plus, ChevronDown, ChevronRight, Trash2, Edit2, Save,
   Video, FileText, FileArchive, Type, Upload, ExternalLink, Eye, EyeOff,
   ArrowLeft, Globe, Lock, Settings2, GripVertical,
+  Sparkles, AlertTriangle, CheckCircle2, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -548,6 +549,7 @@ export default function CourseEditor({
       {addLessonModuleId && (
         <LessonModal
           mode="add"
+          courseId={course.id}
           scormPackages={scormPackages}
           onSave={(data) => addLesson(addLessonModuleId, data)}
           onClose={() => setAddLessonModuleId(null)}
@@ -558,6 +560,7 @@ export default function CourseEditor({
       {editLesson && (
         <LessonModal
           mode="edit"
+          courseId={course.id}
           lesson={editLesson}
           scormPackages={scormPackages}
           onSave={(data) => updateLesson(editLesson.id, data)}
@@ -606,14 +609,322 @@ function EditModuleModal({ module, onSave, onClose }: { module: Module; onSave: 
   );
 }
 
+// ── AI Content Generation ────────────────────────────────────────────────────
+
+type LessonContent = {
+  title: string; introduction: string;
+  sections: { heading: string; content: string }[];
+  summary: string; keyTakeaways: string[];
+};
+type ModuleOverviewContent = {
+  title: string; overview: string; topics: string[];
+  prerequisites: string; estimatedDuration: string;
+};
+type AssessmentContent = {
+  title: string;
+  criteria: { id: string; description: string; performance_indicators: string[] }[];
+  assessmentMethods: string[]; passingRequirements: string;
+};
+
+function generatedContentToHtml(content: Record<string, unknown>, contentType: string): string {
+  if (contentType === "lesson") {
+    const c = content as LessonContent;
+    const sections = (c.sections ?? [])
+      .map((s) => `<h2>${s.heading}</h2>\n<p>${s.content}</p>`)
+      .join("\n");
+    return [
+      `<h1>${c.title}</h1>`,
+      `<h2>Introduction</h2>\n<p>${c.introduction}</p>`,
+      sections,
+      `<h2>Summary</h2>\n<p>${c.summary}</p>`,
+      `<h2>Key Takeaways</h2>\n<ul>${(c.keyTakeaways ?? []).map((k) => `<li>${k}</li>`).join("")}</ul>`,
+    ].join("\n");
+  }
+  if (contentType === "module_overview") {
+    const c = content as ModuleOverviewContent;
+    return [
+      `<h1>${c.title}</h1>`,
+      `<h2>Overview</h2>\n<p>${c.overview}</p>`,
+      `<h2>Topics Covered</h2>\n<ul>${(c.topics ?? []).map((t) => `<li>${t}</li>`).join("")}</ul>`,
+      `<h2>Prerequisites</h2>\n<p>${c.prerequisites}</p>`,
+      `<h2>Estimated Duration</h2>\n<p>${c.estimatedDuration}</p>`,
+    ].join("\n");
+  }
+  if (contentType === "assessment_criteria") {
+    const c = content as AssessmentContent;
+    const criteria = (c.criteria ?? [])
+      .map(
+        (cr) =>
+          `<h3>${cr.id}: ${cr.description}</h3>\n<ul>${(cr.performance_indicators ?? []).map((pi) => `<li>${pi}</li>`).join("")}</ul>`,
+      )
+      .join("\n");
+    return [
+      `<h1>${c.title}</h1>`,
+      `<h2>Assessment Criteria</h2>`,
+      criteria,
+      `<h2>Assessment Methods</h2>\n<ul>${(c.assessmentMethods ?? []).map((m) => `<li>${m}</li>`).join("")}</ul>`,
+      `<h2>Passing Requirements</h2>\n<p>${c.passingRequirements}</p>`,
+    ].join("\n");
+  }
+  return JSON.stringify(content, null, 2);
+}
+
+function ContentPreview({
+  content,
+  contentType,
+}: {
+  content: Record<string, unknown>;
+  contentType: string;
+}) {
+  function Section({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+      <div>
+        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+        {children}
+      </div>
+    );
+  }
+  if (contentType === "lesson") {
+    const c = content as LessonContent;
+    return (
+      <div className="border border-slate-200 rounded-xl p-4 space-y-4 bg-slate-50 max-h-64 overflow-y-auto">
+        <p className="font-semibold text-slate-900 text-sm">{c.title}</p>
+        <Section label="Introduction"><p className="text-xs text-slate-600">{c.introduction}</p></Section>
+        {(c.sections ?? []).map((s, i) => (
+          <Section key={i} label={s.heading}><p className="text-xs text-slate-600">{s.content}</p></Section>
+        ))}
+        <Section label="Summary"><p className="text-xs text-slate-600">{c.summary}</p></Section>
+        <Section label="Key Takeaways">
+          <ul className="list-disc list-inside space-y-0.5">
+            {(c.keyTakeaways ?? []).map((k, i) => <li key={i} className="text-xs text-slate-600">{k}</li>)}
+          </ul>
+        </Section>
+      </div>
+    );
+  }
+  if (contentType === "module_overview") {
+    const c = content as ModuleOverviewContent;
+    return (
+      <div className="border border-slate-200 rounded-xl p-4 space-y-4 bg-slate-50 max-h-64 overflow-y-auto">
+        <p className="font-semibold text-slate-900 text-sm">{c.title}</p>
+        <Section label="Overview"><p className="text-xs text-slate-600">{c.overview}</p></Section>
+        <Section label="Topics Covered">
+          <ul className="list-disc list-inside space-y-0.5">
+            {(c.topics ?? []).map((t, i) => <li key={i} className="text-xs text-slate-600">{t}</li>)}
+          </ul>
+        </Section>
+        <Section label="Prerequisites"><p className="text-xs text-slate-600">{c.prerequisites}</p></Section>
+        <Section label="Estimated Duration"><p className="text-xs text-slate-600">{c.estimatedDuration}</p></Section>
+      </div>
+    );
+  }
+  if (contentType === "assessment_criteria") {
+    const c = content as AssessmentContent;
+    return (
+      <div className="border border-slate-200 rounded-xl p-4 space-y-4 bg-slate-50 max-h-64 overflow-y-auto">
+        <p className="font-semibold text-slate-900 text-sm">{c.title}</p>
+        <Section label="Criteria">
+          {(c.criteria ?? []).map((cr, i) => (
+            <div key={i} className="mb-2">
+              <p className="text-xs font-medium text-slate-700">{cr.id}: {cr.description}</p>
+              <ul className="list-disc list-inside ml-2 space-y-0.5 mt-1">
+                {(cr.performance_indicators ?? []).map((pi, j) => <li key={j} className="text-xs text-slate-600">{pi}</li>)}
+              </ul>
+            </div>
+          ))}
+        </Section>
+        <Section label="Assessment Methods">
+          <ul className="list-disc list-inside space-y-0.5">
+            {(c.assessmentMethods ?? []).map((m, i) => <li key={i} className="text-xs text-slate-600">{m}</li>)}
+          </ul>
+        </Section>
+        <Section label="Passing Requirements"><p className="text-xs text-slate-600">{c.passingRequirements}</p></Section>
+      </div>
+    );
+  }
+  return <pre className="text-xs bg-slate-50 p-3 rounded-lg overflow-auto max-h-48">{JSON.stringify(content, null, 2)}</pre>;
+}
+
+function AIContentModal({
+  courseId,
+  prefillTitle,
+  onUse,
+  onClose,
+}: {
+  courseId: string;
+  prefillTitle: string;
+  onUse: (html: string) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({
+    moduleTitle: prefillTitle,
+    targetAudience: "",
+    contentType: "lesson" as "lesson" | "module_overview" | "assessment_criteria",
+  });
+  const [objectives, setObjectives] = useState<string[]>([""]);
+  const [generating, setGenerating] = useState(false);
+  const [preview, setPreview] = useState<{ content: Record<string, unknown>; contentType: string } | null>(null);
+
+  function addObjective() { setObjectives((o) => [...o, ""]); }
+  function removeObjective(i: number) { setObjectives((o) => o.filter((_, idx) => idx !== i)); }
+  function updateObjective(i: number, v: string) {
+    setObjectives((prev) => prev.map((x, idx) => (idx === i ? v : x)));
+  }
+
+  async function generate() {
+    const validObjectives = objectives.filter((o) => o.trim());
+    if (!form.moduleTitle.trim()) { toast.error("Title is required"); return; }
+    if (!form.targetAudience.trim()) { toast.error("Target audience is required"); return; }
+    if (validObjectives.length === 0) { toast.error("At least one learning objective is required"); return; }
+    setGenerating(true);
+    try {
+      const res = await fetch(`/api/manage/courses/${courseId}/generate-content`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          moduleTitle: form.moduleTitle,
+          targetAudience: form.targetAudience,
+          learningObjectives: validObjectives,
+          contentType: form.contentType,
+        }),
+      });
+      const data = await res.json() as { content: Record<string, unknown>; contentType: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Generation failed");
+      setPreview({ content: data.content, contentType: data.contentType });
+      toast.success("Content generated!");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function useContent() {
+    if (!preview) return;
+    onUse(generatedContentToHtml(preview.content, preview.contentType));
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 shrink-0">
+          <Sparkles className="w-5 h-5 text-primary" />
+          <h2 className="font-bold text-slate-900">AI Content Generator</h2>
+          <button type="button" onClick={onClose} className="ml-auto p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800">
+              AI-generated content requires review before publishing. Edit as needed before adding to your course.
+            </p>
+          </div>
+          {!preview ? (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs">Module / Lesson Title *</Label>
+                <Input
+                  className="mt-1 text-sm"
+                  value={form.moduleTitle}
+                  onChange={(e) => setForm((f) => ({ ...f, moduleTitle: e.target.value }))}
+                  placeholder="e.g. Risk Assessment Principles"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Target Audience *</Label>
+                <Input
+                  className="mt-1 text-sm"
+                  value={form.targetAudience}
+                  onChange={(e) => setForm((f) => ({ ...f, targetAudience: e.target.value }))}
+                  placeholder="e.g. Health & Safety professionals with 2+ years experience"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-xs">Learning Objectives *</Label>
+                  <button
+                    type="button"
+                    onClick={addObjective}
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium"
+                  >
+                    <Plus className="w-3 h-3" /> Add
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {objectives.map((obj, i) => (
+                    <div key={i} className="flex gap-2">
+                      <Input
+                        className="text-sm flex-1"
+                        value={obj}
+                        onChange={(e) => updateObjective(i, e.target.value)}
+                        placeholder={`Objective ${i + 1}`}
+                      />
+                      {objectives.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeObjective(i)}
+                          className="p-2 text-slate-400 hover:text-red-500 transition"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Content Type</Label>
+                <select
+                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                  value={form.contentType}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, contentType: e.target.value as typeof f.contentType }))
+                  }
+                >
+                  <option value="lesson">Full Lesson</option>
+                  <option value="module_overview">Module Overview</option>
+                  <option value="assessment_criteria">Assessment Criteria</option>
+                </select>
+              </div>
+              <Button onClick={generate} disabled={generating} className="w-full gap-2">
+                <Sparkles className="w-4 h-4" />
+                {generating ? "Generating… (15–30 seconds)" : "Generate Content"}
+              </Button>
+              <p className="text-[10px] text-slate-400 text-center">
+                Powered by Claude AI · Review all generated content before publishing
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <ContentPreview content={preview.content} contentType={preview.contentType} />
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setPreview(null)}>
+                  Regenerate
+                </Button>
+                <Button className="flex-1 gap-2" onClick={useContent}>
+                  <CheckCircle2 className="w-4 h-4" /> Use this content
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LessonModal({
   mode,
+  courseId,
   lesson,
   scormPackages,
   onSave,
   onClose,
 }: {
   mode: "add" | "edit";
+  courseId: string;
   lesson?: Lesson;
   scormPackages: ScormPackage[];
   onSave: (data: Partial<Lesson> & { title: string; contentType: string; scormPackageId?: string }) => void;
@@ -631,6 +942,7 @@ function LessonModal({
   });
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [aiOpen, setAiOpen] = useState(false);
 
   async function uploadFile(file: File, type: "pdf" | "video") {
     setUploading(true);
@@ -689,6 +1001,7 @@ function LessonModal({
   }
 
   return (
+    <>
     <Modal title={mode === "add" ? "Add Lesson" : "Edit Lesson"} onClose={onClose} wide>
       <div className="space-y-4">
         {/* Title + type */}
@@ -760,7 +1073,16 @@ function LessonModal({
 
         {form.contentType === "text" && (
           <div>
-            <Label>Text Content (HTML supported)</Label>
+            <div className="flex items-center justify-between mb-1">
+              <Label>Text Content (HTML supported)</Label>
+              <button
+                type="button"
+                onClick={() => setAiOpen(true)}
+                className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium transition"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Generate with AI
+              </button>
+            </div>
             <textarea
               className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono resize-none"
               rows={8}
@@ -830,6 +1152,15 @@ function LessonModal({
         </div>
       </div>
     </Modal>
+    {aiOpen && (
+      <AIContentModal
+        courseId={courseId}
+        prefillTitle={form.title}
+        onUse={(html) => { setForm((f) => ({ ...f, contentData: html })); setAiOpen(false); }}
+        onClose={() => setAiOpen(false)}
+      />
+    )}
+    </>
   );
 }
 

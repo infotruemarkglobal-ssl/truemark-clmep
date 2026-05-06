@@ -6,7 +6,7 @@ import {
   LayoutDashboard, BookOpen, FileText, Award, Users, Building2,
   BarChart3, Shield, ShieldCheck, ClipboardList, FolderOpen, MessageSquare,
   Settings, HelpCircle, X, TrendingUp, Package, BadgeCheck, Bell,
-  UserCircle, Eye, Scale, Crown, CreditCard, KeyRound, ClipboardCheck,
+  UserCircle, Eye, Scale, Crown, CreditCard, KeyRound, ClipboardCheck, ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -71,8 +71,9 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Exams",
       items: [
-        { label: "Exam Papers & Grading", href: "/manage/exams", icon: ClipboardList },
-        { label: "Documents",             href: "/documents",    icon: FolderOpen    },
+        { label: "Grade Queue",           href: "/manage/grade-queue", icon: ListChecks   },
+        { label: "Exam Papers & Grading", href: "/manage/exams",       icon: ClipboardList },
+        { label: "Documents",             href: "/documents",           icon: FolderOpen    },
       ],
     },
     PROFILE_SECTION,
@@ -198,11 +199,12 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Compliance & Data",
       items: [
-        { label: "ISO 17024 Status", href: "/compliance",       icon: ShieldCheck    },
-        { label: "Audit Programme",  href: "/audit-programme",  icon: ClipboardCheck },
-        { label: "Audit Log",        href: "/audit",            icon: ClipboardList  },
-        { label: "Reports",          href: "/reports",          icon: BarChart3      },
-        { label: "Documents",        href: "/documents",        icon: FolderOpen     },
+        { label: "ISO 17024 Status",   href: "/compliance",       icon: ShieldCheck    },
+        { label: "Management Review",  href: "/manage/review",    icon: FileText       },
+        { label: "Audit Programme",    href: "/audit-programme",  icon: ClipboardCheck },
+        { label: "Audit Log",          href: "/audit",            icon: ClipboardList  },
+        { label: "Reports",            href: "/reports",          icon: BarChart3      },
+        { label: "Documents",          href: "/documents",        icon: FolderOpen     },
       ],
     },
     {

@@ -14,6 +14,7 @@ type RenewalData = {
     scheme: { id: string; name: string; code: string; validityMonths: number; cpdHoursRequired: number };
   };
   cpd: { required: number; logged: number; met: boolean; measuredSince: string };
+  exam?: { required: boolean; met: boolean; windowMonths: number | null };
   renewal: {
     windowOpensAt: string | null;
     inRenewalWindow: boolean;
@@ -168,6 +169,24 @@ export default function CertificateRenewPage() {
       {!renewal.inRenewalWindow && renewal.windowOpensAt && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">
           Renewal requests open {new Date(renewal.windowOpensAt).toLocaleDateString()} — 180 days before expiry.
+        </div>
+      )}
+
+      {/* Exam re-sit requirement not met — blocks renewal */}
+      {data.exam?.required && !data.exam?.met && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-5 space-y-3">
+          <p className="text-sm font-semibold text-red-800">New examination required for renewal (ISO 17024 Cl.6.8)</p>
+          <p className="text-sm text-red-700">
+            This certification scheme requires a new passed examination for renewal. You must pass an examination
+            for <strong>{cert.scheme.name}</strong> within the last{" "}
+            <strong>{data.exam.windowMonths} months</strong>.
+          </p>
+          <a
+            href="/exams"
+            className="inline-flex items-center gap-1 text-sm font-semibold text-red-800 underline hover:text-red-900 transition-colors"
+          >
+            View available exams →
+          </a>
         </div>
       )}
 

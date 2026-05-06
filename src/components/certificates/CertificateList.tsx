@@ -6,8 +6,16 @@ import { format, isPast, differenceInDays } from "date-fns";
 import {
   Award, CheckCircle2, XCircle, AlertTriangle, Clock,
   Download, ExternalLink, QrCode, Shield, ChevronRight,
-  FileText, X,
+  FileText, X, Copy, Check,
 } from "lucide-react";
+
+function LinkedinIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+    </svg>
+  );
+}
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -178,11 +186,36 @@ export default function CertificateList({
   // Track which certificate IDs have been acknowledged in this session.
   // Avoids a round-trip on every subsequent download after the first acceptance.
   const [acknowledgedIds, setAcknowledgedIds] = useState<Set<string>>(new Set());
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [modalState, setModalState] = useState<{
     certId: string;
     schemeName: string;
   } | null>(null);
   const [checking, setChecking] = useState<string | null>(null);
+
+  function buildLinkedInUrl(cert: Certificate): string {
+    const issued = new Date(cert.issuedAt);
+    const expires = new Date(cert.expiresAt);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const params = new URLSearchParams({
+      startTask: "CERTIFICATION_NAME",
+      name: `${cert.scheme.name} Certification`,
+      issueYear: String(issued.getFullYear()),
+      issueMonth: String(issued.getMonth() + 1),
+      expirationYear: String(expires.getFullYear()),
+      expirationMonth: String(expires.getMonth() + 1),
+      certUrl: `${appUrl}/verify/${cert.certificateNumber}`,
+      certId: cert.certificateNumber,
+    });
+    return `https://www.linkedin.com/profile/add?${params.toString()}`;
+  }
+
+  async function handleCopyLink(cert: Certificate) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    await navigator.clipboard.writeText(`${appUrl}/verify/${cert.certificateNumber}`);
+    setCopiedId(cert.id);
+    setTimeout(() => setCopiedId((prev) => (prev === cert.id ? null : prev)), 2000);
+  }
 
   async function handleDownloadClick(cert: Certificate) {
     if (checking) return;
@@ -368,6 +401,30 @@ export default function CertificateList({
                       <Download className="w-3.5 h-3.5" aria-hidden="true" />
                       {isChecking ? "Checking…" : "Download PDF"}
                     </Button>
+                    {cert.status === "ACTIVE" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => window.open(buildLinkedInUrl(cert), "_blank")}
+                        >
+                          <LinkedinIcon className="w-3.5 h-3.5" /> Share on LinkedIn
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => handleCopyLink(cert)}
+                        >
+                          {copiedId === cert.id ? (
+                            <><Check className="w-3.5 h-3.5 text-green-600" /> Copied!</>
+                          ) : (
+                            <><Copy className="w-3.5 h-3.5" /> Copy Link</>
+                          )}
+                        </Button>
+                      </>
+                    )}
                     {(isExpiringSoon || isPast(expiresAt)) && cert.renewals.length === 0 && (
                       <Button
                         size="sm"

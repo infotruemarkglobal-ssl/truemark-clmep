@@ -73,6 +73,7 @@ export default function ExamInterface({
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Announces timer thresholds to screen readers without polluting every second
   const [timerAnnouncement, setTimerAnnouncement] = useState("");
@@ -245,7 +246,7 @@ export default function ExamInterface({
   useEffect(() => {
     if (!requiresProctoring) return;
     function onBeforeUnload() {
-      if (submitting) return; // normal submit — don't flag
+      if (submittingRef.current) return; // normal submit — don't flag
       const blob = new Blob(
         [JSON.stringify({ proctoringSessionId: examState.proctoringSessionId, type: "navigation_exit", details: "Candidate navigated away from exam page" })],
         { type: "application/json" }
@@ -535,6 +536,7 @@ export default function ExamInterface({
   const handleSubmit = useCallback(async (autoSubmit = false) => {
     if (submitting) return;
     setSubmitting(true);
+    submittingRef.current = true;
     setShowConfirm(false);
 
     // Stop camera
@@ -560,6 +562,7 @@ export default function ExamInterface({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to submit exam");
       setSubmitting(false);
+      submittingRef.current = false;
     }
   }, [submitting, questions, answers, attemptId, router, examPaperId]);
 
