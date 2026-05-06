@@ -7,11 +7,13 @@ import { toast } from "sonner";
 import {
   Play, FileText, CheckCircle2, Lock, ChevronDown, ChevronRight,
   Award, Clock, Users, BookOpen, ExternalLink, ShoppingCart, Gift,
+  AlertTriangle, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import ApplicationModal, { type Requirements } from "@/components/courses/ApplicationModal";
 
 type Lesson = { id: string; title: string; contentType: string; contentUrl: string | null; contentData: string | null; durationMins: number | null; isPreview: boolean; scormPackageId?: string | null };
 type Module = { id: string; title: string; order: number; lessons: Lesson[] };
@@ -71,7 +73,28 @@ export default function CoursePlayer({
   const [seats, setSeats] = useState(1);
   const isOrgManager = userRole === "ORG_MANAGER";
 
-  const handleEnrol = useCallback(async () => {
+  // Eligibility gate state
+  const [checkingEligibility, setCheckingEligibility] = useState(false);
+  const [eligibilityBlock, setEligibilityBlock] = useState<{
+    reason: string;
+    action: string;
+  } | null>(null);
+  const [applicationPending, setApplicationPending] = useState(false);
+  const [appModal, setAppModal] = useState<{
+    schemeId: string;
+    schemeName: string;
+    requirements: Requirements;
+    previousRejection: {
+      id: string;
+      rejectionReason: string | null;
+      reviewedAt: string | null;
+      declaredExperience: number | null;
+      declaredQualification: string | null;
+      priorCertNumbers: string | null;
+    } | null;
+  } | null>(null);
+
+  const doEnrol = useCallback(async () => {
     setEnrolling(true);
     try {
       const res = await fetch("/api/payments/paystack/initiate", {
@@ -89,7 +112,6 @@ export default function CoursePlayer({
         router.refresh();
         return;
       }
-      // Paid — redirect to Paystack checkout
       window.location.href = data.authorizationUrl;
     } catch {
       toast.error("Something went wrong. Please try again.");
@@ -98,7 +120,7 @@ export default function CoursePlayer({
     }
   }, [course.id, router]);
 
-  const handleAddToCart = useCallback(async () => {
+  const doAddToCart = useCallback(async () => {
     setAddingToCart(true);
     try {
       const res = await fetch("/api/cart/items", {
@@ -119,6 +141,68 @@ export default function CoursePlayer({
       setAddingToCart(false);
     }
   }, [course.id, seats]);
+
+  // Runs eligibility check before allowing enrol/cart actions.
+  // onPass() is called only when the candidate is unconditionally eligible.
+  const withEligibilityCheck = useCallback(async (onPass: () => void) => {
+    setCheckingEligibility(true);
+    setEligibilityBlock(null);
+    setApplicationPending(false);
+    try {
+      const res = await fetch("/api/enrolments/check-eligibility", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId: course.id }),
+      });
+      const data = await res.json() as {
+        eligible?: boolean;
+        reason?: string;
+        action?: string;
+        requiresApplication?: boolean;
+        applicationPending?: boolean;
+        schemeId?: string;
+        schemeName?: string;
+        requirements?: Requirements;
+        previousRejection?: {
+          id: string;
+          rejectionReason: string | null;
+          reviewedAt: string | null;
+          declaredExperience: number | null;
+          declaredQualification: string | null;
+          priorCertNumbers: string | null;
+        } | null;
+      };
+      if (!res.ok) {
+        toast.error((data as { error?: string }).error ?? "Eligibility check failed");
+        return;
+      }
+      if (!data.eligible) {
+        setEligibilityBlock({ reason: data.reason ?? "", action: data.action ?? "" });
+        return;
+      }
+      if (data.applicationPending) {
+        setApplicationPending(true);
+        return;
+      }
+      if (data.requiresApplication) {
+        setAppModal({
+          schemeId: data.schemeId!,
+          schemeName: data.schemeName!,
+          requirements: data.requirements!,
+          previousRejection: data.previousRejection ?? null,
+        });
+        return;
+      }
+      onPass();
+    } catch {
+      toast.error("Could not verify eligibility. Please try again.");
+    } finally {
+      setCheckingEligibility(false);
+    }
+  }, [course.id]);
+
+  const handleEnrol = useCallback(() => withEligibilityCheck(doEnrol), [withEligibilityCheck, doEnrol]);
+  const handleAddToCart = useCallback(() => withEligibilityCheck(doAddToCart), [withEligibilityCheck, doAddToCart]);
 
   const isEnrolled = !!enrolment;
   const completedLessonIds = new Set(
@@ -156,6 +240,71 @@ export default function CoursePlayer({
   }, [enrolment, savingProgress, router]);
 
   return (
+    <>
+    {/* Eligibility blocking modal */}
+    {eligibilityBlock && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setEligibilityBlock(null)} />
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900">Not Eligible</h3>
+              <p className="text-sm text-slate-600 mt-1">{eligibilityBlock.action}</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Button className="flex-1" onClick={() => setEligibilityBlock(null)}>
+              Close
+            </Button>
+            {eligibilityBlock.reason === "AGE_UNVERIFIABLE" && (
+              <Button variant="outline" className="flex-1" onClick={() => { setEligibilityBlock(null); router.push("/profile"); }}>
+                Go to Profile
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Application pending modal */}
+    {applicationPending && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setApplicationPending(false)} />
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900">Application Under Review</h3>
+              <p className="text-sm text-slate-600 mt-1">
+                Your application is currently pending review by a Certification Officer.
+                You will be notified once a decision has been made.
+              </p>
+            </div>
+          </div>
+          <Button className="w-full" onClick={() => setApplicationPending(false)}>
+            Close
+          </Button>
+        </div>
+      </div>
+    )}
+
+    {/* Multi-step application modal */}
+    {appModal && (
+      <ApplicationModal
+        open={!!appModal}
+        onClose={() => setAppModal(null)}
+        courseId={course.id}
+        schemeName={appModal.schemeName}
+        requirements={appModal.requirements}
+        previousRejection={appModal.previousRejection}
+      />
+    )}
+
     <div className="flex flex-col lg:flex-row gap-6 min-h-[calc(100vh-8rem)]">
       {/* ── Main content area ── */}
       <div className="flex-1 space-y-6">
@@ -184,9 +333,9 @@ export default function CoursePlayer({
                 </div>
 
                 {course.price === 0 ? (
-                  <Button onClick={handleEnrol} disabled={enrolling} size="sm" className="gap-2">
+                  <Button onClick={handleEnrol} disabled={enrolling || checkingEligibility} size="sm" className="gap-2">
                     <Gift className="w-4 h-4" />
-                    {enrolling ? "Enrolling…" : "Enrol Free"}
+                    {checkingEligibility ? "Checking…" : enrolling ? "Enrolling…" : "Enrol Free"}
                   </Button>
                 ) : inCart ? (
                   <Button
@@ -214,21 +363,23 @@ export default function CoursePlayer({
                     )}
                     <Button
                       onClick={handleAddToCart}
-                      disabled={addingToCart}
+                      disabled={addingToCart || checkingEligibility}
                       size="sm"
                       className="gap-2"
                     >
-                      {addingToCart
+                      {checkingEligibility
+                        ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Checking…</>
+                        : addingToCart
                         ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Adding…</>
                         : <><ShoppingCart className="w-4 h-4" /> Add to Cart</>
                       }
                     </Button>
                     <button
                       onClick={handleEnrol}
-                      disabled={enrolling}
+                      disabled={enrolling || checkingEligibility}
                       className="text-xs text-slate-400 hover:text-slate-600 underline disabled:opacity-50"
                     >
-                      {enrolling ? "Redirecting…" : "Buy now →"}
+                      {checkingEligibility ? "Checking…" : enrolling ? "Redirecting…" : "Buy now →"}
                     </button>
                   </div>
                 )}
@@ -526,5 +677,6 @@ export default function CoursePlayer({
         </div>
       </aside>
     </div>
+    </>
   );
 }

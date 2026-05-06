@@ -67,21 +67,33 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
     );
   }
 
-  // Count previous attempts
-  const previousAttempts = await db.examAttempt.count({
-    where: { userId: session.user.id, examPaperId: id },
-  });
-
-  // Check eligibility via enrolment progress
-  const isEligible = examPaper.scheme
-    ? !!(await db.enrolment.findFirst({
+  // Find enrolment — used for eligibility check and scoping attempt count to current period.
+  const enrolment = examPaper.scheme
+    ? await db.enrolment.findFirst({
         where: {
           userId: session.user.id,
           course: { schemeId: examPaper.scheme.id },
           status: { in: ["ACTIVE", "COMPLETED"] },
         },
-      }))
-    : false;
+        include: {
+          course: { select: { id: true, title: true, price: true, currency: true } },
+        },
+      })
+    : null;
+  const isEligible = !!enrolment;
+
+  // Count attempts only within the current enrolment period so re-enrolment resets the count.
+  const previousAttempts = await db.examAttempt.count({
+    where: {
+      userId: session.user.id,
+      examPaperId: id,
+      ...(enrolment ? { createdAt: { gte: enrolment.enroledAt } } : {}),
+    },
+  });
+
+  const questionTypes = [
+    ...new Set(examPaper.sections.flatMap((s) => s.questions.map((q) => q.type))),
+  ];
 
   return (
     <ExamLanding
@@ -94,9 +106,12 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
         scheme: examPaper.scheme ? { name: examPaper.scheme.name, code: examPaper.scheme.code } : null,
         totalQuestions,
         requiresProctoring: examPaper.requiresProctoring,
+        tabSwitchLimit: examPaper.tabSwitchLimit,
       }}
       previousAttempts={previousAttempts}
       isEligible={isEligible}
+      course={enrolment?.course ?? null}
+      questionTypes={questionTypes}
     />
   );
 }

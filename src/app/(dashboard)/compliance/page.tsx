@@ -15,6 +15,8 @@ export default async function Page() {
   const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.AUDITOR];
   if (!(ALLOWED as string[]).includes(session.user.role)) redirect("/dashboard");
 
+  // NOTE: COIDeclaration has no `status` field — counting all declarations is the
+  // best proxy available until a review workflow is added to the model.
   const [
     activeSchemes,
     activeExamPapers,
@@ -23,6 +25,9 @@ export default async function Page() {
     recentAudits,
     totalCOI,
     openDSR,
+    openNonConformities,
+    overdueActions,
+    expiringCerts,
   ] = await Promise.all([
     cacheQuery(() => db.certificationScheme.count({ where: { isActive: true } }), ["compliance-schemes"], [CACHE_TAGS.compliance], 300),
     cacheQuery(() => db.examPaper.count({ where: { isActive: true } }), ["compliance-exams"], [CACHE_TAGS.compliance, CACHE_TAGS.exam], 300),
@@ -35,6 +40,9 @@ export default async function Page() {
     }),
     cacheQuery(() => db.cOIDeclaration.count(), ["compliance-coi"], [CACHE_TAGS.compliance], 300),
     cacheQuery(() => db.dataSubjectRequest.count({ where: { status: "pending" } }), ["compliance-dsr"], [CACHE_TAGS.compliance], 300),
+    cacheQuery(() => db.nonConformity.count({ where: { status: "OPEN" } }), ["compliance-nc-open"], [CACHE_TAGS.compliance], 300),
+    cacheQuery(() => db.correctiveAction.count({ where: { completedAt: null, dueDate: { lt: new Date() } } }), ["compliance-ca-overdue"], [CACHE_TAGS.compliance], 300),
+    cacheQuery(() => db.certificate.count({ where: { status: "ACTIVE", expiresAt: { gt: new Date(), lt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) } } }), ["compliance-certs-expiring"], [CACHE_TAGS.compliance, CACHE_TAGS.certificate], 300),
   ]);
 
   const serialisedAudits = recentAudits.map((a) => ({
@@ -55,6 +63,9 @@ export default async function Page() {
         openAppeals,
         totalCOI,
         openDSR,
+        openNonConformities,
+        overdueActions,
+        expiringCerts,
       }}
       recentAudits={serialisedAudits}
       checkedAt={new Date().toISOString()}

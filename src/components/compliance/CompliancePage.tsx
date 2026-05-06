@@ -19,6 +19,9 @@ type Metrics = {
   openAppeals: number;
   totalCOI: number;
   openDSR: number;
+  openNonConformities: number;
+  overdueActions: number;
+  expiringCerts: number;
 };
 
 type AuditEntry = {
@@ -158,6 +161,67 @@ const ISO_CLAUSES: Array<{
             linkText: "Review data requests",
           }
         : null,
+  },
+  {
+    clause: "8.3",
+    title: "Nonconformity Management",
+    description: "Open nonconformities have corrective actions assigned and tracked",
+    status: (m) =>
+      m.openNonConformities > 2 ? "red" : m.openNonConformities > 0 ? "amber" : "green",
+    metric: (m) => `${m.openNonConformities} open nonconformit${m.openNonConformities !== 1 ? "ies" : "y"}`,
+    remediation: (m, s) => {
+      if (s === "red")
+        return {
+          text: `${m.openNonConformities} open nonconformities require corrective action. Review at /manage/nonconformities`,
+          href: "/manage/nonconformities",
+          linkText: "Manage nonconformities",
+        };
+      if (s === "amber")
+        return {
+          text: `${m.openNonConformities} open nonconformit${m.openNonConformities !== 1 ? "ies" : "y"} require corrective action. Review at /manage/nonconformities`,
+          href: "/manage/nonconformities",
+          linkText: "Review nonconformities",
+        };
+      return null;
+    },
+  },
+  {
+    clause: "8.4",
+    title: "Corrective Action Timeliness",
+    description: "Corrective actions completed by their due date",
+    status: (m) => (m.overdueActions > 0 ? "red" : "green"),
+    metric: (m) => `${m.overdueActions} overdue action${m.overdueActions !== 1 ? "s" : ""}`,
+    remediation: (m, s) =>
+      s !== "green"
+        ? {
+            text: `${m.overdueActions} corrective action${m.overdueActions !== 1 ? "s are" : " is"} past their due date. Review at /manage/nonconformities`,
+            href: "/manage/nonconformities",
+            linkText: "Review overdue actions",
+          }
+        : null,
+  },
+  {
+    clause: "6.7",
+    title: "Certificate Expiry Management",
+    description: "Active certificates expiring within 90 days are flagged for renewal",
+    status: (m) =>
+      m.expiringCerts > 5 ? "red" : m.expiringCerts > 0 ? "amber" : "green",
+    metric: (m) => `${m.expiringCerts} expiring within 90 days`,
+    remediation: (m, s) => {
+      if (s === "red")
+        return {
+          text: `${m.expiringCerts} certificates expire within 90 days. Contact holders to begin renewal at /manage/certificates`,
+          href: "/manage/certificates",
+          linkText: "Manage certificates",
+        };
+      if (s === "amber")
+        return {
+          text: `${m.expiringCerts} certificate${m.expiringCerts !== 1 ? "s" : ""} expire within 90 days. Contact holders to begin renewal at /manage/certificates`,
+          href: "/manage/certificates",
+          linkText: "Review expiring certificates",
+        };
+      return null;
+    },
   },
 ];
 

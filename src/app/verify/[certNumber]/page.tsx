@@ -74,24 +74,41 @@ export default async function VerifyCertificatePage({
   }
 
   return (
-    <CertificateVerification
-      result={certificate.status === "ACTIVE" ? "valid" : "invalid"}
-      certNumber={certNumber}
-      certificate={{
-        certificateNumber: certificate.certificateNumber,
-        status: certificate.status,
-        issuedAt: certificate.issuedAt.toISOString(),
-        expiresAt: certificate.expiresAt?.toISOString() ?? null,
-        holderName: `${certificate.user.firstName} ${certificate.user.lastName}`,
-        scheme: {
-          name: certificate.scheme.name,
-          code: certificate.scheme.code,
-          description: certificate.scheme.description ?? null,
-          validityMonths: certificate.scheme.validityMonths,
-        },
-        qrCodeUrl: certificate.qrCodeUrl,
-        openBadgeJson: certificate.openBadgeJson as Record<string, unknown> | null,
-      }}
-    />
+    <>
+      <CertificateVerification
+        result={certificate.status === "ACTIVE" ? "valid" : "invalid"}
+        certNumber={certNumber}
+        certificate={{
+          certificateNumber: certificate.certificateNumber,
+          status: certificate.status,
+          issuedAt: certificate.issuedAt.toISOString(),
+          expiresAt: certificate.expiresAt?.toISOString() ?? null,
+          holderName: `${certificate.user.firstName} ${certificate.user.lastName}`,
+          scheme: {
+            name: certificate.scheme.name,
+            code: certificate.scheme.code,
+            description: certificate.scheme.description ?? null,
+            validityMonths: certificate.scheme.validityMonths,
+          },
+          qrCodeUrl: certificate.qrCodeUrl,
+          openBadgeJson: certificate.openBadgeJson as Record<string, unknown> | null,
+        }}
+      />
+      <div className="text-center pb-6 flex items-center justify-center gap-4 flex-wrap">
+        <a
+          href="/registry"
+          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
+        >
+          View Full Certificate Register →
+        </a>
+        <span className="text-slate-200 text-xs">|</span>
+        <a
+          href="/about"
+          className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
+        >
+          About TrueMark Global →
+        </a>
+      </div>
+    </>
   );
 }

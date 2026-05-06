@@ -36,5 +36,7 @@ export default async function CertificatesPage() {
     renewals: c.renewals,
   }));
 
-  return <CertificateList certificates={serialised} />;
+  const dpoEmail = process.env.GDPR_DPO_EMAIL ?? "certificates@truemarkglobal.com";
+
+  return <CertificateList certificates={serialised} dpoEmail={dpoEmail} />;
 }

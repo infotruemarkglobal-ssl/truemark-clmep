@@ -171,6 +171,23 @@ export default function CertificateRenewPage() {
         </div>
       )}
 
+      {/* CPD requirement not met — blocks renewal request */}
+      {!renewal.canRequest && renewal.inRenewalWindow && cpd.required > 0 && !cpd.met && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-3">
+          <p className="text-sm font-semibold text-amber-800">CPD hours required before you can renew</p>
+          <p className="text-sm text-amber-700">
+            You need <strong>{(cpd.required - cpd.logged).toFixed(1)}h</strong> more CPD hours before you can
+            request renewal. You have logged {cpd.logged}h of {cpd.required}h required.
+          </p>
+          <a
+            href="/cpd"
+            className="inline-flex items-center gap-1 text-sm font-semibold text-amber-800 underline hover:text-amber-900 transition-colors"
+          >
+            Log CPD Hours →
+          </a>
+        </div>
+      )}
+
       {/* Action */}
       {(renewal.canRequest || renewal.canIssue) && (
         <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">

@@ -21,4 +21,5 @@ export const EVENTS = {
   SEND_ADMIN_PASSWORD_RESET: "email/admin.password.reset",
   SCAN_UPLOAD:               "upload/scan.requested",
   BREACH_REPORTED:           "breach/reported",
+  APPLICATION_AUTO_APPROVE:  "application/auto-approve-check",
 } as const;

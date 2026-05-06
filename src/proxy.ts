@@ -20,6 +20,12 @@ const AUTH_EXEMPT_PREFIXES = [
   // Public certificate verification — must be reachable without an account
   // so employers and third parties can confirm a certificate's validity.
   "/verify",
+  // Public certificate register (ISO 17024 Cl.6.7) — searchable list of all
+  // active certified persons. No authentication required.
+  "/registry",
+  // About/structure page (ISO 17024 Cl.5.1) — public page describing
+  // the certification body's structure, scope, and impartiality commitments.
+  "/about",
   // NextAuth internal endpoints
   "/api/auth",
   // Liveness probe — must be reachable by Vercel health checks and uptime

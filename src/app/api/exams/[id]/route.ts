@@ -54,8 +54,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!examPaper) return NextResponse.json({ error: "Exam not found" }, { status: 404 });
 
   // C6: Enrolment gate — a candidate must be enrolled in the scheme linked to
-  // this exam paper before they can start an attempt. Prevents unenrolled
-  // users from sitting exams by calling this endpoint directly.
+  // this exam paper before they can start an attempt. The enrolment record is
+  // also used to scope attempt counting to the current enrolment period so that
+  // re-enrolment properly resets the counter.
+  let enrolmentEnroledAt: Date | null = null;
   if (examPaper.scheme) {
     const enrolment = await db.enrolment.findFirst({
       where: {
@@ -63,6 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         course: { schemeId: examPaper.scheme.id },
         status: { in: ["ACTIVE", "COMPLETED"] },
       },
+      select: { enroledAt: true },
     });
     if (!enrolment) {
       return NextResponse.json(
@@ -70,17 +73,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         { status: 403 },
       );
     }
+    enrolmentEnroledAt = enrolment.enroledAt;
   }
 
   // M (multi-paper attempt count): count attempts at the scheme level, not just
-  // the specific exam paper. A scheme may have multiple active papers; the
-  // maxAttempts limit applies across all of them, not per-paper.
+  // the specific exam paper. Scoped to the current enrolment period so that
+  // re-enrolment resets the counter (enroledAt is updated on re-enrolment).
   const attemptCount = examPaper.scheme
     ? await db.examAttempt.count({
         where: {
           userId: session.user.id,
           examPaper: { schemeId: examPaper.scheme.id },
           status: { in: ["COMPLETED", "VOIDED"] },
+          ...(enrolmentEnroledAt ? { createdAt: { gte: enrolmentEnroledAt } } : {}),
         },
       })
     : await db.examAttempt.count({

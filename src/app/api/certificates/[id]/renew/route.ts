@@ -63,7 +63,11 @@ export async function GET(
     : cert.status === "EXPIRED";
 
   const canIssue = inRenewalWindow && cpdMet && !["REVOKED", "SUSPENDED"].includes(cert.status);
-  const canRequest = inRenewalWindow && !["REVOKED", "SUSPENDED"].includes(cert.status);
+  // ISO 17024 Cl.6.8 — candidates must meet CPD hours before requesting renewal.
+  // When cpdHoursRequired = 0 the scheme has no CPD gate, so canRequest stays true.
+  const canRequest = inRenewalWindow
+    && !["REVOKED", "SUSPENDED"].includes(cert.status)
+    && (cpdRequired === 0 || cpdMet);
 
   return NextResponse.json({
     certificate: {
@@ -155,6 +159,30 @@ export async function POST(
         { error: `Renewal requests open ${RENEWAL_WINDOW_DAYS} days before expiry. Window opens on ${windowOpensAt.toLocaleDateString()}.` },
         { status: 422 },
       );
+    }
+
+    // Enforce CPD requirement (ISO 17024 Cl.6.8) — server-side guard mirrors GET canRequest logic.
+    if (cert.scheme.cpdHoursRequired > 0) {
+      const cpdSince = cert.renewals[0]?.renewedAt ?? cert.issuedAt;
+      const cpdResult = await db.cPDRecord.aggregate({
+        where: {
+          userId: cert.userId,
+          schemeId: cert.schemeId,
+          status: "approved",
+          activityDate: { gte: cpdSince },
+        },
+        _sum: { hoursLogged: true },
+      });
+      const cpdLogged = cpdResult._sum.hoursLogged ?? 0;
+      if (cpdLogged < cert.scheme.cpdHoursRequired) {
+        return NextResponse.json(
+          {
+            error: `CPD requirement not met. Required: ${cert.scheme.cpdHoursRequired}h, logged: ${cpdLogged}h.`,
+            shortfall: cert.scheme.cpdHoursRequired - cpdLogged,
+          },
+          { status: 422 },
+        );
+      }
     }
 
     const officers = await db.user.findMany({

@@ -6,7 +6,7 @@ import {
   LayoutDashboard, BookOpen, FileText, Award, Users, Building2,
   BarChart3, ShieldCheck, ClipboardList, FolderOpen, MessageSquare,
   Settings, HelpCircle, X, TrendingUp, Package, BadgeCheck, Bell,
-  UserCircle, Eye, Scale, Crown, CreditCard, KeyRound,
+  UserCircle, Eye, Scale, Crown, CreditCard, KeyRound, ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -120,9 +120,10 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Compliance",
       items: [
-        { label: "ISO 17024 Status", href: "/compliance",  icon: ShieldCheck  },
-        { label: "Audit Log",        href: "/audit",        icon: ClipboardList },
-        { label: "Reports",          href: "/reports",      icon: BarChart3    },
+        { label: "ISO 17024 Status", href: "/compliance",        icon: ShieldCheck   },
+        { label: "Audit Programme",  href: "/audit-programme",   icon: ClipboardCheck },
+        { label: "Audit Log",        href: "/audit",             icon: ClipboardList  },
+        { label: "Reports",          href: "/reports",           icon: BarChart3      },
       ],
     },
     {
@@ -140,6 +141,7 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Certification",
       items: [
+        { label: "Applications",        href: "/manage/applications",  icon: ClipboardList },
         { label: "Decisions",           href: "/manage/decisions",     icon: BadgeCheck    },
         { label: "Manage Certificates", href: "/manage/certificates",  icon: Award         },
         { label: "Manage Complaints",   href: "/manage/complaints",    icon: MessageSquare },
@@ -175,10 +177,11 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Operations",
       items: [
-        { label: "Courses",               href: "/manage/courses",   icon: BookOpen      },
-        { label: "Exam Papers",           href: "/manage/exams",     icon: ClipboardList },
-        { label: "SCORM Packages",        href: "/manage/scorm",     icon: Package       },
-        { label: "Certification Decisions", href: "/manage/decisions",      icon: BadgeCheck    },
+        { label: "Courses",               href: "/manage/courses",       icon: BookOpen      },
+        { label: "Exam Papers",           href: "/manage/exams",         icon: ClipboardList },
+        { label: "SCORM Packages",        href: "/manage/scorm",         icon: Package       },
+        { label: "Applications",          href: "/manage/applications",  icon: ClipboardList },
+        { label: "Certification Decisions", href: "/manage/decisions",   icon: BadgeCheck    },
         { label: "Manage Certificates",   href: "/manage/certificates",  icon: Award         },
         { label: "Manage Complaints",     href: "/manage/complaints",    icon: MessageSquare },
         { label: "Appeals",               href: "/appeals",              icon: Scale         },
@@ -194,10 +197,11 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Compliance & Data",
       items: [
-        { label: "ISO 17024 Status", href: "/compliance", icon: ShieldCheck  },
-        { label: "Audit Log",        href: "/audit",       icon: ClipboardList },
-        { label: "Reports",          href: "/reports",     icon: BarChart3    },
-        { label: "Documents",        href: "/documents",   icon: FolderOpen   },
+        { label: "ISO 17024 Status", href: "/compliance",       icon: ShieldCheck    },
+        { label: "Audit Programme",  href: "/audit-programme",  icon: ClipboardCheck },
+        { label: "Audit Log",        href: "/audit",            icon: ClipboardList  },
+        { label: "Reports",          href: "/reports",          icon: BarChart3      },
+        { label: "Documents",        href: "/documents",        icon: FolderOpen     },
       ],
     },
     {

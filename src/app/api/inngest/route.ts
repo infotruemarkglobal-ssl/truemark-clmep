@@ -7,6 +7,7 @@ import { appealSlaMonitor } from "@/inngest/functions/appealSla";
 import { orphanedAttemptCleanup } from "@/inngest/functions/orphanedAttempts";
 import { breachDpaReminder } from "@/inngest/functions/breachReminder";
 import { dbKeepalive } from "@/inngest/functions/dbKeepalive";
+import { applicationAutoApprove } from "@/inngest/functions/applicationAutoApprove";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -22,5 +23,6 @@ export const { GET, POST, PUT } = serve({
     orphanedAttemptCleanup,
     breachDpaReminder,
     dbKeepalive,
+    applicationAutoApprove,
   ],
 });

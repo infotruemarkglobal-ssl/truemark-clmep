@@ -376,6 +376,21 @@ export async function GET(
       marginTop: 3,
       textAlign: "center",
     },
+
+    // ── Status watermark ─────────────────────────────────────────────────────
+    // Rendered only when cert.status !== "ACTIVE". Absolutely positioned so it
+    // overlays the certificate face without displacing any content. React-pdf
+    // draws this after all body content so it sits on the top layer.
+    watermark: {
+      position: "absolute",
+      top: "40%",
+      left: "15%",
+      fontSize: 72,
+      opacity: 0.25,
+      transform: "rotate(-35deg)",
+      fontFamily: "Helvetica-Bold",
+      letterSpacing: 8,
+    },
   });
 
   const doc = (
@@ -498,6 +513,16 @@ export async function GET(
             </View>
           ) : null}
         </View>
+
+        {/* ── Status watermark — only on non-ACTIVE certificates ────────── */}
+        {cert.status !== "ACTIVE" && (
+          <Text style={[
+            styles.watermark,
+            { color: cert.status === "REVOKED" ? "#DC2626" : "#9CA3AF" },
+          ]}>
+            {cert.status}
+          </Text>
+        )}
       </Page>
     </Document>
   );
