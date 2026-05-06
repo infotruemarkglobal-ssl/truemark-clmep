@@ -8,7 +8,7 @@ export function TruemarkLogo({ className }: { className?: string }) {
         src="/truemark-logo.png"
         alt="TrueMark Global Standards & Solutions Limited"
         fill
-        className="object-contain"
+        className="object-contain brightness-0 invert"
         priority
       />
     </div>

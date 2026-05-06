@@ -152,7 +152,7 @@ export default function ResetPasswordPage() {
     <div className="max-w-md mx-auto w-full">
       <div className="bg-white rounded-2xl shadow-2xl p-8">
         <div className="text-center mb-8">
-          <TruemarkLogoColour className="w-14 h-14 mx-auto mb-4" />
+          <TruemarkLogoColour className="w-48 h-14 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-slate-900">Set a new password</h1>
           <p className="text-slate-500 text-sm mt-1">Choose a strong password to secure your account.</p>
         </div>

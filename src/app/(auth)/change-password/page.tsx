@@ -63,12 +63,8 @@ export default function ChangePasswordPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* Brand */}
-        <div className="flex items-center gap-3 justify-center mb-8">
-          <TruemarkLogoColour className="w-10 h-10" />
-          <div>
-            <p className="font-bold text-slate-900 text-lg leading-tight">Truemark Global</p>
-            <p className="text-xs text-primary font-medium leading-tight">Certification Portal</p>
-          </div>
+        <div className="flex justify-center mb-8">
+          <TruemarkLogoColour className="w-48 h-16" />
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">

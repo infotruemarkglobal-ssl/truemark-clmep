@@ -21,12 +21,8 @@ export default function LoginPage() {
       <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-8 items-center relative z-10">
         {/* ── Left branding ── */}
         <div className="text-white space-y-6 hidden lg:block">
-          <div className="flex items-center gap-3 mb-8">
-            <TruemarkLogo className="w-12 h-12 rounded-lg overflow-hidden" />
-            <div>
-              <h1 className="text-2xl font-bold">Truemark Global</h1>
-              <p className="text-emerald-200 text-sm">Standards &amp; Solutions Limited</p>
-            </div>
+          <div className="mb-8">
+            <TruemarkLogo className="w-56 h-20" />
           </div>
 
           <h2 className="text-4xl font-bold leading-tight">
