@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
     id: `email-verify-${user.id}`,
     name: EVENTS.SEND_EMAIL_VERIFICATION,
     data: { to: email, firstName, verifyUrl, userId: user.id },
-  }).catch((err) => console.error("[inngest] Failed to queue verification email:", err));
-
+  });
+  
   return NextResponse.json({ ok: true }, { status: 201 });
 }
