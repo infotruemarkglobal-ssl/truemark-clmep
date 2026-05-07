@@ -3,6 +3,7 @@ import { Inngest } from "inngest";
 export const inngest = new Inngest({
   id: "truemark-clmep",
   name: "Truemark Global CLMEP",
+  eventKey: process.env.INNGEST_EVENT_KEY,
 });
 
 // ─── Event type catalogue ─────────────────────────────────────────────────────
