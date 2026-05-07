@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
   await db.verificationToken.create({ data: { identifier: email, token, expires } });
 
-  const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
+  const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
   await inngest.send({
     id: `email-verify-${user.id}`,
     name: EVENTS.SEND_EMAIL_VERIFICATION,

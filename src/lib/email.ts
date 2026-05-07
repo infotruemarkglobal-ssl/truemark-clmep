@@ -11,13 +11,14 @@ const transporter = nodemailer.createTransport({
       : undefined,
 });
 
+const APP_NAME = "TrueMark Global";
+const COMPANY_FULL_NAME = "TrueMark Global Standards &amp; Solutions Limited";
 const FROM = process.env.EMAIL_FROM ?? "noreply@truemarkglobal.com";
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "Truemark Global";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
 
 // CAN-SPAM Act §7 — all commercial email must include a physical postal address.
 // Update this constant if the registered office address changes.
-const POSTAL_ADDRESS = "Truemark Global Limited, 12 Certification Drive, Victoria Island, Lagos, Nigeria";
+const POSTAL_ADDRESS = "TrueMark Global Standards and Solutions Limited, 12 Certification Drive, Victoria Island, Lagos, Nigeria";
 
 // ─── Unsubscribe token ────────────────────────────────────────────────────────
 //
@@ -72,7 +73,7 @@ function unsubscribeUrl(userId: string, purpose = "MARKETING"): string {
  */
 function wrap(body: string, unsubLink?: string): string {
   const footerExtra = unsubLink
-    ? `<br/>To stop receiving these emails, <a href="${unsubLink}" style="color:#1a3d8f;">unsubscribe here</a>.`
+    ? `<br/>To stop receiving these emails, <a href="${unsubLink}" style="color:#1a4731;">unsubscribe here</a>.`
     : "";
 
   return `<!DOCTYPE html>
@@ -88,9 +89,9 @@ function wrap(body: string, unsubLink?: string): string {
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;max-width:560px;width:100%;">
         <!-- Header -->
         <tr>
-          <td style="background:#1a3d8f;padding:28px 32px;">
-            <p style="margin:0;font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">${APP_NAME}</p>
-            <p style="margin:4px 0 0;font-size:11px;color:#93c5fd;font-weight:500;letter-spacing:0.5px;text-transform:uppercase;">Certification Portal</p>
+          <td style="background:#1a4731;padding:28px 32px;">
+            <p style="margin:0;font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">${COMPANY_FULL_NAME}</p>
+            <p style="margin:4px 0 0;font-size:11px;color:#6ee7b7;font-weight:500;letter-spacing:0.5px;text-transform:uppercase;">Certification Portal</p>
           </td>
         </tr>
         <!-- Body -->
@@ -100,9 +101,9 @@ function wrap(body: string, unsubLink?: string): string {
           <td style="padding:20px 32px;border-top:1px solid #e2e8f0;background:#f8fafc;">
             <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.6;">
               This email was sent by ${APP_NAME}. If you have questions, contact
-              <a href="mailto:support@truemarkglobal.com" style="color:#1a3d8f;">support@truemarkglobal.com</a>.${footerExtra}<br/>
+              <a href="mailto:support@truemarkglobal.com" style="color:#1a4731;">support@truemarkglobal.com</a>.${footerExtra}<br/>
               ${POSTAL_ADDRESS}<br/>
-              © ${new Date().getFullYear()} Truemark Global Limited. All rights reserved.
+              © ${new Date().getFullYear()} TrueMark Global Standards and Solutions Limited. All rights reserved.
             </p>
           </td>
         </tr>
@@ -134,7 +135,7 @@ export async function sendEmailVerificationEmail({
       Please verify your email address to activate it. This link expires in <strong>24 hours</strong>.
     </p>
 
-    <a href="${verifyUrl}" style="display:inline-block;background:#1a3d8f;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
+    <a href="${verifyUrl}" style="display:inline-block;background:#1a4731;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
       Verify my email →
     </a>
 
@@ -173,7 +174,7 @@ export async function sendPasswordResetEmail({
       Click the button below to choose a new password. This link expires in <strong>1 hour</strong>.
     </p>
 
-    <a href="${resetUrl}" style="display:inline-block;background:#1a3d8f;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
+    <a href="${resetUrl}" style="display:inline-block;background:#1a4731;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
       Reset my password →
     </a>
 
@@ -222,21 +223,21 @@ export async function sendMemberWelcomeEmail({
       Hi ${firstName}, you have been added as a member of <strong>${orgName}</strong> on the ${APP_NAME} Certification Portal.
     </p>
 
-    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:20px;margin-bottom:24px;">
-      <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#0369a1;">Your account</p>
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:20px;margin-bottom:24px;">
+      <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#16a34a;">Your account</p>
       <p style="margin:0;font-size:13px;color:#0f172a;">Email: <strong>${to}</strong></p>
       <p style="margin:8px 0 0;font-size:13px;color:#475569;">
         Use the button below to set your password and activate your account. The link expires in 7 days.
       </p>
     </div>
 
-    <a href="${setPasswordUrl}" style="display:inline-block;background:#1a3d8f;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
+    <a href="${setPasswordUrl}" style="display:inline-block;background:#1a4731;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
       Set your password →
     </a>
 
     <p style="margin:28px 0 0;font-size:12px;color:#94a3b8;">
       If you did not expect this invitation, please ignore this email or contact
-      <a href="mailto:support@truemarkglobal.com" style="color:#1a3d8f;">support@truemarkglobal.com</a>.
+      <a href="mailto:support@truemarkglobal.com" style="color:#1a4731;">support@truemarkglobal.com</a>.
     </p>
   `, unsubLink);
 
@@ -287,7 +288,7 @@ export async function sendEnrolmentConfirmationEmail({
       <p style="margin:0;font-size:16px;font-weight:700;color:#0f172a;">${courseTitle}</p>
     </div>
 
-    <a href="${courseUrl}" style="display:inline-block;background:#1a3d8f;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
+    <a href="${courseUrl}" style="display:inline-block;background:#1a4731;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
       Start learning →
     </a>
   `, unsubLink);
@@ -348,7 +349,7 @@ export async function sendExamResultEmail({
       <p style="margin:0;font-size:14px;font-weight:700;color:${statusColor};letter-spacing:1px;">${statusText}</p>
     </div>
 
-    <a href="${resultUrl}" style="display:inline-block;background:#1a3d8f;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
+    <a href="${resultUrl}" style="display:inline-block;background:#1a4731;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
       View full results →
     </a>
   `);
@@ -370,9 +371,6 @@ export async function sendExamResultEmail({
 //
 // Unsubscribe is provided so the recipient can opt out. The Inngest function
 // checks whether MARKETING consent has been explicitly withdrawn before sending.
-//
-// NOTE: the renewal URL currently links to the certificate details page.
-// A dedicated /certificates/[id]/renew workflow page is tracked as a TODO.
 
 export async function sendCertificateExpiryWarningEmail({
   to,
@@ -395,9 +393,9 @@ export async function sendCertificateExpiryWarningEmail({
 }) {
   const unsubLink = unsubscribeUrl(userId, "MARKETING");
   const urgency = daysRemaining <= 30 ? "urgent" : daysRemaining <= 90 ? "warning" : "notice";
-  const badgeColor = urgency === "urgent" ? "#dc2626" : urgency === "warning" ? "#d97706" : "#1a3d8f";
-  const badgeBg = urgency === "urgent" ? "#fef2f2" : urgency === "warning" ? "#fffbeb" : "#eff6ff";
-  const badgeBorder = urgency === "urgent" ? "#fca5a5" : urgency === "warning" ? "#fcd34d" : "#93c5fd";
+  const badgeColor = urgency === "urgent" ? "#dc2626" : urgency === "warning" ? "#d97706" : "#1a4731";
+  const badgeBg = urgency === "urgent" ? "#fef2f2" : urgency === "warning" ? "#fffbeb" : "#f0fdf4";
+  const badgeBorder = urgency === "urgent" ? "#fca5a5" : urgency === "warning" ? "#fcd34d" : "#86efac";
 
   const html = wrap(`
     <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a;">Certificate Expiry ${urgency === "urgent" ? "Alert" : "Notice"}</h2>
