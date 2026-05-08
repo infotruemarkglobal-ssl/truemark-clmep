@@ -51,7 +51,14 @@ export default async function PlatformUsersPage() {
   if (!session?.user) redirect("/login");
   if (session.user.role !== USER_ROLES.SUPER_ADMIN) redirect("/dashboard");
 
-  const users = await getInternalUsers();
+  const [users, customRoles] = await Promise.all([
+    getInternalUsers(),
+    db.customRole.findMany({
+      where: { isSystem: false },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, description: true },
+    }),
+  ]);
 
-  return <PlatformUsersClient users={users} currentUserId={session.user.id} />;
+  return <PlatformUsersClient users={users} currentUserId={session.user.id} customRoles={customRoles} />;
 }

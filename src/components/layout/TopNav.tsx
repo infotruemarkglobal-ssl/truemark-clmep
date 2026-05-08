@@ -83,12 +83,8 @@ export default function TopNav({
             <Menu className="w-5 h-5" />
           </button>
 
-          <Link href="/dashboard" className="flex items-center gap-2.5">
-            <TruemarkLogoColour className="w-9 h-9 shrink-0" />
-            <div className="hidden sm:block">
-              <p className="font-bold text-sm text-slate-900 leading-tight">Truemark Global</p>
-              <p className="text-[10px] text-primary font-medium leading-tight">Certification Portal</p>
-            </div>
+          <Link href="/dashboard" className="flex items-center">
+            <TruemarkLogoColour className="w-32 h-10 shrink-0" />
           </Link>
         </div>
 

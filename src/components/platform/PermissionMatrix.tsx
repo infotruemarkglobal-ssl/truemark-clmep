@@ -231,6 +231,8 @@ export default function PermissionMatrix({
                       <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
                         <ShieldCheck className="w-3 h-3" /> system
                       </span>
+                    ) : role.userCount > 0 ? (
+                      <span className="text-[10px] text-slate-400">in use</span>
                     ) : (
                       <button
                         onClick={() => handleDeleteRole(role.id)}

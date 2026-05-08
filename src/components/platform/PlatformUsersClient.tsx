@@ -31,9 +31,12 @@ type PlatformUser = {
   _count: { enrolments: number };
 };
 
+type CustomRole = { id: string; name: string; description: string | null };
+
 type Props = {
   users: PlatformUser[];
   currentUserId: string;
+  customRoles: CustomRole[];
 };
 
 const INTERNAL_ROLES = [
@@ -67,7 +70,7 @@ const inviteSchema = z.object({
   firstName: z.string().min(2, "At least 2 characters"),
   lastName: z.string().min(2, "At least 2 characters"),
   email: z.string().email("Enter a valid email address"),
-  role: z.enum(INTERNAL_ROLES, { message: "Select a role" }),
+  role: z.string().min(1, "Select a role"),
   password: z.string().min(12, "Password must be at least 12 characters"),
 });
 type InviteForm = z.infer<typeof inviteSchema>;
@@ -77,7 +80,7 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-destructive mt-1">{message}</p>;
 }
 
-export default function PlatformUsersClient({ users: initialUsers, currentUserId }: Props) {
+export default function PlatformUsersClient({ users: initialUsers, currentUserId, customRoles }: Props) {
   const [users, setUsers] = useState<PlatformUser[]>(initialUsers);
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -229,11 +232,22 @@ export default function PlatformUsersClient({ users: initialUsers, currentUserId
                             }
                             className="text-sm border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-ring/50 cursor-pointer"
                           >
-                            {INTERNAL_ROLES.map((r) => (
-                              <option key={r} value={r}>
-                                {ROLE_LABELS[r]}
-                              </option>
-                            ))}
+                            <optgroup label="System Roles">
+                              {INTERNAL_ROLES.map((r) => (
+                                <option key={r} value={r}>
+                                  {ROLE_LABELS[r]}
+                                </option>
+                              ))}
+                            </optgroup>
+                            {customRoles.length > 0 && (
+                              <optgroup label="Custom Roles">
+                                {customRoles.map((r) => (
+                                  <option key={r.id} value={r.name}>
+                                    {r.name}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
                           </select>
                         )}
                       </td>
@@ -272,6 +286,7 @@ export default function PlatformUsersClient({ users: initialUsers, currentUserId
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         onCreated={(user) => setUsers((cur) => [user, ...cur])}
+        customRoles={customRoles}
       />
 
       {/* Role Change Confirmation Dialog */}
@@ -324,10 +339,12 @@ function InviteDialog({
   open,
   onOpenChange,
   onCreated,
+  customRoles,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (user: PlatformUser) => void;
+  customRoles: CustomRole[];
 }) {
   const [submitting, setSubmitting] = useState(false);
   const {
@@ -430,11 +447,22 @@ function InviteDialog({
               {...register("role")}
             >
               <option value="">Select a role…</option>
-              {INTERNAL_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_LABELS[r]}
-                </option>
-              ))}
+              <optgroup label="System Roles">
+                {INTERNAL_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </option>
+                ))}
+              </optgroup>
+              {customRoles.length > 0 && (
+                <optgroup label="Custom Roles">
+                  {customRoles.map((r) => (
+                    <option key={r.id} value={r.name}>
+                      {r.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <FieldError message={errors.role?.message} />
           </div>

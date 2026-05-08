@@ -76,9 +76,17 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const role = await db.customRole.findUnique({ where: { id } });
+  const role = await db.customRole.findUnique({
+    where: { id },
+    include: { _count: { select: { userRoles: true } } },
+  });
   if (!role) return NextResponse.json({ error: "Role not found" }, { status: 404 });
   if (role.isSystem) return NextResponse.json({ error: "System roles cannot be deleted" }, { status: 403 });
+  if (role._count.userRoles > 0)
+    return NextResponse.json(
+      { error: `Cannot delete: ${role._count.userRoles} user${role._count.userRoles !== 1 ? "s are" : " is"} assigned to this role` },
+      { status: 409 },
+    );
 
   await db.customRole.delete({ where: { id } });
   return NextResponse.json({ deleted: true });
