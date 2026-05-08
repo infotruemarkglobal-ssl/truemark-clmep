@@ -99,13 +99,19 @@ export async function POST(req: NextRequest) {
     firstName: z.string().min(2),
     lastName: z.string().min(2),
     email: z.string().email().toLowerCase(),
-    role: z.enum(["SUPER_ADMIN", "CERTIFICATION_OFFICER", "EXAMINER", "TRAINER", "PROCTOR", "AUDITOR", "ORG_MANAGER", "CANDIDATE"]),
+    role: z.string().min(1),
     password: z.string().min(12),
     phone: z.string().optional(),
   });
 
   const body = schema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
+
+  const SYSTEM_ROLES = ["SUPER_ADMIN", "CERTIFICATION_OFFICER", "EXAMINER", "TRAINER", "PROCTOR", "AUDITOR", "ORG_MANAGER", "CANDIDATE"];
+  if (!SYSTEM_ROLES.includes(body.data.role)) {
+    const customRole = await db.customRole.findUnique({ where: { name: body.data.role } });
+    if (!customRole) return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  }
 
   const existing = await db.user.findUnique({ where: { email: body.data.email } });
   if (existing) return NextResponse.json({ error: "Email already in use" }, { status: 409 });

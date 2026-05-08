@@ -84,7 +84,7 @@ export default function TopNav({
           </button>
 
           <Link href="/dashboard" className="flex items-center">
-            <TruemarkLogoColour className="w-32 h-10 shrink-0" />
+            <TruemarkLogoColour className="w-48 h-14 shrink-0" />
           </Link>
         </div>
 
