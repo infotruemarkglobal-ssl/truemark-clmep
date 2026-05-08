@@ -8,21 +8,8 @@ import PlatformUsersClient from "@/components/platform/PlatformUsersClient";
 export const metadata: Metadata = { title: "Manage Users — TrueMark Platform" };
 
 async function getInternalUsers() {
-  const platformOrg = await db.organisation.findFirst({
-    where: { isPlatformOwner: true },
-    select: { id: true },
-  });
-  if (!platformOrg) return [];
-
-  const members = await db.organisationMember.findMany({
-    where: { organisationId: platformOrg.id },
-    select: { userId: true },
-    distinct: ["userId"],
-  });
-  const userIds = members.map((m) => m.userId);
-
   const users = await db.user.findMany({
-    where: { id: { in: userIds } },
+    where: { role: { notIn: ["CANDIDATE", "ORG_MANAGER"] } },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
