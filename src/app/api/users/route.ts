@@ -116,10 +116,11 @@ export async function POST(req: NextRequest) {
   const existing = await db.user.findUnique({ where: { email: body.data.email } });
   if (existing) return NextResponse.json({ error: "Email already in use" }, { status: 409 });
 
-  const passwordHash = await bcrypt.hash(body.data.password, 12);
+  const { password, ...userData } = body.data;
+  const passwordHash = await bcrypt.hash(password, 12);
   const user = await db.user.create({
     data: {
-      ...body.data,
+      ...userData,
       passwordHash,
       status: "ACTIVE",
       emailVerified: new Date(),
