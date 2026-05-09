@@ -34,8 +34,8 @@ export default async function Page({
     }),
     session.user.role === USER_ROLES.SUPER_ADMIN
       ? db.user.findMany({
-          where: { role: { in: [USER_ROLES.AUDITOR, USER_ROLES.SUPER_ADMIN] }, status: "ACTIVE" },
-          select: { id: true, firstName: true, lastName: true },
+          where: { role: { notIn: ["CANDIDATE", "ORG_MANAGER"] }, status: "ACTIVE" },
+          select: { id: true, firstName: true, lastName: true, role: true },
           orderBy: { firstName: "asc" },
         })
       : Promise.resolve([]),
