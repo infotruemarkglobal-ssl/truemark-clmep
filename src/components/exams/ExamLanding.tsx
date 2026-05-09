@@ -26,6 +26,7 @@ type ExamPaperInfo = {
 
 type CourseInfo = {
   id: string;
+  slug: string;
   title: string;
   price: number;
   currency: string;
@@ -253,7 +254,7 @@ export default function ExamLanding({
                   size="sm"
                   variant="outline"
                   className="border-red-300 text-red-700 hover:bg-red-100"
-                  onClick={() => router.push(`/courses/${course.id}`)}
+                  onClick={() => router.push(`/courses/${course.slug}`)}
                 >
                   Re-enrol in {course.title}
                 </Button>
@@ -389,7 +390,7 @@ export default function ExamLanding({
             <span
               aria-hidden="true"
               className={cn(
-                "block w-5 h-5 rounded border-2 flex items-center justify-center transition",
+                "flex w-5 h-5 rounded border-2 items-center justify-center transition",
                 agreed ? "bg-primary border-primary" : "border-slate-300 group-hover:border-primary"
               )}
             >

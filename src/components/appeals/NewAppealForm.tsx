@@ -21,6 +21,12 @@ type ExamAttempt = {
   submittedAt: string | null;
 };
 
+type UserCertificate = {
+  id: string;
+  schemeName: string;
+  issuedAt: string;
+};
+
 const APPEAL_TYPES = [
   { value: "exam_result", label: "Exam Result" },
   { value: "certification_decision", label: "Certification Decision" },
@@ -47,7 +53,13 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-export default function NewAppealForm({ examAttempts }: { examAttempts: ExamAttempt[] }) {
+export default function NewAppealForm({
+  examAttempts,
+  certificates,
+}: {
+  examAttempts: ExamAttempt[];
+  certificates: UserCertificate[];
+}) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -209,6 +221,28 @@ export default function NewAppealForm({ examAttempts }: { examAttempts: ExamAtte
                     {a.submittedAt
                       ? ` (${format(new Date(a.submittedAt), "d MMM yyyy")})`
                       : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Related Certificate — for certification decisions */}
+          {selectedType === "certification_decision" && certificates.length > 0 && (
+            <div className="p-5 space-y-1.5">
+              <Label htmlFor="subjectId" className="text-sm font-medium text-slate-700">
+                Related Certificate{" "}
+                <span className="font-normal text-slate-400">(optional)</span>
+              </Label>
+              <select
+                id="subjectId"
+                {...register("subjectId")}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
+              >
+                <option value="">Select a certificate…</option>
+                {certificates.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.schemeName} — Issued {format(new Date(c.issuedAt), "d MMM yyyy")}
                   </option>
                 ))}
               </select>

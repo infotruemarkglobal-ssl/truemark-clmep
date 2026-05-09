@@ -16,16 +16,28 @@ export default async function Page() {
   // Admins manage appeals — they do not submit them via this form.
   if ((ADMIN_ROLES as string[]).includes(session.user.role)) redirect("/appeals");
 
-  const examAttempts = await db.examAttempt.findMany({
-    where: { userId: session.user.id, status: "COMPLETED", deletedAt: null },
-    orderBy: { submittedAt: "desc" },
-    select: {
-      id: true,
-      percentageScore: true,
-      submittedAt: true,
-      examPaper: { select: { title: true } },
-    },
-  });
+  const [examAttempts, certificates] = await Promise.all([
+    db.examAttempt.findMany({
+      where: { userId: session.user.id, status: "COMPLETED", deletedAt: null },
+      orderBy: { submittedAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        percentageScore: true,
+        submittedAt: true,
+        examPaper: { select: { title: true } },
+      },
+    }),
+    db.certificate.findMany({
+      where: { userId: session.user.id, status: "ACTIVE", deletedAt: null },
+      orderBy: { issuedAt: "desc" },
+      select: {
+        id: true,
+        issuedAt: true,
+        scheme: { select: { name: true } },
+      },
+    }),
+  ]);
 
   const serialisedAttempts = examAttempts.map((a) => ({
     id: a.id,
@@ -34,5 +46,11 @@ export default async function Page() {
     submittedAt: a.submittedAt?.toISOString() ?? null,
   }));
 
-  return <NewAppealForm examAttempts={serialisedAttempts} />;
+  const serialisedCerts = certificates.map((c) => ({
+    id: c.id,
+    schemeName: c.scheme.name,
+    issuedAt: c.issuedAt.toISOString(),
+  }));
+
+  return <NewAppealForm examAttempts={serialisedAttempts} certificates={serialisedCerts} />;
 }

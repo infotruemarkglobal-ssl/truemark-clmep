@@ -166,7 +166,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   await db.examResponse.createMany({ data: responseRecords });
 
   const percentageScore = totalObjectiveMarks > 0
-    ? Math.round((rawScore / examPaper.totalMarks) * 100)
+    ? Math.round((rawScore / totalObjectiveMarks) * 100)
     : null;
 
   const passed = !hasManualQuestions && percentageScore !== null

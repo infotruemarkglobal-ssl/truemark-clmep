@@ -470,17 +470,17 @@ export default function ExamInterface({
             const mw = Math.max(1, mouth[6].x - mouth[0].x);
             const mar = mh / mw;
 
-            if (mar > 0.28) {
+            if (mar > 0.40) {
               mouthOpenStreakRef.current++;
               setFaceStatus("talking");
-              if (mouthOpenStreakRef.current === 3) { // 9 s of sustained mouth movement
+              if (mouthOpenStreakRef.current === 5) { // 15 s of sustained mouth movement
                 fetch("/api/exams/proctoring/incident", {
                   method: "POST", headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ proctoringSessionId: examState.proctoringSessionId,
                     type: "talking_detected", details: `Sustained mouth movement detected (MAR: ${mar.toFixed(2)})` }),
                 }).catch(() => {});
                 toast.warning("Talking detected — this session is recorded.", { duration: 5000 });
-                mouthOpenStreakRef.current = 0; // reset so it fires again after another 9 s
+                mouthOpenStreakRef.current = 0; // reset so it fires again after another 15 s
               }
             } else {
               mouthOpenStreakRef.current = 0;

@@ -76,7 +76,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
           status: { in: ["ACTIVE", "COMPLETED"] },
         },
         include: {
-          course: { select: { id: true, title: true, price: true, currency: true } },
+          course: { select: { id: true, slug: true, title: true, price: true, currency: true } },
         },
       })
     : null;
