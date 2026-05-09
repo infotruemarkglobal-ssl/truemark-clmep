@@ -4,8 +4,12 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Award, Edit2, CheckCircle2, XCircle, Shield,
-  ChevronRight, X, Save, AlertTriangle,
+  ChevronRight, X, Save, AlertTriangle, Plus, Loader2,
 } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogDescription,
+  DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -324,6 +328,175 @@ function EditModal({
   );
 }
 
+// ── Create Modal ─────────────────────────────────────────────────────────────
+
+function CreateModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (scheme: Scheme) => void;
+}) {
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [standardVersion, setStandardVersion] = useState("ISO/IEC 17024:2012");
+  const [validityMonths, setValidityMonths] = useState("36");
+  const [passMark, setPassMark] = useState("70");
+  const [maxAttempts, setMaxAttempts] = useState("3");
+  const [cpdHoursRequired, setCpdHoursRequired] = useState("0");
+  const [isActive, setIsActive] = useState(true);
+  const [isPending, startTransition] = useTransition();
+
+  function reset() {
+    setCode(""); setName(""); setDescription("");
+    setStandardVersion("ISO/IEC 17024:2012");
+    setValidityMonths("36"); setPassMark("70");
+    setMaxAttempts("3"); setCpdHoursRequired("0");
+    setIsActive(true);
+  }
+
+  function handleClose() {
+    reset();
+    onClose();
+  }
+
+  function handleCreate() {
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/manage/schemes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code,
+            name,
+            description: description || null,
+            standardVersion: standardVersion || null,
+            validityMonths: Number(validityMonths),
+            passMark: Number(passMark),
+            maxAttempts: Number(maxAttempts),
+            cpdHoursRequired: Number(cpdHoursRequired),
+            isActive,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to create scheme");
+        toast.success("Scheme created");
+        onCreated(data as Scheme);
+        handleClose();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to create scheme");
+      }
+    });
+  }
+
+  const labelClass = "text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1";
+  const inputClass = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40";
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Create New Scheme</DialogTitle>
+          <DialogDescription>
+            Set the core parameters. Eligibility requirements can be configured after creation.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[55vh] overflow-y-auto space-y-4 pr-1">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Code <span className="text-red-400">*</span></label>
+              <input
+                className={inputClass}
+                placeholder="e.g. CQA-001"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+              />
+              <p className="text-xs text-slate-400 mt-1">Must be unique. Auto-uppercased.</p>
+            </div>
+            <div>
+              <label className={labelClass}>Name <span className="text-red-400">*</span></label>
+              <input
+                className={inputClass}
+                placeholder="e.g. Certified Quality Auditor"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Description</label>
+            <textarea
+              className={inputClass}
+              rows={3}
+              placeholder="Optional overview of the certification scheme…"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>Standard Version</label>
+            <input
+              className={inputClass}
+              placeholder="ISO/IEC 17024:2012"
+              value={standardVersion}
+              onChange={(e) => setStandardVersion(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Validity (months) <span className="text-red-400">*</span></label>
+              <input type="number" min={1} className={inputClass} value={validityMonths} onChange={(e) => setValidityMonths(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelClass}>Pass Mark (%) <span className="text-red-400">*</span></label>
+              <input type="number" min={0} max={100} className={inputClass} value={passMark} onChange={(e) => setPassMark(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Max Attempts <span className="text-red-400">*</span></label>
+              <input type="number" min={1} className={inputClass} value={maxAttempts} onChange={(e) => setMaxAttempts(e.target.value)} />
+            </div>
+            <div>
+              <label className={labelClass}>CPD Hours Required</label>
+              <input type="number" min={0} className={inputClass} value={cpdHoursRequired} onChange={(e) => setCpdHoursRequired(e.target.value)} />
+            </div>
+          </div>
+
+          <Toggle
+            label="Scheme Active"
+            description="Inactive schemes are hidden from candidates"
+            checked={isActive}
+            onChange={setIsActive}
+          />
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreate}
+            disabled={isPending || !code.trim() || !name.trim()}
+            className="gap-2"
+          >
+            {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            {isPending ? "Creating…" : "Create Scheme"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Toggle sub-component ──────────────────────────────────────────────────────
 
 function Toggle({
@@ -370,11 +543,16 @@ export default function SchemeManagementPage({ schemes: initial }: { schemes: Sc
   const router = useRouter();
   const [schemes, setSchemes] = useState(initial);
   const [editing, setEditing] = useState<Scheme | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   function handleSaved(updated: Scheme) {
     setSchemes((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     setEditing(null);
     router.refresh();
+  }
+
+  function handleCreated(scheme: Scheme) {
+    setSchemes((prev) => [scheme, ...prev]);
   }
 
   return (
@@ -387,12 +565,23 @@ export default function SchemeManagementPage({ schemes: initial }: { schemes: Sc
         />
       )}
 
+      <CreateModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={handleCreated}
+      />
+
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Certification Schemes</h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Manage scheme settings and eligibility requirements (ISO 17024 Cl.6.1).
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Certification Schemes</h1>
+            <p className="text-slate-500 text-sm mt-1">
+              Manage scheme settings and eligibility requirements (ISO 17024 Cl.6.1).
+            </p>
+          </div>
+          <Button onClick={() => setCreateOpen(true)} className="gap-2 shrink-0">
+            <Plus className="w-4 h-4" /> New Scheme
+          </Button>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
