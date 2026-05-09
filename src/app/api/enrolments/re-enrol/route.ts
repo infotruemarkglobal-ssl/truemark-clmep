@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
       ).map((p) => p.id)
     : [];
 
-  const txOps: Parameters<typeof db.$transaction>[0] = [
+  const txOps: Prisma.PrismaPromise<unknown>[] = [
     db.enrolment.update({
       where: { id: enrolment.id },
       data: { progress: 0, completedAt: null, status: "ACTIVE", enroledAt: new Date() },
