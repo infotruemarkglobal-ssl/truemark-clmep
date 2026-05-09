@@ -61,7 +61,6 @@ const CONTENT_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementTy
   pdf: { label: "PDF", icon: FileText, color: "bg-orange-100 text-orange-600" },
   text: { label: "Text", icon: Type, color: "bg-blue-100 text-blue-600" },
   scorm: { label: "SCORM", icon: FileArchive, color: "bg-purple-100 text-purple-600" },
-  quiz: { label: "Quiz", icon: FileText, color: "bg-green-100 text-green-600" },
   live_session: { label: "Live Session", icon: Video, color: "bg-indigo-100 text-indigo-600" },
 };
 
@@ -931,14 +930,26 @@ function LessonModal({
   onClose: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [form, setForm] = useState({
-    title: lesson?.title ?? "",
-    contentType: lesson?.contentType ?? "video",
-    contentUrl: lesson?.contentUrl ?? "",
-    contentData: lesson?.contentData ?? "",
-    durationMins: lesson?.durationMins ? String(lesson.durationMins) : "",
-    isPreview: lesson?.isPreview ?? false,
-    scormPackageId: lesson?.scormPackage?.id ?? "",
+  const [form, setForm] = useState(() => {
+    let initContentUrl = lesson?.contentUrl ?? "";
+    let initScheduledAt = "";
+    if (lesson?.contentType === "live_session" && lesson.contentData) {
+      try {
+        const d = JSON.parse(lesson.contentData) as { meetingUrl?: string; scheduledAt?: string };
+        if (d.meetingUrl) initContentUrl = d.meetingUrl;
+        if (d.scheduledAt) initScheduledAt = new Date(d.scheduledAt).toISOString().slice(0, 16);
+      } catch { /* fall back to contentUrl */ }
+    }
+    return {
+      title: lesson?.title ?? "",
+      contentType: lesson?.contentType ?? "video",
+      contentUrl: initContentUrl,
+      contentData: lesson?.contentType === "live_session" ? "" : (lesson?.contentData ?? ""),
+      scheduledAt: initScheduledAt,
+      durationMins: lesson?.durationMins ? String(lesson.durationMins) : "",
+      isPreview: lesson?.isPreview ?? false,
+      scormPackageId: lesson?.scormPackage?.id ?? "",
+    };
   });
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -989,11 +1000,17 @@ function LessonModal({
 
   function handleSave() {
     if (!form.title.trim()) { toast.error("Lesson title is required"); return; }
+    const liveContentData = form.contentType === "live_session"
+      ? JSON.stringify({
+          meetingUrl: form.contentUrl || null,
+          scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null,
+        })
+      : null;
     onSave({
       title: form.title,
       contentType: form.contentType,
       contentUrl: form.contentUrl || null,
-      contentData: form.contentData || null,
+      contentData: form.contentType === "live_session" ? liveContentData : (form.contentData || null),
       durationMins: form.durationMins ? parseInt(form.durationMins) : null,
       isPreview: form.isPreview,
       scormPackageId: form.contentType === "scorm" ? form.scormPackageId || undefined : undefined,
@@ -1015,7 +1032,7 @@ function LessonModal({
             <select
               className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
               value={form.contentType}
-              onChange={(e) => setForm((f) => ({ ...f, contentType: e.target.value, contentUrl: "", contentData: "" }))}
+              onChange={(e) => setForm((f) => ({ ...f, contentType: e.target.value, contentUrl: "", contentData: "", scheduledAt: "" }))}
             >
               {Object.entries(CONTENT_TYPE_CONFIG).map(([k, v]) => (
                 <option key={k} value={k}>{v.label}</option>
@@ -1118,14 +1135,28 @@ function LessonModal({
         )}
 
         {form.contentType === "live_session" && (
-          <div>
-            <Label>Meeting URL</Label>
-            <Input
-              className="mt-1"
-              placeholder="https://zoom.us/j/... or Teams link"
-              value={form.contentUrl}
-              onChange={(e) => setForm((f) => ({ ...f, contentUrl: e.target.value }))}
-            />
+          <div className="space-y-3">
+            <div>
+              <Label>Meeting URL</Label>
+              <Input
+                className="mt-1"
+                placeholder="https://zoom.us/j/... or Teams link"
+                value={form.contentUrl}
+                onChange={(e) => setForm((f) => ({ ...f, contentUrl: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Scheduled Date &amp; Time</Label>
+              <Input
+                type="datetime-local"
+                className="mt-1"
+                value={form.scheduledAt}
+                onChange={(e) => setForm((f) => ({ ...f, scheduledAt: e.target.value }))}
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                The join button is disabled until 15 minutes before the session starts.
+              </p>
+            </div>
           </div>
         )}
 

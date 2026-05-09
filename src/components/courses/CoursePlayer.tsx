@@ -1,7 +1,7 @@
 "use client";
 
 import DOMPurify from "isomorphic-dompurify";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -40,6 +40,115 @@ type Enrolment = {
   status: string;
   lessonProgress: LessonProgressRecord[];
 } | null;
+
+function toYouTubeEmbed(url: string): string | null {
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([^&\s?]+)/);
+  return match ? `https://www.youtube-nocookie.com/embed/${match[1]}` : null;
+}
+
+function LiveSessionPlayer({ lesson }: { lesson: { title: string; contentUrl: string | null; contentData: string | null; durationMins: number | null } }) {
+  let meetingUrl: string | null = lesson.contentUrl;
+  let scheduledAt: Date | null = null;
+  if (lesson.contentData) {
+    try {
+      const d = JSON.parse(lesson.contentData) as { meetingUrl?: string; scheduledAt?: string };
+      if (d.meetingUrl) meetingUrl = d.meetingUrl;
+      if (d.scheduledAt) scheduledAt = new Date(d.scheduledAt);
+    } catch { /* fall back to contentUrl */ }
+  }
+
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const JOIN_WINDOW_MS = 15 * 60 * 1000;
+  const durationMs = (lesson.durationMins ?? 60) * 60 * 1000;
+
+  type SessionState = "no-time" | "upcoming" | "joinable" | "ended";
+  let state: SessionState = "no-time";
+  let secondsUntil = 0;
+  if (scheduledAt) {
+    const msUntil = scheduledAt.getTime() - now.getTime();
+    const msAfterEnd = now.getTime() - (scheduledAt.getTime() + durationMs);
+    if (msAfterEnd > 0) state = "ended";
+    else if (msUntil <= JOIN_WINDOW_MS) state = "joinable";
+    else { state = "upcoming"; secondsUntil = Math.ceil(msUntil / 1000); }
+  }
+
+  function formatCountdown(s: number) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${sec}s`;
+    return `${sec}s`;
+  }
+
+  return (
+    <div className="min-h-64 flex items-center justify-center bg-indigo-50 p-8">
+      <div className="w-full max-w-md space-y-4 text-center">
+        <span className="inline-flex items-center gap-1.5 bg-indigo-100 text-indigo-700 text-sm font-medium px-3 py-1 rounded-full">
+          <Users className="w-4 h-4" /> Live Session
+        </span>
+
+        <h2 className="text-xl font-bold text-slate-900">{lesson.title}</h2>
+
+        {scheduledAt && (
+          <p className="text-slate-600 text-sm">
+            {scheduledAt.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+            {" at "}
+            {scheduledAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+          </p>
+        )}
+
+        {state === "upcoming" && (
+          <div className="bg-white border border-indigo-100 rounded-xl p-4 space-y-1">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Starting in</p>
+            <p className="text-3xl font-bold text-indigo-600 tabular-nums">{formatCountdown(secondsUntil)}</p>
+          </div>
+        )}
+
+        {state === "joinable" && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+            <p className="text-sm font-semibold text-emerald-700">Session is in progress — join now</p>
+          </div>
+        )}
+
+        {state === "ended" && (
+          <div className="bg-slate-100 border border-slate-200 rounded-xl p-3">
+            <p className="text-sm text-slate-500">This session has ended</p>
+          </div>
+        )}
+
+        {meetingUrl ? (
+          state === "upcoming" ? (
+            <span className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-sm bg-slate-200 text-slate-400 cursor-not-allowed select-none">
+              <ExternalLink className="w-4 h-4" /> Join Session
+            </span>
+          ) : (
+            <a
+              href={meetingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                "inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-sm transition",
+                state === "ended"
+                  ? "bg-slate-200 text-slate-500 hover:bg-slate-300"
+                  : "bg-indigo-600 text-white hover:bg-indigo-700",
+              )}
+            >
+              <ExternalLink className="w-4 h-4" /> Join Session
+            </a>
+          )
+        ) : (
+          <p className="text-sm text-slate-400">No meeting URL configured</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const CONTENT_ICONS: Record<string, React.ElementType> = {
   video: Play,
@@ -438,17 +547,33 @@ export default function CoursePlayer({
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             {/* Content viewer */}
             {activeLesson.contentType === "video" && activeLesson.contentUrl ? (
-              <div className="bg-black aspect-video w-full">
-                <video
-                  key={activeLesson.id}
-                  className="w-full h-full"
-                  controls
-                  controlsList="nodownload"
-                  src={activeLesson.contentUrl}
-                >
-                  Your browser does not support the video tag.
-                </video>
-              </div>
+              (() => {
+                const embedUrl = toYouTubeEmbed(activeLesson.contentUrl);
+                return embedUrl ? (
+                  <div className="bg-black aspect-video w-full">
+                    <iframe
+                      key={activeLesson.id}
+                      src={embedUrl}
+                      className="w-full h-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      title={activeLesson.title}
+                    />
+                  </div>
+                ) : (
+                  <div className="bg-black aspect-video w-full">
+                    <video
+                      key={activeLesson.id}
+                      className="w-full h-full"
+                      controls
+                      controlsList="nodownload"
+                      src={activeLesson.contentUrl}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                );
+              })()
             ) : activeLesson.contentType === "video" ? (
               <div className="bg-slate-900 aspect-video flex items-center justify-center">
                 <div className="text-center text-white">
@@ -540,6 +665,8 @@ export default function CoursePlayer({
                   )}
                 </div>
               </div>
+            ) : activeLesson.contentType === "live_session" ? (
+              <LiveSessionPlayer lesson={activeLesson} />
             ) : (
               <div className="bg-slate-50 min-h-48 flex items-center justify-center p-8 text-center">
                 <div>

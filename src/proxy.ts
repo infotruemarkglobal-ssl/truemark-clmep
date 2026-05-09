@@ -118,9 +118,11 @@ function buildCsp(nonce: string): string {
     // any client component calls the Paystack API directly.
     "connect-src 'self' https://api.paystack.co https://*.sentry.io",
     // S3/R2 for course video <video> elements; blob: for MediaSource API streams.
-    "media-src 'self' blob: https://*.amazonaws.com https://*.r2.cloudflarestorage.com",
+    // YouTube origins needed for youtube-nocookie.com embed iframes in the course player.
+    "media-src 'self' blob: https://*.amazonaws.com https://*.r2.cloudflarestorage.com https://www.youtube.com https://*.youtube.com https://www.youtube-nocookie.com",
     // /scorm-content/* (same-origin SCORM player iframe) + Paystack hosted checkout.
-    "frame-src 'self' https://checkout.paystack.com",
+    // YouTube and Vimeo embed iframes in the course player.
+    "frame-src 'self' https://checkout.paystack.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
     // Web workers used by the video player and SCORM runtime.
     "worker-src 'self' blob:",
     // Block all plugin content (<object>, <embed>, Flash).
