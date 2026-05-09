@@ -47,19 +47,21 @@ export async function POST(req: NextRequest) {
       ).map((p) => p.id)
     : [];
 
-  await db.$transaction([
+  const txOps: Parameters<typeof db.$transaction>[0] = [
     db.enrolment.update({
       where: { id: enrolment.id },
       data: { progress: 0, completedAt: null, status: "ACTIVE", enroledAt: new Date() },
     }),
     db.lessonProgress.deleteMany({ where: { enrolmentId: enrolment.id } }),
-    db.examAttempt.deleteMany({
-      where: {
-        userId: session.user.id,
-        examPaperId: { in: examPaperIds },
-      },
-    }),
-  ]);
+  ];
+  if (examPaperIds.length > 0) {
+    txOps.push(
+      db.examAttempt.deleteMany({
+        where: { userId: session.user.id, examPaperId: { in: examPaperIds } },
+      })
+    );
+  }
+  await db.$transaction(txOps);
 
   return NextResponse.json({ ok: true });
 }

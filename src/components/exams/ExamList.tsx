@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { format, isPast, formatDistanceToNow } from "date-fns";
 import {
   ClipboardList, Clock, Calendar, CheckCircle2, XCircle,
-  AlertCircle, ChevronRight, BookOpen, Award, Lock,
+  AlertCircle, ChevronRight, BookOpen, Award, Lock, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -197,7 +197,15 @@ export default function ExamList({
                             <Award className="w-4 h-4" /> View Certificate
                           </Button>
                         ) : (
-                          <Button variant="outline" disabled>No attempts left</Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-amber-300 text-amber-700 hover:bg-amber-50 gap-1.5"
+                            onClick={() => router.push(`/courses/${course.slug}`)}
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            Re-enrol to retry
+                          </Button>
                         )}
                       </div>
                     </div>
