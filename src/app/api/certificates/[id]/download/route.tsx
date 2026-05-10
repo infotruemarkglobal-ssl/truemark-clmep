@@ -39,13 +39,13 @@ async function fetchToBase64(src: string | null | undefined): Promise<string | n
   }
 }
 
-const G = "#065f46";       // brand green
-const G_LIGHT = "#a7f3d0"; // light green accent
-const GREY_MID = "#6b7280";
-const GREY_LINE = "#d1d5db";
-const GREY_FAINT = "#9ca3af";
-const DARK = "#1f2937";
-const BODY_TEXT = "#4b5563";
+const G           = "#0F6E56";
+const G_PILL_BG   = "#E1F5EE";
+const GREY_MID    = "#6b7280";
+const GREY_LINE   = "#d1d5db";
+const GREY_FAINT  = "#9ca3af";
+const DARK        = "#111827";
+const BODY_TEXT   = "#374151";
 
 export const dynamic = "force-dynamic";
 
@@ -131,35 +131,47 @@ export async function GET(
   const { renderToBuffer, Document, Page, View, Text, StyleSheet, Image } =
     await import("@react-pdf/renderer");
 
+  // A4 landscape ≈ 841 × 595 pts.
+  // Corner blocks proportional to SVG design (140/800 × 841 ≈ 147, 140/580 × 595 ≈ 144).
+  const CW = 147; // corner block width
+  const CH = 144; // corner block height
+
   const styles = StyleSheet.create({
     page: {
       fontFamily: "Helvetica",
       backgroundColor: "#ffffff",
-      padding: 44,
       flexDirection: "column",
     },
+
+    // ── Corner decorations (absolute, behind all content) ────────────────────
+    cornerTL: { position: "absolute", top: 0, left: 0, width: CW, height: CH, backgroundColor: G },
+    cornerTR: { position: "absolute", top: 0, right: 0, width: CW, height: CH, backgroundColor: G },
+    cornerBL: { position: "absolute", bottom: 0, left: 0, width: CW, height: CH, backgroundColor: G },
+    cornerBR: { position: "absolute", bottom: 0, right: 0, width: CW, height: CH, backgroundColor: G },
+
+    // ── Double border (absolute) ─────────────────────────────────────────────
     outerBorder: {
       position: "absolute",
-      top: 12,
-      left: 12,
-      right: 12,
-      bottom: 12,
-      borderWidth: 3,
-      borderColor: G,
-      borderStyle: "solid",
+      top: 8, left: 8, right: 8, bottom: 8,
+      borderWidth: 1.5, borderColor: G, borderStyle: "solid",
     },
     innerBorder: {
       position: "absolute",
-      top: 17,
-      left: 17,
-      right: 17,
-      bottom: 17,
-      borderWidth: 1,
-      borderColor: G_LIGHT,
-      borderStyle: "solid",
+      top: 18, left: 18, right: 18, bottom: 18,
+      borderWidth: 0.5, borderColor: G, borderStyle: "solid",
+      opacity: 0.4,
     },
 
-    // ── Header ──────────────────────────────────────────────────────────
+    // ── Content wrapper (keeps text clear of corner blocks) ──────────────────
+    contentWrap: {
+      flex: 1,
+      paddingTop: 30,
+      paddingBottom: 22,
+      paddingHorizontal: 158,
+      flexDirection: "column",
+    },
+
+    // ── Header ───────────────────────────────────────────────────────────────
     headerRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -168,35 +180,20 @@ export async function GET(
     logoBlock: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 12,
+      gap: 9,
     },
-    logoImage: {
-      width: 58,
-      height: 58,
-    },
-    logoFallback: {
-      width: 58,
-      height: 58,
-      backgroundColor: G_LIGHT,
-      borderRadius: 4,
-    },
-    orgNameBlock: {
-      justifyContent: "center",
-    },
-    orgPrimary: {
+    logoImage: { width: 42, height: 42, objectFit: "contain" },
+    logoFallback: { width: 42, height: 42, borderRadius: 21, backgroundColor: G },
+    orgBlock: { flexDirection: "column" },
+    orgName: {
       fontSize: 11,
       fontFamily: "Helvetica-Bold",
       color: G,
-      letterSpacing: 0.8,
+      letterSpacing: 0.7,
     },
-    accredBadge: {
-      alignItems: "flex-end",
-    },
-    accredText: {
-      fontSize: 8,
-      color: GREY_MID,
-      textAlign: "right",
-    },
+    orgSubtitle: { fontSize: 7.5, color: GREY_MID, marginTop: 2 },
+    accredBlock: { alignItems: "flex-end" },
+    accredLabel: { fontSize: 7.5, color: GREY_MID, textAlign: "right" },
     accredStandard: {
       fontSize: 9,
       fontFamily: "Helvetica-Bold",
@@ -204,47 +201,53 @@ export async function GET(
       textAlign: "right",
       marginTop: 2,
     },
+
     headerDivider: {
-      height: 1,
-      backgroundColor: G_LIGHT,
+      height: 0.75,
+      backgroundColor: G,
+      opacity: 0.3,
       marginTop: 10,
-      marginBottom: 0,
     },
 
-    // ── Body ─────────────────────────────────────────────────────────────
+    // ── Body ─────────────────────────────────────────────────────────────────
     body: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
     },
     certLabel: {
-      fontSize: 9,
-      color: GREY_MID,
-      letterSpacing: 3,
-      textTransform: "uppercase",
-      marginBottom: 4,
-    },
-    certCode: {
-      fontSize: 26,
-      fontFamily: "Helvetica-Bold",
-      color: G,
-      marginBottom: 3,
-    },
-    certSchemeName: {
-      fontSize: 11,
-      color: "#374151",
-      marginBottom: 18,
-    },
-    divider: {
-      width: 60,
-      height: 2,
-      backgroundColor: G,
-      marginBottom: 18,
-    },
-    awardedLabel: {
       fontSize: 8,
       color: GREY_FAINT,
-      letterSpacing: 2,
+      letterSpacing: 3.5,
+      textTransform: "uppercase",
+      marginBottom: 5,
+    },
+    certCode: {
+      fontSize: 28,
+      fontFamily: "Helvetica-Bold",
+      color: G,
+      marginBottom: 4,
+    },
+    certSchemeName: {
+      fontSize: 10,
+      color: BODY_TEXT,
+      marginBottom: 16,
+    },
+
+    // Horizontal rule with centred dot
+    dividerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      width: 360,
+      marginBottom: 16,
+    },
+    dividerLine: { flex: 1, height: 1, backgroundColor: GREY_LINE },
+    dividerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: G, marginHorizontal: 8 },
+
+    awardedLabel: {
+      fontSize: 7.5,
+      color: GREY_FAINT,
+      letterSpacing: 2.5,
       textTransform: "uppercase",
       marginBottom: 6,
     },
@@ -255,104 +258,83 @@ export async function GET(
       marginBottom: 12,
     },
     achievementText: {
-      fontSize: 9,
+      fontSize: 8.5,
       color: BODY_TEXT,
       textAlign: "center",
-      maxWidth: 420,
-      lineHeight: 1.6,
-      marginBottom: 14,
+      maxWidth: 400,
+      lineHeight: 1.7,
+      marginBottom: 12,
     },
-    metaRow: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      marginBottom: 4,
-    },
+
+    // Exam + org meta with vertical divider between them
+    metaRow: { flexDirection: "row", alignItems: "center" },
+    metaBlock: { alignItems: "center", paddingHorizontal: 16 },
+    metaVertDivider: { width: 1, height: 24, backgroundColor: GREY_LINE },
     metaLabel: {
       fontSize: 7,
       color: GREY_FAINT,
       textTransform: "uppercase",
       letterSpacing: 1,
-      width: 76,
-      textAlign: "right",
-      marginRight: 8,
-      paddingTop: 1,
+      marginBottom: 2,
     },
     metaValue: {
-      fontSize: 9,
-      color: DARK,
+      fontSize: 8.5,
       fontFamily: "Helvetica-Bold",
+      color: DARK,
+      textAlign: "center",
     },
 
-    // ── Details bar ──────────────────────────────────────────────────────
-    detailsDivider: {
-      height: 1,
-      backgroundColor: GREY_LINE,
-      width: 420,
-      marginTop: 14,
+    // ── Footer info row (DATE ISSUED | VALID UNTIL | STATUS | CERT NO) ───────
+    footerInfoRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      borderTopWidth: 0.75,
+      borderTopColor: GREY_LINE,
+      paddingTop: 10,
+      marginTop: 12,
       marginBottom: 10,
     },
-    detailsRow: {
-      flexDirection: "row",
-      gap: 32,
-    },
-    detailBlock: {
-      alignItems: "center",
-    },
-    detailLabel: {
-      fontSize: 7,
+    footerInfoBlock: { alignItems: "center", flex: 1 },
+    footerInfoLabel: {
+      fontSize: 6.5,
       color: GREY_FAINT,
-      letterSpacing: 1.5,
       textTransform: "uppercase",
-      marginBottom: 3,
+      letterSpacing: 1.5,
+      marginBottom: 4,
     },
-    detailValue: {
-      fontSize: 9,
-      color: DARK,
-      fontFamily: "Helvetica-Bold",
-    },
+    footerInfoValue: { fontSize: 9, fontFamily: "Helvetica-Bold", color: DARK },
     certNumberText: {
-      fontSize: 8,
-      color: GREY_FAINT,
+      fontSize: 7.5,
       fontFamily: "Helvetica-Oblique",
-      letterSpacing: 0.5,
+      color: GREY_MID,
+      letterSpacing: 0.3,
     },
 
-    // ── Footer ───────────────────────────────────────────────────────────
-    footerDivider: {
-      height: 1,
-      backgroundColor: G_LIGHT,
-      marginTop: 14,
-      marginBottom: 12,
+    // Status pill — green on pale green
+    statusPill: {
+      backgroundColor: G_PILL_BG,
+      borderRadius: 10,
+      paddingVertical: 2,
+      paddingHorizontal: 8,
     },
-    footerRow: {
+    statusPillText: { fontSize: 8.5, fontFamily: "Helvetica-Bold", color: G },
+
+    // ── Signature + QR row ───────────────────────────────────────────────────
+    sigFooterRow: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "flex-end",
     },
-    sigsGroup: {
-      flexDirection: "row",
-      gap: 48,
-    },
-    signatureBlock: {
-      alignItems: "center",
-      minWidth: 120,
-    },
-    signatureImage: {
-      width: 110,
-      height: 38,
-      objectFit: "contain",
-    },
-    signatureLine: {
-      width: 120,
-      height: 1,
-      backgroundColor: GREY_LINE,
-      marginTop: 4,
-    },
+    sigsGroup: { flexDirection: "row", gap: 40 },
+    signatureBlock: { alignItems: "center", minWidth: 110 },
+    signatureImage: { width: 100, height: 34, objectFit: "contain" },
+    signatureLine: { width: 110, height: 1, backgroundColor: GREY_LINE, marginTop: 4 },
     signerName: {
       fontSize: 8,
-      color: "#374151",
       fontFamily: "Helvetica-Bold",
-      marginTop: 4,
+      color: BODY_TEXT,
+      marginTop: 3,
       textAlign: "center",
     },
     signerTitle: {
@@ -363,30 +345,18 @@ export async function GET(
       textAlign: "center",
       marginTop: 1,
     },
-    qrBlock: {
-      alignItems: "center",
-    },
-    qrImage: {
-      width: 58,
-      height: 58,
-    },
-    qrLabel: {
-      fontSize: 7,
-      color: GREY_FAINT,
-      marginTop: 3,
-      textAlign: "center",
-    },
 
-    // ── Status watermark ─────────────────────────────────────────────────────
-    // Rendered only when cert.status !== "ACTIVE". Absolutely positioned so it
-    // overlays the certificate face without displacing any content. React-pdf
-    // draws this after all body content so it sits on the top layer.
+    qrBlock: { alignItems: "center" },
+    qrImage: { width: 60, height: 60 },
+    qrLabel: { fontSize: 6.5, color: GREY_FAINT, marginTop: 3, textAlign: "center" },
+
+    // ── Status watermark — only on non-ACTIVE certificates ───────────────────
     watermark: {
       position: "absolute",
       top: "40%",
       left: "15%",
       fontSize: 72,
-      opacity: 0.25,
+      opacity: 0.2,
       transform: "rotate(-35deg)",
       fontFamily: "Helvetica-Bold",
       letterSpacing: 8,
@@ -401,120 +371,139 @@ export async function GET(
       keywords={`integrity:sha256:${integrityHash}`}
     >
       <Page size="A4" orientation="landscape" style={styles.page}>
+        {/* ── Corner decorations ───────────────────────────────────────── */}
+        <View style={styles.cornerTL} />
+        <View style={styles.cornerTR} />
+        <View style={styles.cornerBL} />
+        <View style={styles.cornerBR} />
+
+        {/* ── Double border ────────────────────────────────────────────── */}
         <View style={styles.outerBorder} />
         <View style={styles.innerBorder} />
 
-        {/* ── Header: logo + org name + accreditation ─────────────── */}
-        <View style={styles.headerRow}>
-          <View style={styles.logoBlock}>
-            {logoSrc ? (
-              <Image src={logoSrc} style={styles.logoImage} />
-            ) : (
-              <View style={styles.logoFallback} />
-            )}
-            <View style={styles.orgNameBlock}>
-              <Text style={styles.orgPrimary}>TRUEMARK GLOBAL STANDARDS &amp; SOLUTIONS LIMITED</Text>
+        {/* ── Main content ─────────────────────────────────────────────── */}
+        <View style={styles.contentWrap}>
+
+          {/* Header: logo + org name | accreditation */}
+          <View style={styles.headerRow}>
+            <View style={styles.logoBlock}>
+              {logoSrc ? (
+                <Image src={logoSrc} style={styles.logoImage} />
+              ) : (
+                <View style={styles.logoFallback} />
+              )}
+              <View style={styles.orgBlock}>
+                <Text style={styles.orgName}>TRUEMARK GLOBAL</Text>
+                <Text style={styles.orgSubtitle}>Standards &amp; Solutions Limited</Text>
+              </View>
+            </View>
+            <View style={styles.accredBlock}>
+              <Text style={styles.accredLabel}>Personnel Certification Body</Text>
+              <Text style={styles.accredStandard}>ISO/IEC 17024:2012 Accredited</Text>
             </View>
           </View>
-          <View style={styles.accredBadge}>
-            <Text style={styles.accredText}>Personnel Certification Body</Text>
-            <Text style={styles.accredStandard}>ISO/IEC 17024:2012 Accredited</Text>
+
+          <View style={styles.headerDivider} />
+
+          {/* Body — centred certification content */}
+          <View style={styles.body}>
+            <Text style={styles.certLabel}>Certificate of</Text>
+            <Text style={styles.certCode}>{cert.schemeCodeSnapshot ?? cert.scheme.code}</Text>
+            <Text style={styles.certSchemeName}>{cert.schemeNameSnapshot ?? cert.scheme.name}</Text>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <View style={styles.dividerDot} />
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Text style={styles.awardedLabel}>Awarded to</Text>
+            <Text style={styles.holderName}>{holderName}</Text>
+
+            <Text style={styles.achievementText}>
+              {`This certifies that the above-named individual has successfully fulfilled all requirements for ${cert.schemeNameSnapshot ?? cert.scheme.name} certification as set forth by Truemark Global Standards & Solutions Limited under the ISO/IEC 17024:2012 standard.`}
+            </Text>
+
+            {/* Exam paper / sponsoring org — with vertical divider between them */}
+            {(cert.examPaperTitleSnapshot || cert.sponsoringOrgNameSnapshot) ? (
+              <View style={styles.metaRow}>
+                {cert.examPaperTitleSnapshot ? (
+                  <View style={styles.metaBlock}>
+                    <Text style={styles.metaLabel}>Examination</Text>
+                    <Text style={styles.metaValue}>{cert.examPaperTitleSnapshot}</Text>
+                  </View>
+                ) : null}
+                {cert.examPaperTitleSnapshot && cert.sponsoringOrgNameSnapshot ? (
+                  <View style={styles.metaVertDivider} />
+                ) : null}
+                {cert.sponsoringOrgNameSnapshot ? (
+                  <View style={styles.metaBlock}>
+                    <Text style={styles.metaLabel}>Organisation</Text>
+                    <Text style={styles.metaValue}>{cert.sponsoringOrgNameSnapshot}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </View>
-        </View>
 
-        <View style={styles.headerDivider} />
-
-        {/* ── Body: certification details ───────────────────────────── */}
-        <View style={styles.body}>
-          <Text style={styles.certLabel}>Certificate of</Text>
-          <Text style={styles.certCode}>{cert.scheme.code}</Text>
-          <Text style={styles.certSchemeName}>{cert.scheme.name}</Text>
-
-          <View style={styles.divider} />
-
-          <Text style={styles.awardedLabel}>Awarded to</Text>
-          <Text style={styles.holderName}>{holderName}</Text>
-
-          <Text style={styles.achievementText}>
-            {`This certifies that the above-named individual has successfully fulfilled all requirements for ${cert.scheme.name} certification as set forth by Truemark Global Standards & Solutions Limited under the ISO/IEC 17024:2012 standard.`}
-          </Text>
-
-          {cert.examPaperTitleSnapshot ? (
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Examination</Text>
-              <Text style={styles.metaValue}>{cert.examPaperTitleSnapshot}</Text>
+          {/* Footer info row — 4 columns */}
+          <View style={styles.footerInfoRow}>
+            <View style={styles.footerInfoBlock}>
+              <Text style={styles.footerInfoLabel}>Date Issued</Text>
+              <Text style={styles.footerInfoValue}>{issuedDate}</Text>
             </View>
-          ) : null}
-          {cert.candidateEmployerSnapshot ? (
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Employer</Text>
-              <Text style={styles.metaValue}>{cert.candidateEmployerSnapshot}</Text>
+            <View style={styles.footerInfoBlock}>
+              <Text style={styles.footerInfoLabel}>Valid Until</Text>
+              <Text style={styles.footerInfoValue}>{expiresDate}</Text>
             </View>
-          ) : null}
-          {cert.sponsoringOrgNameSnapshot ? (
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Organisation</Text>
-              <Text style={styles.metaValue}>{cert.sponsoringOrgNameSnapshot}</Text>
+            <View style={styles.footerInfoBlock}>
+              <Text style={styles.footerInfoLabel}>Status</Text>
+              {cert.status === "ACTIVE" ? (
+                <View style={styles.statusPill}>
+                  <Text style={styles.statusPillText}>ACTIVE</Text>
+                </View>
+              ) : (
+                <Text style={styles.footerInfoValue}>{cert.status}</Text>
+              )}
             </View>
-          ) : null}
-
-          <View style={styles.detailsDivider} />
-
-          <View style={styles.detailsRow}>
-            <View style={styles.detailBlock}>
-              <Text style={styles.detailLabel}>Date Issued</Text>
-              <Text style={styles.detailValue}>{issuedDate}</Text>
-            </View>
-            <View style={styles.detailBlock}>
-              <Text style={styles.detailLabel}>Valid Until</Text>
-              <Text style={styles.detailValue}>{expiresDate}</Text>
-            </View>
-            <View style={styles.detailBlock}>
-              <Text style={styles.detailLabel}>Status</Text>
-              <Text style={styles.detailValue}>{cert.status}</Text>
-            </View>
-            <View style={styles.detailBlock}>
-              <Text style={styles.detailLabel}>Certificate No.</Text>
+            <View style={styles.footerInfoBlock}>
+              <Text style={styles.footerInfoLabel}>Certificate No.</Text>
               <Text style={styles.certNumberText}>{cert.certificateNumber}</Text>
             </View>
           </View>
-        </View>
 
-        {/* ── Footer: signatures + QR ───────────────────────────────── */}
-        <View style={styles.footerDivider} />
-        <View style={styles.footerRow}>
-          <View style={styles.sigsGroup}>
-            {/* Certification Officer */}
-            <View style={styles.signatureBlock}>
-              {officerSigSrc ? (
-                <Image src={officerSigSrc} style={styles.signatureImage} />
-              ) : null}
-              <View style={styles.signatureLine} />
-              <Text style={styles.signerName}>{officerName}</Text>
-              <Text style={styles.signerTitle}>Certification Officer</Text>
+          {/* Signature blocks + QR */}
+          <View style={styles.sigFooterRow}>
+            <View style={styles.sigsGroup}>
+              <View style={styles.signatureBlock}>
+                {officerSigSrc ? (
+                  <Image src={officerSigSrc} style={styles.signatureImage} />
+                ) : null}
+                <View style={styles.signatureLine} />
+                <Text style={styles.signerName}>{officerName}</Text>
+                <Text style={styles.signerTitle}>Certification Officer</Text>
+              </View>
+              <View style={styles.signatureBlock}>
+                {directorSigSrc ? (
+                  <Image src={directorSigSrc} style={styles.signatureImage} />
+                ) : null}
+                <View style={styles.signatureLine} />
+                <Text style={styles.signerName}>{directorName}</Text>
+                <Text style={styles.signerTitle}>Director of Certification</Text>
+              </View>
             </View>
 
-            {/* Director of Certification */}
-            <View style={styles.signatureBlock}>
-              {directorSigSrc ? (
-                <Image src={directorSigSrc} style={styles.signatureImage} />
-              ) : null}
-              <View style={styles.signatureLine} />
-              <Text style={styles.signerName}>{directorName}</Text>
-              <Text style={styles.signerTitle}>Director of Certification</Text>
-            </View>
+            {cert.qrCodeUrl ? (
+              <View style={styles.qrBlock}>
+                <Image src={cert.qrCodeUrl} style={styles.qrImage} />
+                <Text style={styles.qrLabel}>Scan to verify</Text>
+              </View>
+            ) : null}
           </View>
 
-          {/* QR Code */}
-          {cert.qrCodeUrl ? (
-            <View style={styles.qrBlock}>
-              <Image src={cert.qrCodeUrl} style={styles.qrImage} />
-              <Text style={styles.qrLabel}>Scan to verify authenticity</Text>
-            </View>
-          ) : null}
         </View>
 
-        {/* ── Status watermark — only on non-ACTIVE certificates ────────── */}
+        {/* Status watermark — only on non-ACTIVE certificates */}
         {cert.status !== "ACTIVE" && (
           <Text style={[
             styles.watermark,
