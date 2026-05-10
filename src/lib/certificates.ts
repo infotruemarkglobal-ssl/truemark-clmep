@@ -125,7 +125,9 @@ export async function generateOpenBadgeJwt(opts: {
     // HS256 fallback — symmetric, development only. env.ts enforces AUTH_SECRET
     // strength in production, but this algorithm is NOT suitable for external
     // verification because the verifier would need the shared secret.
-    const secret = new TextEncoder().encode(process.env.AUTH_SECRET);
+    // Derive a fixed 32-byte key from AUTH_SECRET via SHA-256 so jose's
+    // HS256 minimum-key-size requirement is always met regardless of secret length.
+    const secret = crypto.createHash("sha256").update(process.env.AUTH_SECRET ?? "").digest();
     jwt = await jwtBuilder
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
       .sign(secret);

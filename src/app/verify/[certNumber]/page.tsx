@@ -91,7 +91,9 @@ export default async function VerifyCertificatePage({
             validityMonths: certificate.scheme.validityMonths,
           },
           qrCodeUrl: certificate.qrCodeUrl,
-          openBadgeJson: certificate.openBadgeJson as Record<string, unknown> | null,
+          openBadgeJson: certificate.openBadgeJson
+            ? JSON.parse(certificate.openBadgeJson) as Record<string, unknown>
+            : null,
         }}
       />
       <div className="text-center pb-6 flex items-center justify-center gap-4 flex-wrap">

@@ -126,19 +126,34 @@ export async function POST(req: NextRequest) {
   // reusing the existing record. Only treat it as truly "done" once a certificate
   // row also exists, since that is the terminal state.
   let certDecision: Awaited<ReturnType<typeof db.certificationDecision.create>>;
+  // Track whether we created the decision in THIS request so we only clean it up on failure
+  // if we own it — reused decisions already have their own audit trail.
+  let decisionCreatedHere = false;
+
   const existingDecision = await db.certificationDecision.findUnique({ where: { attemptId } });
   if (existingDecision) {
     const existingCert = await db.certificate.findUnique({ where: { decisionId: existingDecision.id } });
     if (existingCert) {
-      return NextResponse.json({ error: "Decision already made for this attempt" }, { status: 409 });
+      // Bug 4 — a certificate can exist without an audit log if a prior request created it
+      // but the compensating certificate.delete silently failed. Detect this by checking for
+      // the CERTIFICATE_ISSUED audit entry. If absent the cert is untracked; delete it and retry.
+      const certAuditEntry = await db.auditLog.findFirst({
+        where: { entityType: "Certificate", entityId: existingCert.id, action: "CERTIFICATE_ISSUED" },
+      });
+      if (certAuditEntry) {
+        return NextResponse.json({ error: "Decision already made for this attempt" }, { status: 409 });
+      }
+      // Stranded certificate (no audit trail) — clean it up so this request can proceed.
+      await db.certificate.delete({ where: { id: existingCert.id } }).catch(() => {});
     }
-    // Decision exists but certificate was never issued — reuse and retry.
+    // Decision exists but no valid certificate — reuse and retry.
     certDecision = existingDecision;
   } else {
     try {
       certDecision = await db.certificationDecision.create({
         data: { attemptId, certificationOfficerId: session.user.id, decision, justification },
       });
+      decisionCreatedHere = true;
     } catch (err) {
       if ((err as { code?: string }).code === "P2002") {
         return NextResponse.json({ error: "Decision already made for this attempt" }, { status: 409 });
@@ -206,8 +221,11 @@ export async function POST(req: NextRequest) {
     qrCodeUrl = await generateQrCode(certNumber);
   } catch (err) {
     console.error("[certificates/generate] badge/qr generation failed", err);
-    // Clean up the orphaned decision record so the officer can retry.
-    await db.certificationDecision.delete({ where: { id: certDecision.id } }).catch(() => {});
+    // Only delete the decision if we created it in this request — reused decisions
+    // belong to a prior request and already have their own audit trail entry.
+    if (decisionCreatedHere) {
+      await db.certificationDecision.delete({ where: { id: certDecision.id } }).catch(() => {});
+    }
     return NextResponse.json({ error: "Certificate generation failed. Please try again." }, { status: 500 });
   }
 
@@ -225,7 +243,7 @@ export async function POST(req: NextRequest) {
       status: "ACTIVE",
       issuedAt,
       expiresAt,
-      openBadgeJson: JSON.stringify(openBadgeJson),
+      openBadgeJson: openBadgeJson,
       openBadgeJwt,
       qrCodeUrl,
       // Cl.7.1 ISO 17024 — immutable snapshots of the scheme at issuance.

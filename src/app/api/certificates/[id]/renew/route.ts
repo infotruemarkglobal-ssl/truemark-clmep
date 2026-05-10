@@ -321,7 +321,7 @@ export async function POST(
         status: "ACTIVE",
         issuedAt,
         expiresAt,
-        openBadgeJson: JSON.stringify(openBadgeJson),
+        openBadgeJson: openBadgeJson,
         openBadgeJwt,
         qrCodeUrl,
         schemeNameSnapshot: cert.scheme.name,
