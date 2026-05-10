@@ -112,7 +112,13 @@ export async function generateOpenBadgeJwt(opts: {
   }
 
   let jwt: string;
-  const rsaPrivateKeyPem = process.env.CERT_SIGNING_PRIVATE_KEY;
+  const rawKey = process.env.CERT_SIGNING_PRIVATE_KEY ?? "";
+  // Vercel strips newlines from multiline env vars — accept base64-encoded PEM as well.
+  const rsaPrivateKeyPem = rawKey
+    ? rawKey.includes("BEGIN PRIVATE KEY")
+      ? rawKey
+      : Buffer.from(rawKey, "base64").toString("utf-8")
+    : "";
 
   if (rsaPrivateKeyPem) {
     // RS256 — OB3.0-conformant asymmetric signing. Verifiers use the JWKS
