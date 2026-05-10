@@ -18,13 +18,26 @@ export async function GET() {
   return NextResponse.json(records);
 }
 
+const ACTIVITY_TYPES = [
+  "FORMAL_TRAINING",
+  "WEBINAR_ONLINE",
+  "WRITING_PUBLISHING",
+  "MENTORING",
+  "PROFESSIONAL_ASSOCIATION",
+  "WORK_BASED_LEARNING",
+  "READING_SELF_STUDY",
+] as const;
+
 const schema = z.object({
   title: z.string().min(2).max(255),
-  type: z.enum(["course_completion", "conference", "self_study", "work_experience", "publication"]),
+  // Legacy type kept for backward compatibility
+  type: z.enum(["course_completion", "conference", "self_study", "work_experience", "publication"]).optional(),
+  activityType: z.enum(ACTIVITY_TYPES).default("FORMAL_TRAINING"),
   hoursLogged: z.number().min(0.5).max(1000),
   activityDate: z.string().datetime(),
   schemeId: z.string().nullable().optional(),
   evidenceUrl: z.string().url().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -67,7 +80,8 @@ export async function POST(req: NextRequest) {
     data: {
       userId: session.user.id,
       title: body.data.title,
-      type: body.data.type,
+      type: body.data.type ?? "course_completion",
+      activityType: body.data.activityType,
       hoursLogged: body.data.hoursLogged,
       activityDate: new Date(body.data.activityDate),
       schemeId: body.data.schemeId ?? null,

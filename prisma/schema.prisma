@@ -59,6 +59,7 @@ model User {
   certificates            Certificate[]
   cpdRecords              CPDRecord[]
   cpdRecordsLogged        CPDRecord[]             @relation("CPDLogger")
+  cpdRecordsVerified      CPDRecord[]             @relation("CPDVerifier")
   notifications           Notification[]
   consentRecords          ConsentRecord[]
   dataSubjectRequests     DataSubjectRequest[]
@@ -716,6 +717,9 @@ model CPDRecord {
   schemeId     String?
   title        String
   type         String // course_completion, conference, self_study, work_experience, publication
+  // New 7-type activity classification — FORMAL_TRAINING | WEBINAR_ONLINE | WRITING_PUBLISHING |
+  // MENTORING | PROFESSIONAL_ASSOCIATION | WORK_BASED_LEARNING | READING_SELF_STUDY
+  activityType  String    @default("FORMAL_TRAINING")
   hoursLogged  Float
   activityDate DateTime
   evidenceUrl  String?
@@ -723,6 +727,8 @@ model CPDRecord {
   reviewedBy   String?
   reviewedAt   DateTime?
   reviewNote   String?
+  verifiedAt    DateTime?
+  verifiedById  String?
   createdAt    DateTime  @default(now())
 
   // Org context — NULL for INDIVIDUAL. Set when ORG_MANAGER logs CPD on behalf
@@ -737,6 +743,7 @@ model CPDRecord {
   scheme       CertificationScheme? @relation(fields: [schemeId], references: [id])
   organisation Organisation?        @relation(fields: [organisationId], references: [id])
   loggedByUser User?                @relation("CPDLogger", fields: [loggedByUserId], references: [id])
+  verifiedBy   User?                @relation("CPDVerifier", fields: [verifiedById], references: [id])
 
   @@index([userId])
   @@index([schemeId])

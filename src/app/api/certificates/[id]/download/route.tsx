@@ -6,10 +6,6 @@ import { format } from "date-fns";
 import { USER_ROLES } from "@/lib/constants";
 import crypto from "crypto";
 
-// Fetches an image and returns it as a base64 data-URI for @react-pdf/renderer.
-// fetch() is used instead of fs.readFile because Vercel's runtime has a
-// read-only filesystem — only /tmp is writable and public/ assets are not
-// accessible via process.cwd() at runtime.
 async function fetchToBase64(src: string | null | undefined): Promise<string | null> {
   if (!src) return null;
   if (src.startsWith("data:")) return src;
@@ -19,7 +15,6 @@ async function fetchToBase64(src: string | null | undefined): Promise<string | n
     if (src.startsWith("http://") || src.startsWith("https://")) {
       url = src;
     } else {
-      // Leading "/" → public static asset served by Next.js
       const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
       url = base.replace(/\/$/, "") + (src.startsWith("/") ? src : `/${src}`);
     }
@@ -39,20 +34,18 @@ async function fetchToBase64(src: string | null | undefined): Promise<string | n
   }
 }
 
-const G           = "#0F6E56";
-const G_PILL_BG   = "#E1F5EE";
-const GREY_MID    = "#6b7280";
-const GREY_LINE   = "#d1d5db";
-const GREY_FAINT  = "#9ca3af";
-const DARK        = "#111827";
-const BODY_TEXT   = "#374151";
+// ── Brand colours ─────────────────────────────────────────────────────────────
+const G          = "#0F6E56";   // primary green
+const G_DARK     = "#085041";   // dark green (holder name)
+const G_PILL_BG  = "#E1F5EE";   // status pill background
+const G_MID      = "#1D9E75";   // lighter green for polygon fades
+const GREY_MID   = "#5F5E5A";   // body text
+const GREY_LABEL = "#888780";   // muted labels / divider lines
+const GREY_LINE  = "#D3D1C7";   // thin dividers
+const DARK       = "#2C2C2A";   // values
 
 export const dynamic = "force-dynamic";
-
-// Vercel Pro required for maxDuration > 10.
-// PDF generation + R2 image fetches routinely take 10–20s.
-// See: https://vercel.com/docs/functions/runtimes#max-duration
-export const maxDuration = 60; // seconds — PDF generation can take 10–20s
+export const maxDuration = 60;
 
 export async function GET(
   req: NextRequest,
@@ -62,8 +55,6 @@ export async function GET(
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // H12: 20 downloads per hour per user — enough for legitimate re-downloads
-  // while preventing bulk scraping of certificates.
   const rl = await rateLimit(session.user.id, "cert-download", { limit: 20, windowMs: 60 * 60_000 });
   if (!rl.success) {
     return NextResponse.json(
@@ -95,12 +86,9 @@ export async function GET(
   ]);
 
   if (!cert) return NextResponse.json({ error: "Certificate not found" }, { status: 404 });
-
   if (!isAdmin && cert.userId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-
-  // ISO 17024 Cl.7.6 — suspended/revoked certs cannot be downloaded by the holder.
   if (!isAdmin && cert.status !== "ACTIVE") {
     return NextResponse.json(
       { error: `Certificate is not active (status: ${cert.status}). Download is unavailable.` },
@@ -109,32 +97,36 @@ export async function GET(
   }
 
   const holderName = `${cert.user.firstName} ${cert.user.lastName}`;
-  const issuedDate = format(cert.issuedAt, "d MMMM yyyy");
+  const issuedDate  = format(cert.issuedAt, "d MMMM yyyy");
   const expiresDate = cert.expiresAt ? format(cert.expiresAt, "d MMMM yyyy") : "No Expiry";
 
-  // SHA-256 integrity fingerprint embedded in PDF keywords for tamper evidence.
   const integrityPayload = `${cert.certificateNumber}|${cert.issuedAt.toISOString()}|${holderName}|${cert.scheme.code}`;
   const integrityHash = crypto.createHash("sha256").update(integrityPayload).digest("hex");
 
-  // Fetch all images as base64 data-URIs. Each is wrapped independently so a
-  // missing asset degrades gracefully rather than aborting the whole PDF.
   const [logoSrc, officerSigSrc, directorSigSrc] = await Promise.all([
     fetchToBase64("/truemark-logo.png"),
     fetchToBase64(cert.decision.certificationOfficer.signatureUrl),
     fetchToBase64(directorSigSetting?.value ?? null),
   ]);
-  const officerName = `${cert.decision.certificationOfficer.firstName} ${cert.decision.certificationOfficer.lastName}`;
+  const officerName  = `${cert.decision.certificationOfficer.firstName} ${cert.decision.certificationOfficer.lastName}`;
   const directorName = directorNameSetting?.value ?? "Director of Certification";
 
-  // Dynamic import — defers the ~2 MB @react-pdf/renderer module until
-  // after auth, rate limiting, and DB checks have passed.
-  const { renderToBuffer, Document, Page, View, Text, StyleSheet, Image } =
-    await import("@react-pdf/renderer");
+  const {
+    renderToBuffer, Document, Page, View, Text, StyleSheet, Image,
+    Svg, Polygon, Rect: SvgRect,
+  } = await import("@react-pdf/renderer");
 
-  // A4 landscape ≈ 841 × 595 pts.
-  // Corner blocks proportional to SVG design (140/800 × 841 ≈ 147, 140/580 × 595 ≈ 144).
-  const CW = 147; // corner block width
-  const CH = 144; // corner block height
+  // A4 landscape = 841 × 595 pts
+  // Corner block proportional to SVG (140/800 × 841 ≈ 147, 140/580 × 595 ≈ 144)
+  const CW = 147;  // corner block width
+  const CH = 144;  // corner block height
+
+  // Polygon fade points for top-left corner (scaled from SVG 800×580 → 841×595)
+  // SVG poly1 TL: (140,0),(200,0),(0,200),(0,140) → scaled
+  // SVG poly2 TL: (200,0),(240,0),(0,240),(0,200) → scaled
+  const SX = 841 / 800;
+  const SY = 595 / 580;
+  const p = (x: number, y: number) => `${Math.round(x * SX)},${Math.round(y * SY)}`;
 
   const styles = StyleSheet.create({
     page: {
@@ -143,13 +135,16 @@ export async function GET(
       flexDirection: "column",
     },
 
-    // ── Corner decorations (absolute, behind all content) ────────────────────
+    // ── Absolute corner blocks ────────────────────────────────────────────────
     cornerTL: { position: "absolute", top: 0, left: 0, width: CW, height: CH, backgroundColor: G },
     cornerTR: { position: "absolute", top: 0, right: 0, width: CW, height: CH, backgroundColor: G },
     cornerBL: { position: "absolute", bottom: 0, left: 0, width: CW, height: CH, backgroundColor: G },
     cornerBR: { position: "absolute", bottom: 0, right: 0, width: CW, height: CH, backgroundColor: G },
 
-    // ── Double border (absolute) ─────────────────────────────────────────────
+    // SVG overlay for polygon fades — full page size, pointer-events none
+    svgOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+
+    // ── Double border ────────────────────────────────────────────────────────
     outerBorder: {
       position: "absolute",
       top: 8, left: 8, right: 8, bottom: 8,
@@ -162,12 +157,12 @@ export async function GET(
       opacity: 0.4,
     },
 
-    // ── Content wrapper (keeps text clear of corner blocks) ──────────────────
+    // ── Content (clear of corner blocks) ─────────────────────────────────────
     contentWrap: {
       flex: 1,
-      paddingTop: 30,
-      paddingBottom: 22,
-      paddingHorizontal: 158,
+      paddingTop: 22,
+      paddingBottom: 20,
+      paddingHorizontal: 160,
       flexDirection: "column",
     },
 
@@ -177,186 +172,79 @@ export async function GET(
       alignItems: "center",
       justifyContent: "space-between",
     },
-    logoBlock: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 9,
-    },
-    logoImage: { width: 42, height: 42, objectFit: "contain" },
-    logoFallback: { width: 42, height: 42, borderRadius: 21, backgroundColor: G },
-    orgBlock: { flexDirection: "column" },
-    orgName: {
-      fontSize: 11,
-      fontFamily: "Helvetica-Bold",
-      color: G,
-      letterSpacing: 0.7,
-    },
-    orgSubtitle: { fontSize: 7.5, color: GREY_MID, marginTop: 2 },
+    // Fix #2: Logo alone, larger, no org text
+    logoImage: { width: 52, height: 52, objectFit: "contain" },
+    logoFallback: { width: 52, height: 52, borderRadius: 26, backgroundColor: G },
     accredBlock: { alignItems: "flex-end" },
-    accredLabel: { fontSize: 7.5, color: GREY_MID, textAlign: "right" },
-    accredStandard: {
-      fontSize: 9,
-      fontFamily: "Helvetica-Bold",
-      color: G,
-      textAlign: "right",
-      marginTop: 2,
-    },
+    accredLabel: { fontSize: 8, color: GREY_MID, textAlign: "right", letterSpacing: 0.5 },
+    accredStandard: { fontSize: 9, fontFamily: "Helvetica-Bold", color: G_DARK, textAlign: "right", marginTop: 2, letterSpacing: 0.5 },
 
-    headerDivider: {
-      height: 0.75,
-      backgroundColor: G,
-      opacity: 0.3,
-      marginTop: 10,
-    },
+    headerDivider: { height: 0.8, backgroundColor: G, opacity: 0.5, marginTop: 8, marginBottom: 12 },
 
-    // ── Body ─────────────────────────────────────────────────────────────────
-    body: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    certLabel: {
-      fontSize: 8,
-      color: GREY_FAINT,
-      letterSpacing: 3.5,
-      textTransform: "uppercase",
-      marginBottom: 5,
-    },
-    certCode: {
-      fontSize: 28,
-      fontFamily: "Helvetica-Bold",
-      color: G,
-      marginBottom: 4,
-    },
-    certSchemeName: {
-      fontSize: 10,
-      color: BODY_TEXT,
-      marginBottom: 16,
-    },
+    // ── Body (centred) ────────────────────────────────────────────────────────
+    body: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 4 },
+    certOfLabel: { fontSize: 11, color: GREY_LABEL, letterSpacing: 4, textTransform: "uppercase", marginBottom: 6 },
+    certCode: { fontSize: 46, fontFamily: "Helvetica-Bold", color: G, letterSpacing: 2, marginBottom: 4 },
+    certSchemeName: { fontSize: 13, color: GREY_MID, letterSpacing: 1, marginBottom: 12 },
 
-    // Horizontal rule with centred dot
-    dividerRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      width: 360,
-      marginBottom: 16,
-    },
-    dividerLine: { flex: 1, height: 1, backgroundColor: GREY_LINE },
+    dividerRow: { flexDirection: "row", alignItems: "center", width: 240, marginBottom: 10 },
+    dividerLine: { flex: 1, height: 1.5, backgroundColor: G },
     dividerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: G, marginHorizontal: 8 },
 
-    awardedLabel: {
-      fontSize: 7.5,
-      color: GREY_FAINT,
-      letterSpacing: 2.5,
-      textTransform: "uppercase",
-      marginBottom: 6,
-    },
-    holderName: {
-      fontSize: 22,
-      fontFamily: "Helvetica-BoldOblique",
-      color: DARK,
-      marginBottom: 12,
-    },
-    achievementText: {
-      fontSize: 8.5,
-      color: BODY_TEXT,
-      textAlign: "center",
-      maxWidth: 400,
-      lineHeight: 1.7,
-      marginBottom: 12,
-    },
+    awardedLabel: { fontSize: 9.5, color: GREY_LABEL, letterSpacing: 3, textTransform: "uppercase", marginBottom: 8 },
+    holderName: { fontSize: 38, fontFamily: "Helvetica-BoldOblique", color: G_DARK, marginBottom: 6 },
+    holderUnderline: { width: 280, height: 0.5, backgroundColor: G, opacity: 0.4, marginBottom: 12 },
 
-    // Exam + org meta with vertical divider between them
-    metaRow: { flexDirection: "row", alignItems: "center" },
-    metaBlock: { alignItems: "center", paddingHorizontal: 16 },
-    metaVertDivider: { width: 1, height: 24, backgroundColor: GREY_LINE },
-    metaLabel: {
-      fontSize: 7,
-      color: GREY_FAINT,
-      textTransform: "uppercase",
-      letterSpacing: 1,
-      marginBottom: 2,
-    },
-    metaValue: {
-      fontSize: 8.5,
-      fontFamily: "Helvetica-Bold",
-      color: DARK,
-      textAlign: "center",
-    },
+    achievementText: { fontSize: 10.5, color: GREY_MID, textAlign: "center", maxWidth: 440, lineHeight: 1.7, marginBottom: 10 },
 
-    // ── Footer info row (DATE ISSUED | VALID UNTIL | STATUS | CERT NO) ───────
+    metaRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+    metaBlock: { alignItems: "center", paddingHorizontal: 20 },
+    metaVertDivider: { width: 0.8, height: 24, backgroundColor: GREY_LINE },
+    metaLabel: { fontSize: 8, color: GREY_LABEL, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 },
+    metaValue: { fontSize: 10.5, fontFamily: "Helvetica-Bold", color: DARK, textAlign: "center" },
+
+    // ── Footer info row ───────────────────────────────────────────────────────
     footerInfoRow: {
       flexDirection: "row",
       alignItems: "flex-start",
       justifyContent: "space-between",
-      borderTopWidth: 0.75,
+      borderTopWidth: 0.7,
       borderTopColor: GREY_LINE,
-      paddingTop: 10,
-      marginTop: 12,
-      marginBottom: 10,
+      paddingTop: 8,
+      marginTop: 8,
+      marginBottom: 8,
     },
     footerInfoBlock: { alignItems: "center", flex: 1 },
-    footerInfoLabel: {
-      fontSize: 6.5,
-      color: GREY_FAINT,
-      textTransform: "uppercase",
-      letterSpacing: 1.5,
-      marginBottom: 4,
-    },
-    footerInfoValue: { fontSize: 9, fontFamily: "Helvetica-Bold", color: DARK },
-    certNumberText: {
-      fontSize: 7.5,
-      fontFamily: "Helvetica-Oblique",
-      color: GREY_MID,
-      letterSpacing: 0.3,
-    },
+    footerInfoLabel: { fontSize: 8, color: GREY_LABEL, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
+    footerInfoValue: { fontSize: 10, fontFamily: "Helvetica-Bold", color: DARK },
+    certNumberText: { fontSize: 10, fontFamily: "Helvetica-Bold", color: DARK },
 
-    // Status pill — green on pale green
-    statusPill: {
-      backgroundColor: G_PILL_BG,
-      borderRadius: 10,
-      paddingVertical: 2,
-      paddingHorizontal: 8,
-    },
-    statusPillText: { fontSize: 8.5, fontFamily: "Helvetica-Bold", color: G },
+    statusPill: { backgroundColor: G_PILL_BG, borderRadius: 8, paddingVertical: 2, paddingHorizontal: 8 },
+    statusPillText: { fontSize: 9, fontFamily: "Helvetica-Bold", color: G, letterSpacing: 1 },
 
-    // ── Signature + QR row ───────────────────────────────────────────────────
+    // ── Signature row — Fix #3: Claire left-third, Pam Jane center ────────────
     sigFooterRow: {
       flexDirection: "row",
-      justifyContent: "space-between",
       alignItems: "flex-end",
     },
-    sigsGroup: { flexDirection: "row", gap: 40 },
-    signatureBlock: { alignItems: "center", minWidth: 110 },
-    signatureImage: { width: 100, height: 34, objectFit: "contain" },
-    signatureLine: { width: 110, height: 1, backgroundColor: GREY_LINE, marginTop: 4 },
-    signerName: {
-      fontSize: 8,
-      fontFamily: "Helvetica-Bold",
-      color: BODY_TEXT,
-      marginTop: 3,
-      textAlign: "center",
-    },
-    signerTitle: {
-      fontSize: 7,
-      color: GREY_FAINT,
-      textTransform: "uppercase",
-      letterSpacing: 0.8,
-      textAlign: "center",
-      marginTop: 1,
-    },
+    signatureBlock: { alignItems: "center", width: 140 },
+    signatureImage: { width: 110, height: 36, objectFit: "contain", marginBottom: 2 },
+    signatureLine: { width: 140, height: 0.8, backgroundColor: G },
+    signerName: { fontSize: 9, fontFamily: "Helvetica-Bold", color: DARK, marginTop: 4, textAlign: "center" },
+    signerTitle: { fontSize: 8, color: GREY_LABEL, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginTop: 1 },
 
-    qrBlock: { alignItems: "center" },
-    qrImage: { width: 60, height: 60 },
-    qrLabel: { fontSize: 6.5, color: GREY_FAINT, marginTop: 3, textAlign: "center" },
+    // Fix #4: QR absolutely positioned flush against the right corner block
+    qrAbsolute: { position: "absolute", bottom: 22, right: 6, alignItems: "center" },
+    qrImage: { width: 64, height: 64 },
+    qrLabel: { fontSize: 7, color: GREY_LABEL, marginTop: 3, textAlign: "center" },
 
-    // ── Status watermark — only on non-ACTIVE certificates ───────────────────
+    // Watermark
     watermark: {
       position: "absolute",
       top: "40%",
       left: "15%",
       fontSize: 72,
-      opacity: 0.2,
+      opacity: 0.18,
       transform: "rotate(-35deg)",
       fontFamily: "Helvetica-Bold",
       letterSpacing: 8,
@@ -371,32 +259,75 @@ export async function GET(
       keywords={`integrity:sha256:${integrityHash}`}
     >
       <Page size="A4" orientation="landscape" style={styles.page}>
-        {/* ── Corner decorations ───────────────────────────────────────── */}
+
+        {/* ── Corner solid blocks ─────────────────────────────────────────── */}
         <View style={styles.cornerTL} />
         <View style={styles.cornerTR} />
         <View style={styles.cornerBL} />
         <View style={styles.cornerBR} />
 
-        {/* ── Double border ────────────────────────────────────────────── */}
+        {/* ── Fix #1: SVG polygon fades on each corner ────────────────────── */}
+        <Svg width={841} height={595} style={styles.svgOverlay}>
+          {/* Top-left fades */}
+          <Polygon
+            points={`${p(140,0)} ${p(200,0)} ${p(0,200)} ${p(0,140)}`}
+            fill={G_MID}
+            opacity={0.5}
+          />
+          <Polygon
+            points={`${p(200,0)} ${p(240,0)} ${p(0,240)} ${p(0,200)}`}
+            fill={G}
+            opacity={0.25}
+          />
+          {/* Top-right fades */}
+          <Polygon
+            points={`${p(660,0)} ${p(600,0)} ${p(800,200)} ${p(800,140)}`}
+            fill={G_MID}
+            opacity={0.5}
+          />
+          <Polygon
+            points={`${p(600,0)} ${p(560,0)} ${p(800,240)} ${p(800,200)}`}
+            fill={G}
+            opacity={0.25}
+          />
+          {/* Bottom-left fades */}
+          <Polygon
+            points={`${p(0,440)} ${p(0,380)} ${p(200,580)} ${p(140,580)}`}
+            fill={G_MID}
+            opacity={0.5}
+          />
+          <Polygon
+            points={`${p(0,380)} ${p(0,340)} ${p(240,580)} ${p(200,580)}`}
+            fill={G}
+            opacity={0.25}
+          />
+          {/* Bottom-right fades */}
+          <Polygon
+            points={`${p(800,440)} ${p(800,380)} ${p(600,580)} ${p(660,580)}`}
+            fill={G_MID}
+            opacity={0.5}
+          />
+          <Polygon
+            points={`${p(800,380)} ${p(800,340)} ${p(560,580)} ${p(600,580)}`}
+            fill={G}
+            opacity={0.25}
+          />
+        </Svg>
+
+        {/* ── Double border ────────────────────────────────────────────────── */}
         <View style={styles.outerBorder} />
         <View style={styles.innerBorder} />
 
-        {/* ── Main content ─────────────────────────────────────────────── */}
+        {/* ── Main content ─────────────────────────────────────────────────── */}
         <View style={styles.contentWrap}>
 
-          {/* Header: logo + org name | accreditation */}
+          {/* Header — Fix #2: logo alone (larger), no org text */}
           <View style={styles.headerRow}>
-            <View style={styles.logoBlock}>
-              {logoSrc ? (
-                <Image src={logoSrc} style={styles.logoImage} />
-              ) : (
-                <View style={styles.logoFallback} />
-              )}
-              <View style={styles.orgBlock}>
-                <Text style={styles.orgName}>TRUEMARK GLOBAL</Text>
-                <Text style={styles.orgSubtitle}>Standards &amp; Solutions Limited</Text>
-              </View>
-            </View>
+            {logoSrc ? (
+              <Image src={logoSrc} style={styles.logoImage} />
+            ) : (
+              <View style={styles.logoFallback} />
+            )}
             <View style={styles.accredBlock}>
               <Text style={styles.accredLabel}>Personnel Certification Body</Text>
               <Text style={styles.accredStandard}>ISO/IEC 17024:2012 Accredited</Text>
@@ -405,9 +336,9 @@ export async function GET(
 
           <View style={styles.headerDivider} />
 
-          {/* Body — centred certification content */}
+          {/* Body */}
           <View style={styles.body}>
-            <Text style={styles.certLabel}>Certificate of</Text>
+            <Text style={styles.certOfLabel}>Certificate of</Text>
             <Text style={styles.certCode}>{cert.schemeCodeSnapshot ?? cert.scheme.code}</Text>
             <Text style={styles.certSchemeName}>{cert.schemeNameSnapshot ?? cert.scheme.name}</Text>
 
@@ -419,12 +350,12 @@ export async function GET(
 
             <Text style={styles.awardedLabel}>Awarded to</Text>
             <Text style={styles.holderName}>{holderName}</Text>
+            <View style={styles.holderUnderline} />
 
             <Text style={styles.achievementText}>
               {`This certifies that the above-named individual has successfully fulfilled all requirements for ${cert.schemeNameSnapshot ?? cert.scheme.name} certification as set forth by Truemark Global Standards & Solutions Limited under the ISO/IEC 17024:2012 standard.`}
             </Text>
 
-            {/* Exam paper / sponsoring org — with vertical divider between them */}
             {(cert.examPaperTitleSnapshot || cert.sponsoringOrgNameSnapshot) ? (
               <View style={styles.metaRow}>
                 {cert.examPaperTitleSnapshot ? (
@@ -446,7 +377,7 @@ export async function GET(
             ) : null}
           </View>
 
-          {/* Footer info row — 4 columns */}
+          {/* Footer info row */}
           <View style={styles.footerInfoRow}>
             <View style={styles.footerInfoBlock}>
               <Text style={styles.footerInfoLabel}>Date Issued</Text>
@@ -472,38 +403,42 @@ export async function GET(
             </View>
           </View>
 
-          {/* Signature blocks + QR */}
+          {/* Fix #3: Signatures — Claire left, Director center, gap right for QR */}
           <View style={styles.sigFooterRow}>
-            <View style={styles.sigsGroup}>
-              <View style={styles.signatureBlock}>
-                {officerSigSrc ? (
-                  <Image src={officerSigSrc} style={styles.signatureImage} />
-                ) : null}
-                <View style={styles.signatureLine} />
-                <Text style={styles.signerName}>{officerName}</Text>
-                <Text style={styles.signerTitle}>Certification Officer</Text>
-              </View>
-              <View style={styles.signatureBlock}>
-                {directorSigSrc ? (
-                  <Image src={directorSigSrc} style={styles.signatureImage} />
-                ) : null}
-                <View style={styles.signatureLine} />
-                <Text style={styles.signerName}>{directorName}</Text>
-                <Text style={styles.signerTitle}>Director of Certification</Text>
-              </View>
+            {/* Signature 1 — Certification Officer (left) */}
+            <View style={styles.signatureBlock}>
+              {officerSigSrc ? (
+                <Image src={officerSigSrc} style={styles.signatureImage} />
+              ) : null}
+              <View style={styles.signatureLine} />
+              <Text style={styles.signerName}>{officerName}</Text>
+              <Text style={styles.signerTitle}>Certification Officer</Text>
             </View>
 
-            {cert.qrCodeUrl ? (
-              <View style={styles.qrBlock}>
-                <Image src={cert.qrCodeUrl} style={styles.qrImage} />
-                <Text style={styles.qrLabel}>Scan to verify</Text>
-              </View>
-            ) : null}
-          </View>
+            {/* Gap between sig 1 and sig 2 */}
+            <View style={{ width: 20 }} />
 
+            {/* Signature 2 — Director of Certification (center) */}
+            <View style={styles.signatureBlock}>
+              {directorSigSrc ? (
+                <Image src={directorSigSrc} style={styles.signatureImage} />
+              ) : null}
+              <View style={styles.signatureLine} />
+              <Text style={styles.signerName}>{directorName}</Text>
+              <Text style={styles.signerTitle}>Director of Certification</Text>
+            </View>
+          </View>
         </View>
 
-        {/* Status watermark — only on non-ACTIVE certificates */}
+        {/* Fix #4: QR absolutely positioned flush against right corner block */}
+        {cert.qrCodeUrl ? (
+          <View style={styles.qrAbsolute}>
+            <Image src={cert.qrCodeUrl} style={styles.qrImage} />
+            <Text style={styles.qrLabel}>Scan to verify</Text>
+          </View>
+        ) : null}
+
+        {/* Status watermark — non-ACTIVE only */}
         {cert.status !== "ACTIVE" && (
           <Text style={[
             styles.watermark,
