@@ -295,10 +295,10 @@ export async function POST(req: NextRequest) {
   await db.notification.create({
     data: {
       userId: attempt.userId,
-      type: "CERTIFICATE_EXPIRY",
+      type: "SYSTEM_ALERT",
       title: `Certificate Issued — ${scheme.name}`,
       message: `Congratulations! Your ${scheme.name} certificate (${certNumber}) has been issued. Valid until ${expiresAt.toLocaleDateString()}.`,
-      link: `/certificates/${certificate.id}`,
+      link: `/verify/${certNumber}`,
     },
   }).catch(() => {});
 

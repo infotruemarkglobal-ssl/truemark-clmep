@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
         type: "SYSTEM_ALERT",
         title: `BREACH ALERT [${body.data.severity.toUpperCase()}]: ${body.data.title}`,
         message: `A data breach has been recorded. Art. 33 GDPR requires DPA notification by ${dpaDeadline.toLocaleString()}. Breach ID: ${breach.id}.`,
-        link: `/manage/gdpr/breaches/${breach.id}`,
+        link: `/audit`,
       })),
     }).catch(() => {});
   }

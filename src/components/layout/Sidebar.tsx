@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import {
   LayoutDashboard, BookOpen, FileText, Award, Users, Building2,
   BarChart3, Shield, ShieldCheck, ClipboardList, FolderOpen, MessageSquare,
@@ -247,6 +248,16 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const sections = ROLE_NAV[role] ?? ROLE_NAV.CANDIDATE;
+
+  // Close on Escape key — standard for modal-style overlays (WCAG 2.1 SC 2.1.2)
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">

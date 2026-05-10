@@ -33,7 +33,7 @@ export async function PATCH(
     include: {
       user: { select: { id: true, firstName: true, lastName: true, email: true } },
       scheme: { select: { id: true, name: true, code: true } },
-      course: { select: { id: true, title: true } },
+      course: { select: { id: true, title: true, slug: true } },
     },
   });
 
@@ -87,12 +87,12 @@ export async function PATCH(
     await db.notification.create({
       data: {
         userId: application.userId,
-        type: "RENEWAL_REMINDER",
+        type: "SYSTEM_ALERT",
         title: `Application Approved — ${application.scheme.name}`,
         message:
           `Your application for ${application.scheme.name} has been approved by a Certification Officer. ` +
           `You are now enrolled and may proceed with your course.`,
-        link: `/courses/${application.course.id}`,
+        link: `/courses/${application.course.slug}`,
       },
     }).catch(() => {});
 
@@ -125,12 +125,12 @@ export async function PATCH(
   await db.notification.create({
     data: {
       userId: application.userId,
-      type: "RENEWAL_REMINDER",
+      type: "SYSTEM_ALERT",
       title: `Application Rejected — ${application.scheme.name}`,
       message:
         `Your application for ${application.scheme.name} was not approved. ` +
         `Reason: ${body.data.reason} You may reapply once you have addressed the requirements.`,
-      link: `/courses/${application.course.id}`,
+      link: `/courses/${application.course.slug}`,
     },
   }).catch(() => {});
 

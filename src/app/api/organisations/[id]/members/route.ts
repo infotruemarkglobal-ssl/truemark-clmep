@@ -120,7 +120,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await db.notification.create({
       data: {
         userId: user.id,
-        type: "ORG_MEMBER_ADDED",
+        type: "SYSTEM_ALERT",
         title: `You've been added to ${org.name}`,
         message: `${session.user.name} added you as a member of ${org.name}. You now have access to organisation courses and resources.`,
         link: "/dashboard",
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await db.notification.create({
         data: {
           userId: existing.id,
-          type: "ORG_MEMBER_ADDED",
+          type: "SYSTEM_ALERT",
           title: `You've been added to ${org.name}`,
           message: `You have been added as a member of ${org.name}.`,
           link: "/dashboard",

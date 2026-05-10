@@ -27,7 +27,7 @@ type Certificate = {
   certificateNumber: string;
   status: string;
   issuedAt: string;
-  expiresAt: string;
+  expiresAt: string | null;
   qrCodeUrl: string | null;
   scheme: { name: string; code: string; validityMonths: number };
   renewals: { id: string }[];
@@ -195,18 +195,20 @@ export default function CertificateList({
 
   function buildLinkedInUrl(cert: Certificate): string {
     const issued = new Date(cert.issuedAt);
-    const expires = new Date(cert.expiresAt);
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
     const params = new URLSearchParams({
       startTask: "CERTIFICATION_NAME",
       name: `${cert.scheme.name} Certification`,
       issueYear: String(issued.getFullYear()),
       issueMonth: String(issued.getMonth() + 1),
-      expirationYear: String(expires.getFullYear()),
-      expirationMonth: String(expires.getMonth() + 1),
       certUrl: `${appUrl}/verify/${cert.certificateNumber}`,
       certId: cert.certificateNumber,
     });
+    if (cert.expiresAt) {
+      const expires = new Date(cert.expiresAt);
+      params.set("expirationYear", String(expires.getFullYear()));
+      params.set("expirationMonth", String(expires.getMonth() + 1));
+    }
     return `https://www.linkedin.com/profile/add?${params.toString()}`;
   }
 
@@ -298,12 +300,14 @@ export default function CertificateList({
           {certificates.map((cert) => {
             const statusConf = STATUS_CONFIG[cert.status] ?? STATUS_CONFIG.ACTIVE;
             const StatusIcon = statusConf.icon;
-            const expiresAt = new Date(cert.expiresAt);
+            const expiresAt = cert.expiresAt ? new Date(cert.expiresAt) : null;
             const issuedAt = new Date(cert.issuedAt);
-            const daysLeft = differenceInDays(expiresAt, new Date());
-            const isExpiringSoon = daysLeft > 0 && daysLeft <= 90;
-            const totalDays = differenceInDays(expiresAt, issuedAt);
-            const validityProgress = Math.max(0, Math.min(100, ((totalDays - daysLeft) / totalDays) * 100));
+            const daysLeft = expiresAt ? differenceInDays(expiresAt, new Date()) : null;
+            const isExpiringSoon = daysLeft !== null && daysLeft > 0 && daysLeft <= 90;
+            const totalDays = expiresAt ? differenceInDays(expiresAt, issuedAt) : 0;
+            const validityProgress = expiresAt && totalDays > 0
+              ? Math.max(0, Math.min(100, (((totalDays - (daysLeft ?? 0)) / totalDays) * 100)))
+              : 0;
             const isChecking = checking === cert.id;
 
             return (
@@ -353,15 +357,21 @@ export default function CertificateList({
                     </div>
                     <div>
                       <p className="text-xs text-slate-400 mb-0.5">Expires</p>
-                      <p className={cn("font-medium", isPast(expiresAt) ? "text-red-500" : isExpiringSoon ? "text-amber-600" : "")}>
-                        {format(expiresAt, "d MMM yyyy")}
-                      </p>
+                      {expiresAt ? (
+                        <p className={cn("font-medium", isPast(expiresAt) ? "text-red-500" : isExpiringSoon ? "text-amber-600" : "")}>
+                          {format(expiresAt, "d MMM yyyy")}
+                        </p>
+                      ) : (
+                        <p className="font-medium text-slate-500">No expiry</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs text-slate-400 mb-0.5">Validity</p>
-                      <p className="font-medium">{cert.scheme.validityMonths} months</p>
+                      <p className="font-medium">
+                        {cert.scheme.validityMonths > 0 ? `${cert.scheme.validityMonths} months` : "Indefinite"}
+                      </p>
                     </div>
-                    {cert.status === "ACTIVE" && !isPast(expiresAt) && (
+                    {cert.status === "ACTIVE" && expiresAt && !isPast(expiresAt) && daysLeft !== null && (
                       <div>
                         <p className="text-xs text-slate-400 mb-0.5">Days remaining</p>
                         <p className={cn("font-medium", isExpiringSoon ? "text-amber-600" : "text-slate-700")}>
@@ -371,7 +381,7 @@ export default function CertificateList({
                     )}
                   </div>
 
-                  {cert.status === "ACTIVE" && (
+                  {cert.status === "ACTIVE" && expiresAt && (
                     <div>
                       <Progress value={validityProgress} className="h-1.5" />
                       <p className="text-xs text-slate-400 mt-1">
@@ -425,7 +435,7 @@ export default function CertificateList({
                         </Button>
                       </>
                     )}
-                    {(isExpiringSoon || isPast(expiresAt)) && cert.renewals.length === 0 && (
+                    {((isExpiringSoon || (expiresAt && isPast(expiresAt)))) && cert.renewals.length === 0 && (
                       <Button
                         size="sm"
                         className="gap-1.5 bg-amber-500 hover:bg-amber-600"
@@ -452,8 +462,8 @@ export default function CertificateList({
             Share your badge on LinkedIn and other professional platforms to showcase your certifications.
             Each badge is digitally signed and can be verified by any employer or third party.
           </p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => router.push("/profile/badges")}>
-            Manage Badges
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => router.push("/registry")}>
+            View Public Registry
           </Button>
         </div>
       </div>

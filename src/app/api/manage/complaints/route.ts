@@ -121,5 +121,23 @@ export async function PATCH(req: NextRequest) {
     metadata: { status: body.data.status, resolution: body.data.resolution },
   });
 
+  // Notify the complainant if they are a registered user and status is visible to them
+  if (complaint.userId && ["ACKNOWLEDGED", "RESOLVED", "CLOSED"].includes(body.data.status)) {
+    const messages: Record<string, string> = {
+      ACKNOWLEDGED: `Your complaint (${complaint.reference}) has been received and is under review.`,
+      RESOLVED: `Your complaint (${complaint.reference}) has been resolved. ${body.data.resolution ? `Resolution: ${body.data.resolution}` : ""}`,
+      CLOSED: `Your complaint (${complaint.reference}) has been closed.`,
+    };
+    await db.notification.create({
+      data: {
+        userId: complaint.userId,
+        type: "COMPLAINT_UPDATE",
+        title: `Complaint Update — ${complaint.reference}`,
+        message: messages[body.data.status] ?? `Your complaint status has been updated.`,
+        link: `/support`,
+      },
+    }).catch(() => {});
+  }
+
   return NextResponse.json(updated);
 }

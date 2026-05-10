@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
     await db.notification.create({
       data: {
         userId: purchase.userId,
-        type: "ENROLMENT",
+        type: "ENROLMENT_CONFIRMATION",
         title: "Payment confirmed — you're enrolled!",
         message: course
           ? `Your payment was received and you are now enrolled in "${course.title}". Start learning whenever you're ready.`

@@ -92,7 +92,7 @@ export async function PATCH(
       type: "SYSTEM_ALERT",
       title: "Certificate Revoked",
       message: `Your certificate ${certificate.certificateNumber} has been revoked. If you believe this is an error, please contact certifications@truemarkglobal.com.`,
-      link: `/certificates/${certificate.id}`,
+      link: `/verify/${certificate.certificateNumber}`,
     },
   }).catch(() => {});
 

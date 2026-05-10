@@ -81,6 +81,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       },
     });
 
+    // Notify the candidate on status changes they care about
+    const CANDIDATE_VISIBLE = ["ACKNOWLEDGED", "UPHELD", "REJECTED", "CLOSED"];
+    if (CANDIDATE_VISIBLE.includes(body.data.status)) {
+      const statusMessages: Record<string, string> = {
+        ACKNOWLEDGED: `Your appeal (${appeal.reference}) has been received and is now under review.`,
+        UPHELD: `Your appeal (${appeal.reference}) has been upheld. ${body.data.resolution ? `Decision: ${body.data.resolution}` : ""}`,
+        REJECTED: `Your appeal (${appeal.reference}) was not upheld. ${body.data.resolution ? `Reason: ${body.data.resolution}` : ""}`,
+        CLOSED: `Your appeal (${appeal.reference}) has been closed.`,
+      };
+      await db.notification.create({
+        data: {
+          userId: appeal.userId,
+          type: "APPEAL_UPDATE",
+          title: `Appeal ${body.data.status.charAt(0) + body.data.status.slice(1).toLowerCase()} — ${appeal.reference}`,
+          message: statusMessages[body.data.status] ?? `Your appeal status has been updated to ${body.data.status}.`,
+          link: `/appeals`,
+        },
+      }).catch(() => {});
+    }
+
     return NextResponse.json(updated);
   } catch (err) {
     console.error("[appeals PATCH]", err);

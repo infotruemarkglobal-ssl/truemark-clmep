@@ -50,7 +50,8 @@ export default async function CandidateDashboard() {
     ),
     cacheQuery(
       () => db.cPDRecord.aggregate({
-        where: { userId, status: { in: ["APPROVED", "PENDING"] } },
+        // CPD status values are stored as lowercase in the DB ("approved", "pending")
+        where: { userId, status: { in: ["approved", "pending"] } },
         _sum: { hoursLogged: true },
       }),
       [`candidate-cpd-${userId}`],
@@ -139,7 +140,7 @@ export default async function CandidateDashboard() {
         <Link href="/registry" className="inline-flex items-center gap-1 text-primary hover:underline font-medium">
           Public Certificate Register <ExternalLink className="w-3 h-3" />
         </Link>
-        <Link href="/verify/TG-2025-00000000" className="inline-flex items-center gap-1 text-slate-500 hover:text-primary hover:underline">
+        <Link href="/registry" className="inline-flex items-center gap-1 text-slate-500 hover:text-primary hover:underline">
           Verify a certificate <ExternalLink className="w-3 h-3" />
         </Link>
       </div>
@@ -196,7 +197,7 @@ export default async function CandidateDashboard() {
               </p>
             ) : (
               certificates.map((cert) => (
-                <Link key={cert.id} href={`/certificates/${cert.id}`} className="flex items-center gap-3 group">
+                <Link key={cert.id} href={`/verify/${cert.certificateNumber}`} className="flex items-center gap-3 group">
                   <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center shrink-0">
                     <Award className="w-4 h-4 text-emerald-600" />
                   </div>

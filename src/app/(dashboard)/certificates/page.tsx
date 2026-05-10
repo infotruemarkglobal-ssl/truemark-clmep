@@ -30,7 +30,7 @@ export default async function CertificatesPage() {
     certificateNumber: c.certificateNumber,
     status: c.status,
     issuedAt: c.issuedAt.toISOString(),
-    expiresAt: (c.expiresAt ?? new Date()).toISOString(),
+    expiresAt: c.expiresAt?.toISOString() ?? null,
     qrCodeUrl: c.qrCodeUrl,
     scheme: c.scheme,
     renewals: c.renewals,

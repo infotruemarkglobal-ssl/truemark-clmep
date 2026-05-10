@@ -35,7 +35,11 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
   const maxAttempts = examPaper.scheme?.maxAttempts ?? 3;
   const passMark = examPaper.passMark;
 
-  if (inProgressAttempt && inProgressAttempt.proctoringSession) {
+  // Resume an in-progress attempt regardless of whether proctoring is required.
+  // The previous condition (`&& inProgressAttempt.proctoringSession`) caused
+  // non-proctored in-progress exams to silently fall through to ExamLanding,
+  // where a second "Start" attempt would return a 409 conflict error.
+  if (inProgressAttempt) {
     const allQuestions = examPaper.sections.flatMap((s) =>
       s.questions.map((q) => ({
         id: q.id,
@@ -54,7 +58,9 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
         examState={{
           attemptId: inProgressAttempt.id,
           examPaperId: examPaper.id,
-          proctoringSessionId: inProgressAttempt.proctoringSession.id,
+          // Empty string for non-proctored exams — ExamInterface gates all
+          // proctoring calls on requiresProctoring so this is never used.
+          proctoringSessionId: inProgressAttempt.proctoringSession?.id ?? "",
           questions: allQuestions,
           timeLimitMins: durationMins,
           startedAt: (inProgressAttempt.startedAt ?? new Date()).toISOString(),

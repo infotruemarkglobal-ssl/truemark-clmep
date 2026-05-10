@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import ExamList from "@/components/exams/ExamList";
@@ -23,7 +24,7 @@ type EligibleCourse = {
 
 export default async function ExamsPage() {
   const session = await auth();
-  if (!session?.user) return null;
+  if (!session?.user) redirect("/login");
 
   // Fetch enrolments and past attempts in parallel — independent queries.
   const [enrolments, attempts] = await Promise.all([

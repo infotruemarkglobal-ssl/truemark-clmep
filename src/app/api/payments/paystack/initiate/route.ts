@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     await db.notification.create({
       data: {
         userId: session.user.id,
-        type: "ENROLMENT",
+        type: "ENROLMENT_CONFIRMATION",
         title: "Enrolment confirmed",
         message: `You are now enrolled in "${course.title}". Start learning whenever you're ready.`,
         link: `/courses/${course.slug}`,

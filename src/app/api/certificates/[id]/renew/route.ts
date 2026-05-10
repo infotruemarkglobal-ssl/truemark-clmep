@@ -251,7 +251,7 @@ export async function POST(
             `${cert.user.firstName} ${cert.user.lastName} has requested renewal of their ` +
             `${cert.scheme.name} certificate (${cert.certificateNumber}).` +
             (body.data.notes ? ` Note: ${body.data.notes}` : ""),
-          link: `/manage/certificates/${cert.id}/renew`,
+          link: `/manage/certificates`,
         })),
         skipDuplicates: true,
       });
@@ -364,7 +364,7 @@ export async function POST(
       message:
         `Your ${cert.scheme.name} certificate has been renewed. ` +
         `New certificate number: ${newCertNumber}. Valid until ${expiresAt.toLocaleDateString()}.`,
-      link: `/certificates/${cert.id}`,
+      link: `/verify/${newCertNumber}`,
     },
   }).catch(() => {});
 

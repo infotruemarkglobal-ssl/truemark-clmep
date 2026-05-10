@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
     await db.notification.createMany({
       data: officers.map((o) => ({
         userId: o.id,
-        type: "RENEWAL_REMINDER",
+        type: "SYSTEM_ALERT",
         title: `New Application — ${scheme.name}`,
         message:
           `${candidate.firstName} ${candidate.lastName} submitted an application for ` +

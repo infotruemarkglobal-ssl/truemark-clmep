@@ -34,7 +34,7 @@ export const applicationAutoApprove = inngest.createFunction(
         include: {
           user: { select: { id: true, firstName: true, lastName: true, email: true } },
           scheme: { select: { id: true, name: true, code: true } },
-          course: { select: { id: true } },
+          course: { select: { id: true, slug: true } },
         },
       }),
     );
@@ -83,12 +83,12 @@ export const applicationAutoApprove = inngest.createFunction(
         .create({
           data: {
             userId: application.userId,
-            type: "RENEWAL_REMINDER",
+            type: "SYSTEM_ALERT",
             title: `Application Approved — ${application.scheme.name}`,
             message:
               `Your application for the ${application.scheme.name} scheme has been automatically approved. ` +
               `You are now enrolled and may proceed with your course.`,
-            link: `/courses/${application.courseId}`,
+            link: application.course?.slug ? `/courses/${application.course.slug}` : "/courses",
           },
         })
         .catch(() => undefined),
@@ -103,7 +103,7 @@ export const applicationAutoApprove = inngest.createFunction(
       await db.notification.createMany({
         data: officers.map((o) => ({
           userId: o.id,
-          type: "RENEWAL_REMINDER",
+          type: "SYSTEM_ALERT",
           title: `Auto-approved Application — ${application.scheme.name}`,
           message:
             `${application.user.firstName} ${application.user.lastName}'s application for ` +

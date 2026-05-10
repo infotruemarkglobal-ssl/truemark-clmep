@@ -99,7 +99,7 @@ export const appealSlaMonitor = inngest.createFunction(
               `Appeal ${appeal.reference} (${appeal.type}) has been unresolved for ` +
               `${daysSince} days, exceeding the ${APPEAL_SLA_DAYS}-day SLA. ` +
               `Immediate review required (ISO 17024 Cl.7.9).`,
-            link: `/manage/appeals/${appeal.id}`,
+            link: `/appeals`,
           })),
           skipDuplicates: true,
         });

@@ -249,7 +249,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await db.notification.create({
       data: {
         userId: session.user.id,
-        type: "EXAM_RESULT",
+        type: "SYSTEM_ALERT",
         title: passed ? "Exam passed — congratulations!" : "Exam result available",
         message: passed
           ? `You scored ${percentageScore}% on "${examPaper.title}" and passed. Your result is now under review.`
@@ -261,7 +261,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await db.notification.create({
       data: {
         userId: session.user.id,
-        type: "EXAM_SUBMITTED",
+        type: "SYSTEM_ALERT",
         title: "Exam submitted — awaiting grading",
         message: `Your submission for "${examPaper.title}" is complete. Results will be available once manual grading is finished.`,
         link: "/exams",

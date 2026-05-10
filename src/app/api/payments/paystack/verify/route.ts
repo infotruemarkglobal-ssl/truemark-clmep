@@ -103,6 +103,7 @@ export async function GET(req: NextRequest) {
   });
 
   // Create or reset enrolment
+  let courseSlug: string | null = null;
   if (purchase.userId && purchase.courseId) {
     await db.enrolment.upsert({
       where: { userId_courseId: { userId: purchase.userId, courseId: purchase.courseId } },
@@ -118,9 +119,11 @@ export async function GET(req: NextRequest) {
     });
 
     // Send enrolment notification after payment
-    const enrolledCourse = purchase.courseId
-      ? await db.course.findFirst({ where: { id: purchase.courseId }, select: { title: true, slug: true } })
-      : null;
+    const enrolledCourse = await db.course.findFirst({
+      where: { id: purchase.courseId },
+      select: { title: true, slug: true },
+    });
+    courseSlug = enrolledCourse?.slug ?? null;
     await db.notification.create({
       data: {
         userId: purchase.userId,
@@ -134,9 +137,5 @@ export async function GET(req: NextRequest) {
     }).catch(() => {});
   }
 
-  const course = purchase.courseId
-    ? await db.course.findFirst({ where: { id: purchase.courseId }, select: { slug: true } })
-    : null;
-
-  return NextResponse.json({ ok: true, status: "success", courseSlug: course?.slug ?? null });
+  return NextResponse.json({ ok: true, status: "success", courseSlug });
 }

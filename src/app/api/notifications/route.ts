@@ -42,6 +42,8 @@ export async function PATCH(req: NextRequest) {
   await auditLog({
     userId: session.user.id,
     action: "NOTIFICATIONS_READ",
+    entityType: "Notification",
+    entityId: session.user.id,
     // Intentionally excludes notification content — messages may contain
     // certificate numbers, exam results, or other candidate-sensitive data.
     metadata: { count: result.count },
