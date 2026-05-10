@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { USER_ROLES } from "@/lib/constants";
-import { uploadFile, deleteFile } from "@/lib/storage";
+import { uploadFile, deleteFile, getFileUrl } from "@/lib/storage";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg"];
@@ -74,5 +74,7 @@ export async function POST(req: NextRequest) {
     metadata: { storageKey: key },
   });
 
-  return NextResponse.json({ ok: true });
+  // Resolve the storage key to a serving URL so the client can display it immediately.
+  const signatureUrl = await getFileUrl(key);
+  return NextResponse.json({ ok: true, signatureUrl });
 }

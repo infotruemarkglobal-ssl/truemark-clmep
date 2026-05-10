@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { getFileUrl } from "@/lib/storage";
 import { Shield, Globe, Bell, Database, Mail, Key, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -196,7 +197,7 @@ export default async function SystemSettings() {
       {/* Certificate signature settings */}
       <CertificateSettings
         initialDirectorName={directorName?.value ?? null}
-        initialDirectorSigUrl={directorSig?.value || null}
+        initialDirectorSigUrl={directorSig?.value ? await getFileUrl(directorSig.value) : null}
       />
 
       {/* Production readiness checklist */}

@@ -13,10 +13,16 @@ async function fetchToBase64(src: string | null | undefined): Promise<string | n
   try {
     let url: string;
     if (src.startsWith("http://") || src.startsWith("https://")) {
+      // Already an absolute URL (pre-signed S3, public CDN, etc.)
       url = src;
-    } else {
+    } else if (src.startsWith("/")) {
+      // Absolute path — prefix with app origin (e.g. /truemark-logo.png)
       const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
-      url = base.replace(/\/$/, "") + (src.startsWith("/") ? src : `/${src}`);
+      url = base.replace(/\/$/, "") + src;
+    } else {
+      // Storage key (e.g. "signatures/director-sig.png") — resolve through storage layer
+      const { getFileUrl } = await import("@/lib/storage");
+      url = await getFileUrl(src);
     }
 
     const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
@@ -113,20 +119,12 @@ export async function GET(
 
   const {
     renderToBuffer, Document, Page, View, Text, StyleSheet, Image,
-    Svg, Polygon, Rect: SvgRect,
+    Svg, Polygon,
   } = await import("@react-pdf/renderer");
 
   // A4 landscape = 841 × 595 pts
-  // Corner block proportional to SVG (140/800 × 841 ≈ 147, 140/580 × 595 ≈ 144)
   const CW = 147;  // corner block width
   const CH = 144;  // corner block height
-
-  // Polygon fade points for top-left corner (scaled from SVG 800×580 → 841×595)
-  // SVG poly1 TL: (140,0),(200,0),(0,200),(0,140) → scaled
-  // SVG poly2 TL: (200,0),(240,0),(0,240),(0,200) → scaled
-  const SX = 841 / 800;
-  const SY = 595 / 580;
-  const p = (x: number, y: number) => `${Math.round(x * SX)},${Math.round(y * SY)}`;
 
   const styles = StyleSheet.create({
     page: {
@@ -172,8 +170,8 @@ export async function GET(
       alignItems: "center",
       justifyContent: "space-between",
     },
-    logoImage: { width: 200, height: 200, objectFit: "contain" },
-    logoFallback: { width: 200, height: 200, borderRadius: 100, backgroundColor: G },
+    logoImage: { width: 200, height: 66, objectFit: "contain" },
+    logoFallback: { width: 66, height: 66, borderRadius: 33, backgroundColor: G },
     accredBlock: { alignItems: "flex-end" },
     accredLabel: { fontSize: 8, color: GREY_MID, textAlign: "right", letterSpacing: 0.5 },
     accredStandard: { fontSize: 9, fontFamily: "Helvetica-Bold", color: G_DARK, textAlign: "right", marginTop: 2, letterSpacing: 0.5 },
@@ -221,11 +219,11 @@ export async function GET(
     statusPill: { backgroundColor: G_PILL_BG, borderRadius: 8, paddingVertical: 2, paddingHorizontal: 8 },
     statusPillText: { fontSize: 9, fontFamily: "Helvetica-Bold", color: G, letterSpacing: 1 },
 
-    // ── Signature row — both centered on page ────────────────────────────────
+    // ── Signature row — Claire left, Pam right ────────────────────────────────
     sigFooterRow: {
       flexDirection: "row",
       alignItems: "flex-end",
-      justifyContent: "center",
+      justifyContent: "space-between",
     },
     signatureBlock: { alignItems: "center", width: 140 },
     signatureImage: { width: 110, height: 36, objectFit: "contain", marginBottom: 2 },
@@ -237,7 +235,7 @@ export async function GET(
     // right=(147-64)/2=41.5→42, bottom=(144-77)/2=33.5→34 (77=64img+3gap+10label)
     qrAbsolute: { position: "absolute", bottom: 34, right: 42, alignItems: "center", width: 64 },
     qrImage: { width: 64, height: 64 },
-    qrLabel: { fontSize: 7, color: GREY_LABEL, marginTop: 3, textAlign: "center" },
+    qrLabel: { fontSize: 7, color: "#c8e6de", marginTop: 3, textAlign: "center" },
 
     // Watermark
     watermark: {
@@ -267,52 +265,20 @@ export async function GET(
         <View style={styles.cornerBL} />
         <View style={styles.cornerBR} />
 
-        {/* ── Fix #1: SVG polygon fades on each corner ────────────────────── */}
+        {/* ── SVG corner fades — layered triangles per corner ─────────────── */}
         <Svg width={841} height={595} style={styles.svgOverlay}>
-          {/* Top-left fades */}
-          <Polygon
-            points={`${p(140,0)} ${p(200,0)} ${p(0,200)} ${p(0,140)}`}
-            fill={G_MID}
-            opacity={0.5}
-          />
-          <Polygon
-            points={`${p(200,0)} ${p(240,0)} ${p(0,240)} ${p(0,200)}`}
-            fill={G}
-            opacity={0.25}
-          />
-          {/* Top-right fades */}
-          <Polygon
-            points={`${p(660,0)} ${p(600,0)} ${p(800,200)} ${p(800,140)}`}
-            fill={G_MID}
-            opacity={0.5}
-          />
-          <Polygon
-            points={`${p(600,0)} ${p(560,0)} ${p(800,240)} ${p(800,200)}`}
-            fill={G}
-            opacity={0.25}
-          />
-          {/* Bottom-left fades */}
-          <Polygon
-            points={`${p(0,440)} ${p(0,380)} ${p(200,580)} ${p(140,580)}`}
-            fill={G_MID}
-            opacity={0.5}
-          />
-          <Polygon
-            points={`${p(0,380)} ${p(0,340)} ${p(240,580)} ${p(200,580)}`}
-            fill={G}
-            opacity={0.25}
-          />
-          {/* Bottom-right fades */}
-          <Polygon
-            points={`${p(800,440)} ${p(800,380)} ${p(600,580)} ${p(660,580)}`}
-            fill={G_MID}
-            opacity={0.5}
-          />
-          <Polygon
-            points={`${p(800,380)} ${p(800,340)} ${p(560,580)} ${p(600,580)}`}
-            fill={G}
-            opacity={0.25}
-          />
+          {/* Top-left */}
+          <Polygon points="0,0 330,0 0,270" fill={G_MID} opacity={0.14} />
+          <Polygon points="0,0 210,0 0,170" fill={G_MID} opacity={0.16} />
+          {/* Top-right */}
+          <Polygon points="841,0 511,0 841,270" fill={G_MID} opacity={0.14} />
+          <Polygon points="841,0 631,0 841,170" fill={G_MID} opacity={0.16} />
+          {/* Bottom-left */}
+          <Polygon points="0,595 330,595 0,325" fill={G_MID} opacity={0.14} />
+          <Polygon points="0,595 210,595 0,425" fill={G_MID} opacity={0.16} />
+          {/* Bottom-right */}
+          <Polygon points="841,595 511,595 841,325" fill={G_MID} opacity={0.14} />
+          <Polygon points="841,595 631,595 841,425" fill={G_MID} opacity={0.16} />
         </Svg>
 
         {/* ── Double border ────────────────────────────────────────────────── */}
@@ -416,10 +382,7 @@ export async function GET(
               <Text style={styles.signerTitle}>Certification Officer</Text>
             </View>
 
-            {/* Gap between sig 1 and sig 2 */}
-            <View style={{ width: 20 }} />
-
-            {/* Signature 2 — Director of Certification (center) */}
+            {/* Signature 2 — Director of Certification (right) */}
             <View style={styles.signatureBlock}>
               {directorSigSrc ? (
                 <Image src={directorSigSrc} style={styles.signatureImage} />
