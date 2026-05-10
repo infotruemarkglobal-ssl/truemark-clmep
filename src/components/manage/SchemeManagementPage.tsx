@@ -106,7 +106,7 @@ function EditModal({
           requiredPriorCerts: toJsonList(requiredPriorCerts),
           requiresDocuments, requiresEmployerLetter, requiresIdDocument,
           eligibilityNotes: eligibilityNotes || null,
-          autoApproveMinutes: Number(autoApproveMinutes) || 60,
+          autoApproveMinutes: Number(autoApproveMinutes) || 2880,
         };
 
         const res = await fetch(`/api/manage/schemes/${scheme.id}`, {

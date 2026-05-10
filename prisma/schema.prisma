@@ -288,7 +288,7 @@ model CertificationScheme {
   requiresEmployerLetter  Boolean  @default(false)
   requiresIdDocument      Boolean  @default(false)
   eligibilityNotes        String?
-  autoApproveMinutes      Int      @default(60)
+  autoApproveMinutes      Int      @default(2880)
 
   courses      Course[]
   examPapers   ExamPaper[]
