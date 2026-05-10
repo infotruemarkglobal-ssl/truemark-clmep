@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import ProctoringReportPanel from "@/components/manage/ProctoringReportPanel";
 
 type PendingAttempt = {
   id: string;
@@ -312,6 +313,9 @@ export default function CertificationDecisionsPage({
                   )}
                 </div>
               </div>
+
+              {/* Proctoring report */}
+              <ProctoringReportPanel attemptId={selected.id} />
 
               {/* Decision buttons */}
               <div>

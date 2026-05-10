@@ -160,8 +160,8 @@ export async function GET(
     // ── Content (clear of corner blocks) ─────────────────────────────────────
     contentWrap: {
       flex: 1,
-      paddingTop: 22,
-      paddingBottom: 20,
+      paddingTop: 12,
+      paddingBottom: 14,
       paddingHorizontal: 160,
       flexDirection: "column",
     },
@@ -178,25 +178,25 @@ export async function GET(
     accredLabel: { fontSize: 8, color: GREY_MID, textAlign: "right", letterSpacing: 0.5 },
     accredStandard: { fontSize: 9, fontFamily: "Helvetica-Bold", color: G_DARK, textAlign: "right", marginTop: 2, letterSpacing: 0.5 },
 
-    headerDivider: { height: 0.8, backgroundColor: G, opacity: 0.5, marginTop: 8, marginBottom: 6 },
+    headerDivider: { height: 0.8, backgroundColor: G, opacity: 0.5, marginTop: 4, marginBottom: 4 },
 
     // ── Body (compact, not stretched) ─────────────────────────────────────────
-    body: { alignItems: "center", paddingTop: 14, paddingBottom: 0 },
-    certOfLabel: { fontSize: 11, color: GREY_LABEL, letterSpacing: 4, textTransform: "uppercase", marginBottom: 6 },
-    certCode: { fontSize: 46, fontFamily: "Helvetica-Bold", color: G, letterSpacing: 2, marginBottom: 4 },
-    certSchemeName: { fontSize: 13, color: GREY_MID, letterSpacing: 1, marginBottom: 12 },
+    body: { alignItems: "center", paddingTop: 4, paddingBottom: 0 },
+    certOfLabel: { fontSize: 11, color: GREY_LABEL, letterSpacing: 4, textTransform: "uppercase", marginBottom: 4 },
+    certCode: { fontSize: 42, fontFamily: "Helvetica-Bold", color: G, letterSpacing: 2, marginBottom: 3 },
+    certSchemeName: { fontSize: 13, color: GREY_MID, letterSpacing: 1, marginBottom: 6 },
 
-    dividerRow: { flexDirection: "row", alignItems: "center", width: 240, marginBottom: 10 },
+    dividerRow: { flexDirection: "row", alignItems: "center", width: 240, marginBottom: 6 },
     dividerLine: { flex: 1, height: 1.5, backgroundColor: G },
     dividerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: G, marginHorizontal: 8 },
 
-    awardedLabel: { fontSize: 9.5, color: GREY_LABEL, letterSpacing: 3, textTransform: "uppercase", marginBottom: 8 },
-    holderName: { fontSize: 38, fontFamily: "Helvetica-BoldOblique", color: G_DARK, marginBottom: 6 },
-    holderUnderline: { width: 280, height: 0.5, backgroundColor: G, opacity: 0.4, marginBottom: 12 },
+    awardedLabel: { fontSize: 9.5, color: GREY_LABEL, letterSpacing: 3, textTransform: "uppercase", marginBottom: 4 },
+    holderName: { fontSize: 34, fontFamily: "Helvetica-BoldOblique", color: G_DARK, marginBottom: 4 },
+    holderUnderline: { width: 280, height: 0.5, backgroundColor: G, opacity: 0.4, marginBottom: 6 },
 
-    achievementText: { fontSize: 10.5, color: GREY_MID, textAlign: "center", maxWidth: 440, lineHeight: 1.7, marginBottom: 10 },
+    achievementText: { fontSize: 10, color: GREY_MID, textAlign: "center", maxWidth: 440, lineHeight: 1.6, marginBottom: 6 },
 
-    metaRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+    metaRow: { flexDirection: "row", alignItems: "center", marginBottom: 2 },
     metaBlock: { alignItems: "center", paddingHorizontal: 20 },
     metaVertDivider: { width: 0.8, height: 24, backgroundColor: GREY_LINE },
     metaLabel: { fontSize: 8, color: GREY_LABEL, textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 },
@@ -209,9 +209,9 @@ export async function GET(
       justifyContent: "space-between",
       borderTopWidth: 0.7,
       borderTopColor: GREY_LINE,
-      paddingTop: 8,
-      marginTop: 8,
-      marginBottom: 8,
+      paddingTop: 6,
+      marginTop: 6,
+      marginBottom: 6,
     },
     footerInfoBlock: { alignItems: "center", flex: 1 },
     footerInfoLabel: { fontSize: 8, color: GREY_LABEL, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 },
@@ -234,7 +234,8 @@ export async function GET(
     signerTitle: { fontSize: 8, color: GREY_LABEL, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginTop: 1 },
 
     // QR centred within the bottom-right corner block (147 × 144 pt)
-    qrAbsolute: { position: "absolute", bottom: 34, right: 42, alignItems: "center" },
+    // right=(147-64)/2=41.5→42, bottom=(144-77)/2=33.5→34 (77=64img+3gap+10label)
+    qrAbsolute: { position: "absolute", bottom: 34, right: 42, alignItems: "center", width: 64 },
     qrImage: { width: 64, height: 64 },
     qrLabel: { fontSize: 7, color: GREY_LABEL, marginTop: 3, textAlign: "center" },
 
@@ -402,9 +403,6 @@ export async function GET(
               <Text style={styles.certNumberText}>{cert.certificateNumber}</Text>
             </View>
           </View>
-
-          {/* Flex spacer — pushes signatures to bottom of contentWrap */}
-          <View style={{ flex: 1 }} />
 
           {/* Signatures — centred */}
           <View style={styles.sigFooterRow}>
