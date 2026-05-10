@@ -219,8 +219,12 @@ export async function GET(
     statusPill: { backgroundColor: G_PILL_BG, borderRadius: 8, paddingVertical: 2, paddingHorizontal: 8 },
     statusPillText: { fontSize: 9, fontFamily: "Helvetica-Bold", color: G, letterSpacing: 1 },
 
-    // ── Signature row — Claire left, Pam right ────────────────────────────────
+    // ── Signature row — absolutely positioned to align with QR code ──────────
     sigFooterRow: {
+      position: "absolute",
+      bottom: 34,
+      left: 160,
+      right: 160,
       flexDirection: "row",
       alignItems: "flex-end",
       justifyContent: "space-between",
@@ -370,27 +374,28 @@ export async function GET(
             </View>
           </View>
 
-          {/* Signatures — centred */}
-          <View style={styles.sigFooterRow}>
-            {/* Signature 1 — Certification Officer (left) */}
-            <View style={styles.signatureBlock}>
-              {officerSigSrc ? (
-                <Image src={officerSigSrc} style={styles.signatureImage} />
-              ) : null}
-              <View style={styles.signatureLine} />
-              <Text style={styles.signerName}>{officerName}</Text>
-              <Text style={styles.signerTitle}>Certification Officer</Text>
-            </View>
+        </View>
 
-            {/* Signature 2 — Director of Certification (right) */}
-            <View style={styles.signatureBlock}>
-              {directorSigSrc ? (
-                <Image src={directorSigSrc} style={styles.signatureImage} />
-              ) : null}
-              <View style={styles.signatureLine} />
-              <Text style={styles.signerName}>{directorName}</Text>
-              <Text style={styles.signerTitle}>Director of Certification</Text>
-            </View>
+        {/* Signatures — absolutely positioned to align with QR code */}
+        <View style={styles.sigFooterRow}>
+          {/* Signature 1 — Certification Officer (left) */}
+          <View style={styles.signatureBlock}>
+            {officerSigSrc ? (
+              <Image src={officerSigSrc} style={styles.signatureImage} />
+            ) : null}
+            <View style={styles.signatureLine} />
+            <Text style={styles.signerName}>{officerName}</Text>
+            <Text style={styles.signerTitle}>Certification Officer</Text>
+          </View>
+
+          {/* Signature 2 — Director of Certification (right) */}
+          <View style={styles.signatureBlock}>
+            {directorSigSrc ? (
+              <Image src={directorSigSrc} style={styles.signatureImage} />
+            ) : null}
+            <View style={styles.signatureLine} />
+            <Text style={styles.signerName}>{directorName}</Text>
+            <Text style={styles.signerTitle}>Director of Certification</Text>
           </View>
         </View>
 

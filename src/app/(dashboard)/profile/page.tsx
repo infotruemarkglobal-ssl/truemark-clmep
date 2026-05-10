@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getFileUrl } from "@/lib/storage";
 import ProfilePage from "@/components/settings/ProfilePage";
 
 export const metadata: Metadata = { title: "My Profile" };
@@ -38,10 +39,13 @@ export default async function ProfileRoute() {
 
   if (!user) redirect("/login");
 
+  const signatureUrl = user.signatureUrl ? await getFileUrl(user.signatureUrl) : null;
+
   return (
     <ProfilePage
       user={{
         ...user,
+        signatureUrl,
         lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
         createdAt: user.createdAt.toISOString(),
         profile: user.profile ?? null,
