@@ -77,7 +77,7 @@ export default async function CandidateDashboard() {
   const activeCerts = certificates.filter((c) => c.status === "ACTIVE");
   const expiringSoon = certificates.filter((c) => {
     if (!c.expiresAt) return false;
-    const daysLeft = Math.floor((c.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    const daysLeft = Math.floor((new Date(c.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     return daysLeft <= 90 && daysLeft > 0 && c.status === "ACTIVE";
   });
 
@@ -207,7 +207,7 @@ export default async function CandidateDashboard() {
                     </p>
                     <p className="text-xs text-slate-500">
                       {cert.certificateNumber}
-                      {cert.expiresAt && ` · Expires ${format(cert.expiresAt, "MMM yyyy")}`}
+                      {cert.expiresAt && ` · Expires ${format(new Date(cert.expiresAt), "MMM yyyy")}`}
                     </p>
                   </div>
                   <Badge
@@ -262,7 +262,7 @@ export default async function CandidateDashboard() {
                       {attempt.examPaper.title}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {formatDistanceToNow(attempt.createdAt, { addSuffix: true })}
+                      {formatDistanceToNow(new Date(attempt.createdAt), { addSuffix: true })}
                       {attempt.percentageScore != null && ` · ${attempt.percentageScore}%`}
                     </p>
                   </div>
