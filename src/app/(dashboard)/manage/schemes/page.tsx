@@ -35,6 +35,9 @@ export default async function Page() {
       requiresIdDocument: true,
       eligibilityNotes: true,
       autoApproveMinutes: true,
+      renewalRequiresExam: true,
+      renewalRequiresCPD: true,
+      renewalExamWindowMonths: true,
     },
   });
 

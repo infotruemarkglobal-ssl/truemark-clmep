@@ -14,13 +14,16 @@ type RenewalData = {
     scheme: { id: string; name: string; code: string; validityMonths: number; cpdHoursRequired: number };
   };
   cpd: { required: number; logged: number; met: boolean; measuredSince: string };
-  exam?: { required: boolean; met: boolean; windowMonths: number | null };
   renewal: {
     windowOpensAt: string | null;
     inRenewalWindow: boolean;
     canRequest: boolean;
     canIssue: boolean;
     lastRenewal: string | null;
+    requiresExam: boolean;
+    recentExamPassed: boolean;
+    requiresCPD: boolean;
+    examWindowMonths: number;
   };
 };
 
@@ -139,7 +142,7 @@ export default function CertificateRenewPage() {
       </div>
 
       {/* CPD progress */}
-      {cpd.required > 0 && (
+      {renewal.requiresCPD && cpd.required > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">CPD Requirement</h2>
           <div className="flex items-end justify-between">
@@ -172,26 +175,26 @@ export default function CertificateRenewPage() {
         </div>
       )}
 
-      {/* Exam re-sit requirement not met — blocks renewal */}
-      {data.exam?.required && !data.exam?.met && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-5 space-y-3">
-          <p className="text-sm font-semibold text-red-800">New examination required for renewal (ISO 17024 Cl.6.8)</p>
-          <p className="text-sm text-red-700">
-            This certification scheme requires a new passed examination for renewal. You must pass an examination
-            for <strong>{cert.scheme.name}</strong> within the last{" "}
-            <strong>{data.exam.windowMonths} months</strong>.
+      {/* Exam re-sit required but not recently passed */}
+      {renewal.requiresExam && !renewal.recentExamPassed && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-3">
+          <p className="text-sm font-semibold text-amber-800">New examination required for renewal (ISO 17024 Cl.6.8)</p>
+          <p className="text-sm text-amber-700">
+            A new examination is required to renew this certification. You must pass the{" "}
+            <strong>{cert.scheme.name}</strong> exam within{" "}
+            <strong>{renewal.examWindowMonths} months</strong> before your renewal date.
           </p>
           <a
             href="/exams"
-            className="inline-flex items-center gap-1 text-sm font-semibold text-red-800 underline hover:text-red-900 transition-colors"
+            className="inline-flex items-center gap-1 text-sm font-semibold text-amber-800 underline hover:text-amber-900 transition-colors"
           >
-            View available exams →
+            Take Exam →
           </a>
         </div>
       )}
 
       {/* CPD requirement not met — blocks renewal request */}
-      {!renewal.canRequest && renewal.inRenewalWindow && cpd.required > 0 && !cpd.met && (
+      {!renewal.canRequest && renewal.inRenewalWindow && renewal.requiresCPD && cpd.required > 0 && !cpd.met && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 space-y-3">
           <p className="text-sm font-semibold text-amber-800">CPD hours required before you can renew</p>
           <p className="text-sm text-amber-700">
@@ -248,7 +251,7 @@ export default function CertificateRenewPage() {
             )}
           </div>
 
-          {renewal.canIssue && !cpd.met && cpd.required > 0 && (
+          {renewal.canIssue && renewal.requiresCPD && !cpd.met && cpd.required > 0 && (
             <p className="text-xs text-amber-600">
               CPD requirement not fully met. As Certification Officer you may still issue the renewal — ensure you have reviewed and approved the candidate's CPD record before proceeding.
             </p>

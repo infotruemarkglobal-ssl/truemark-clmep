@@ -36,6 +36,9 @@ type Scheme = {
   requiresIdDocument: boolean;
   eligibilityNotes: string | null;
   autoApproveMinutes: number;
+  renewalRequiresExam: boolean;
+  renewalRequiresCPD: boolean;
+  renewalExamWindowMonths: number;
 };
 
 // Helpers to convert between JSON array strings and comma-separated display text
@@ -87,7 +90,12 @@ function EditModal({
   const [eligibilityNotes, setEligibilityNotes] = useState(scheme.eligibilityNotes ?? "");
   const [autoApproveMinutes, setAutoApproveMinutes] = useState(String(scheme.autoApproveMinutes));
 
-  const [activeTab, setActiveTab] = useState<"basic" | "eligibility">("basic");
+  // Renewal requirement fields
+  const [renewalRequiresExam, setRenewalRequiresExam] = useState(scheme.renewalRequiresExam);
+  const [renewalRequiresCPD, setRenewalRequiresCPD] = useState(scheme.renewalRequiresCPD);
+  const [renewalExamWindowMonths, setRenewalExamWindowMonths] = useState(String(scheme.renewalExamWindowMonths));
+
+  const [activeTab, setActiveTab] = useState<"basic" | "eligibility" | "renewal">("basic");
   const [isPending, startTransition] = useTransition();
 
   function handleSave() {
@@ -107,6 +115,10 @@ function EditModal({
           requiresDocuments, requiresEmployerLetter, requiresIdDocument,
           eligibilityNotes: eligibilityNotes || null,
           autoApproveMinutes: Number(autoApproveMinutes) || 2880,
+          // Renewal
+          renewalRequiresExam,
+          renewalRequiresCPD,
+          renewalExamWindowMonths: Number(renewalExamWindowMonths) || 6,
         };
 
         const res = await fetch(`/api/manage/schemes/${scheme.id}`, {
@@ -147,7 +159,7 @@ function EditModal({
 
         {/* Tabs */}
         <div className="flex gap-1 px-6 pt-4 shrink-0">
-          {(["basic", "eligibility"] as const).map((tab) => (
+          {(["basic", "eligibility", "renewal"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -199,6 +211,50 @@ function EditModal({
                 checked={isActive}
                 onChange={setIsActive}
               />
+            </>
+          )}
+
+          {activeTab === "renewal" && (
+            <>
+              <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-800">
+                Configure what candidates must satisfy to renew their certificate (ISO 17024 Cl.6.8).
+                Defaults: CPD required, no exam re-sit required.
+              </div>
+
+              <Toggle
+                label="Require CPD hours for renewal"
+                description="Candidates must have logged the required CPD hours since their last issuance"
+                checked={renewalRequiresCPD}
+                onChange={setRenewalRequiresCPD}
+              />
+
+              <Toggle
+                label="Require new examination for renewal"
+                description="Candidates must pass an exam for this scheme within the window below"
+                checked={renewalRequiresExam}
+                onChange={setRenewalRequiresExam}
+              />
+
+              {renewalRequiresExam && (
+                <div className="pl-4 border-l-2 border-primary/20">
+                  <label className={labelClass}>Exam must be passed within (months before renewal)</label>
+                  <input
+                    type="number" min={1} max={120}
+                    className={inputClass}
+                    value={renewalExamWindowMonths}
+                    onChange={(e) => setRenewalExamWindowMonths(e.target.value)}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    Candidate must have a passed attempt within this many months. Default: 6.
+                  </p>
+                </div>
+              )}
+
+              {!renewalRequiresExam && !renewalRequiresCPD && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600">
+                  Renewal will be granted based on time alone — no CPD or examination required.
+                </div>
+              )}
             </>
           )}
 

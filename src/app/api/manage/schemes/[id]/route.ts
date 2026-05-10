@@ -35,6 +35,8 @@ export async function PATCH(
     "requiredQualifications", "requiredPriorCerts",
     "requiresDocuments", "requiresEmployerLetter", "requiresIdDocument",
     "eligibilityNotes", "autoApproveMinutes",
+    // Renewal (ISO 17024 Cl.6.8)
+    "renewalRequiresExam", "renewalRequiresCPD", "renewalExamWindowMonths",
   ] as const;
 
   type AllowedField = (typeof ALLOWED_FIELDS)[number];
@@ -48,7 +50,7 @@ export async function PATCH(
     return NextResponse.json({ error: "No updatable fields provided" }, { status: 400 });
 
   // Coerce numeric fields that arrive as strings from form inputs.
-  for (const numKey of ["minAgeYears", "minExperienceYears", "autoApproveMinutes", "validityMonths", "passMark", "maxAttempts", "cpdHoursRequired"] as const) {
+  for (const numKey of ["minAgeYears", "minExperienceYears", "autoApproveMinutes", "validityMonths", "passMark", "maxAttempts", "cpdHoursRequired", "renewalExamWindowMonths"] as const) {
     if (numKey in updateData && updateData[numKey] !== null && updateData[numKey] !== undefined) {
       const v = Number(updateData[numKey]);
       updateData[numKey] = isNaN(v) ? null : v;

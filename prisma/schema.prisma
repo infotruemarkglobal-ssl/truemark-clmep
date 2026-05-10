@@ -290,6 +290,11 @@ model CertificationScheme {
   eligibilityNotes        String?
   autoApproveMinutes      Int      @default(2880)
 
+  // Renewal requirements (ISO 17024 Cl.6.8)
+  renewalRequiresExam     Boolean  @default(false)
+  renewalRequiresCPD      Boolean  @default(true)
+  renewalExamWindowMonths Int      @default(6)
+
   courses      Course[]
   examPapers   ExamPaper[]
   certificates Certificate[]
