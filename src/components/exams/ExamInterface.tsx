@@ -65,8 +65,14 @@ export default function ExamInterface({
   } = examState;
 
   const totalSeconds = timeLimitMins * 60;
-  const elapsed = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
-  const [secondsLeft, setSecondsLeft] = useState(Math.max(0, totalSeconds - elapsed));
+  // SSR-safe initialiser: start at totalSeconds, then correct on the client after hydration.
+  // Using Date.now() here would produce different values on server vs client → React #418.
+  const [secondsLeft, setSecondsLeft] = useState(totalSeconds);
+  useEffect(() => {
+    const elapsed = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
+    setSecondsLeft(Math.max(0, totalSeconds - elapsed));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
@@ -592,7 +598,7 @@ export default function ExamInterface({
           Announced only at 30/15/5/1-minute marks, not every second, to avoid
           overwhelming users with constant updates (WCAG 4.1.3). */}
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {timerAnnouncement}
+        {timerAnnouncement || null}
       </div>
 
       {/* ── Top bar ── */}
