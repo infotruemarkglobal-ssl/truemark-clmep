@@ -172,17 +172,16 @@ export async function GET(
       alignItems: "center",
       justifyContent: "space-between",
     },
-    // Fix #2: Logo alone, larger, no org text
-    logoImage: { width: 52, height: 52, objectFit: "contain" },
-    logoFallback: { width: 52, height: 52, borderRadius: 26, backgroundColor: G },
+    logoImage: { width: 80, height: 80, objectFit: "contain" },
+    logoFallback: { width: 80, height: 80, borderRadius: 40, backgroundColor: G },
     accredBlock: { alignItems: "flex-end" },
     accredLabel: { fontSize: 8, color: GREY_MID, textAlign: "right", letterSpacing: 0.5 },
     accredStandard: { fontSize: 9, fontFamily: "Helvetica-Bold", color: G_DARK, textAlign: "right", marginTop: 2, letterSpacing: 0.5 },
 
-    headerDivider: { height: 0.8, backgroundColor: G, opacity: 0.5, marginTop: 8, marginBottom: 12 },
+    headerDivider: { height: 0.8, backgroundColor: G, opacity: 0.5, marginTop: 8, marginBottom: 6 },
 
-    // ── Body (centred) ────────────────────────────────────────────────────────
-    body: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 4 },
+    // ── Body (compact, not stretched) ─────────────────────────────────────────
+    body: { alignItems: "center", paddingTop: 14, paddingBottom: 0 },
     certOfLabel: { fontSize: 11, color: GREY_LABEL, letterSpacing: 4, textTransform: "uppercase", marginBottom: 6 },
     certCode: { fontSize: 46, fontFamily: "Helvetica-Bold", color: G, letterSpacing: 2, marginBottom: 4 },
     certSchemeName: { fontSize: 13, color: GREY_MID, letterSpacing: 1, marginBottom: 12 },
@@ -222,10 +221,11 @@ export async function GET(
     statusPill: { backgroundColor: G_PILL_BG, borderRadius: 8, paddingVertical: 2, paddingHorizontal: 8 },
     statusPillText: { fontSize: 9, fontFamily: "Helvetica-Bold", color: G, letterSpacing: 1 },
 
-    // ── Signature row — Fix #3: Claire left-third, Pam Jane center ────────────
+    // ── Signature row — both centered on page ────────────────────────────────
     sigFooterRow: {
       flexDirection: "row",
       alignItems: "flex-end",
+      justifyContent: "center",
     },
     signatureBlock: { alignItems: "center", width: 140 },
     signatureImage: { width: 110, height: 36, objectFit: "contain", marginBottom: 2 },
@@ -233,8 +233,8 @@ export async function GET(
     signerName: { fontSize: 9, fontFamily: "Helvetica-Bold", color: DARK, marginTop: 4, textAlign: "center" },
     signerTitle: { fontSize: 8, color: GREY_LABEL, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginTop: 1 },
 
-    // Fix #4: QR absolutely positioned flush against the right corner block
-    qrAbsolute: { position: "absolute", bottom: 22, right: 6, alignItems: "center" },
+    // QR centred within the bottom-right corner block (147 × 144 pt)
+    qrAbsolute: { position: "absolute", bottom: 34, right: 42, alignItems: "center" },
     qrImage: { width: 64, height: 64 },
     qrLabel: { fontSize: 7, color: GREY_LABEL, marginTop: 3, textAlign: "center" },
 
@@ -403,7 +403,10 @@ export async function GET(
             </View>
           </View>
 
-          {/* Fix #3: Signatures — Claire left, Director center, gap right for QR */}
+          {/* Flex spacer — pushes signatures to bottom of contentWrap */}
+          <View style={{ flex: 1 }} />
+
+          {/* Signatures — centred */}
           <View style={styles.sigFooterRow}>
             {/* Signature 1 — Certification Officer (left) */}
             <View style={styles.signatureBlock}>
