@@ -107,41 +107,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Atomic decision creation (CRITICAL-2: TOCTOU fix) ──────────────────────
-  // Rely on the unique constraint on CertificationDecision.attemptId rather than
-  // a read-then-write interactive transaction, which is incompatible with
-  // PgBouncer in transaction-pooling mode (Supabase production).
-  // A P2002 (unique constraint violation) is the same outcome as the inner
-  // findUnique returning a duplicate — same 409 response to the caller.
-  let certDecision: Awaited<ReturnType<typeof db.certificationDecision.create>>;
-  try {
-    certDecision = await db.certificationDecision.create({
-      data: {
-        attemptId,
-        certificationOfficerId: session.user.id,
-        decision,
-        justification,
-      },
-    });
-  } catch (err) {
-    // P2002 = unique constraint violation on attemptId — decision already exists
-    if ((err as { code?: string }).code === "P2002") {
-      return NextResponse.json({ error: "Decision already made for this attempt" }, { status: 409 });
-    }
-    throw err;
-  }
-
-  await auditLog({
-    userId: session.user.id,
-    action: "CERTIFICATION_DECISION",
-    entityType: "CertificationDecision",
-    entityId: certDecision.id,
-    metadata: { decision, attemptId, candidateId: attempt.userId, justification },
-  });
-
   // C3: Guard — an "approved" decision must only be issued when the candidate
-  // actually passed. Prevents a CO from manually approving a failed attempt
-  // by calling the API directly with decision:"approved".
+  // actually passed. Check BEFORE any writes so we never orphan a decision record.
   if (decision === "approved" && attempt.passed !== true) {
     return NextResponse.json(
       {
@@ -151,6 +118,40 @@ export async function POST(req: NextRequest) {
       },
       { status: 422 },
     );
+  }
+
+  // ── Idempotent decision creation ───────────────────────────────────────────
+  // If a prior request wrote the decision record but failed before issuing the
+  // certificate (network error, generation failure, etc.), allow a retry by
+  // reusing the existing record. Only treat it as truly "done" once a certificate
+  // row also exists, since that is the terminal state.
+  let certDecision: Awaited<ReturnType<typeof db.certificationDecision.create>>;
+  const existingDecision = await db.certificationDecision.findUnique({ where: { attemptId } });
+  if (existingDecision) {
+    const existingCert = await db.certificate.findUnique({ where: { decisionId: existingDecision.id } });
+    if (existingCert) {
+      return NextResponse.json({ error: "Decision already made for this attempt" }, { status: 409 });
+    }
+    // Decision exists but certificate was never issued — reuse and retry.
+    certDecision = existingDecision;
+  } else {
+    try {
+      certDecision = await db.certificationDecision.create({
+        data: { attemptId, certificationOfficerId: session.user.id, decision, justification },
+      });
+    } catch (err) {
+      if ((err as { code?: string }).code === "P2002") {
+        return NextResponse.json({ error: "Decision already made for this attempt" }, { status: 409 });
+      }
+      throw err;
+    }
+    await auditLog({
+      userId: session.user.id,
+      action: "CERTIFICATION_DECISION",
+      entityType: "CertificationDecision",
+      entityId: certDecision.id,
+      metadata: { decision, attemptId, candidateId: attempt.userId, justification },
+    });
   }
 
   if (decision !== "approved") {
@@ -185,19 +186,30 @@ export async function POST(req: NextRequest) {
   const issuedAt = new Date();
   const expiresAt = addMonths(issuedAt, scheme.validityMonths);
 
-  const { json: openBadgeJson, jwt: openBadgeJwt } = await generateOpenBadgeJwt({
-    certificateId: certDecision.id,
-    certificateNumber: certNumber,
-    candidateId: attempt.userId,
-    candidateName: `${attempt.user.firstName} ${attempt.user.lastName}`,
-    candidateEmail: attempt.user.email,
-    schemeName: scheme.name,
-    schemeCode: scheme.code,
-    issuedAt,
-    expiresAt,
-  });
-
-  const qrCodeUrl = await generateQrCode(certNumber);
+  let openBadgeJson: Awaited<ReturnType<typeof generateOpenBadgeJwt>>["json"];
+  let openBadgeJwt: string;
+  let qrCodeUrl: string;
+  try {
+    const badge = await generateOpenBadgeJwt({
+      certificateId: certDecision.id,
+      certificateNumber: certNumber,
+      candidateId: attempt.userId,
+      candidateName: `${attempt.user.firstName} ${attempt.user.lastName}`,
+      candidateEmail: attempt.user.email,
+      schemeName: scheme.name,
+      schemeCode: scheme.code,
+      issuedAt,
+      expiresAt,
+    });
+    openBadgeJson = badge.json;
+    openBadgeJwt = badge.jwt;
+    qrCodeUrl = await generateQrCode(certNumber);
+  } catch (err) {
+    console.error("[certificates/generate] badge/qr generation failed", err);
+    // Clean up the orphaned decision record so the officer can retry.
+    await db.certificationDecision.delete({ where: { id: certDecision.id } }).catch(() => {});
+    return NextResponse.json({ error: "Certificate generation failed. Please try again." }, { status: 500 });
+  }
 
   // Certificate create + audit log written sequentially with a compensating
   // delete if the follow-up writes fail. The interactive $transaction callback

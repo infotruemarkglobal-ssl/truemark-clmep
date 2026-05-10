@@ -108,7 +108,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (["mcq_single", "mcq_multi", "true_false"].includes(question.type)) {
       totalObjectiveMarks += question.marks;
       if (question.options) {
-        const opts: { id: string; text: string; isCorrect: boolean }[] = JSON.parse(question.options);
+        let opts: { id: string; text: string; isCorrect: boolean }[] = [];
+        try { opts = JSON.parse(question.options); } catch { opts = []; }
         const correctIds = opts.filter((o) => o.isCorrect).map((o) => o.id);
 
         if (question.type === "mcq_single" || question.type === "true_false") {
@@ -141,12 +142,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // If the question is later edited or archived the appeals panel can still
     // reconstruct the exact wording and mark allocation the candidate faced.
     // Options are stored WITHOUT isCorrect to avoid leaking answers into logs.
-    const optionsSnapshot = question.options
-      ? JSON.stringify(
+    let optionsSnapshot: string | null = null;
+    if (question.options) {
+      try {
+        optionsSnapshot = JSON.stringify(
           (JSON.parse(question.options) as Array<{ id: string; text: string; isCorrect: boolean }>)
-            .map(({ id, text }) => ({ id, text }))
-        )
-      : null;
+            .map(({ id, text }) => ({ id, text })),
+        );
+      } catch { optionsSnapshot = null; }
+    }
 
     responseRecords.push({
       attemptId,

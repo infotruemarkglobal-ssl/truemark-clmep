@@ -16,19 +16,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const schema = z.object({
-    status: z.enum(["ACKNOWLEDGED", "UNDER_REVIEW", "RESOLVED", "ESCALATED", "CLOSED"]),
+    status: z.enum(["ACKNOWLEDGED", "UNDER_REVIEW", "UPHELD", "REJECTED", "ESCALATED", "CLOSED"]),
     resolution: z.string().min(5).optional(),
     assignedTo: z.string().optional().nullable(),
   });
 
   const body = schema.safeParse(await req.json());
-  if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
+  if (!body.success) {
+    const msg = body.error.issues[0]?.message ?? "Invalid request";
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
 
   const appeal = await db.appeal.findUnique({ where: { id } });
   if (!appeal) return NextResponse.json({ error: "Appeal not found" }, { status: 404 });
 
   // ISO 17024 Cl.6.2.4 — appeal decisions are final once issued.
-  if (["RESOLVED", "CLOSED"].includes(appeal.status)) {
+  if (["UPHELD", "REJECTED", "CLOSED"].includes(appeal.status)) {
     return NextResponse.json(
       { error: "This appeal has already been finalised and cannot be modified" },
       { status: 409 },
@@ -38,10 +41,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // Enforce the status transition graph — prevents jumping to states out of order
   // (e.g., going straight from SUBMITTED to CLOSED without review).
   const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-    SUBMITTED:    ["ACKNOWLEDGED", "UNDER_REVIEW", "CLOSED"],
-    ACKNOWLEDGED: ["UNDER_REVIEW", "ESCALATED", "CLOSED"],
-    UNDER_REVIEW: ["RESOLVED", "ESCALATED", "CLOSED"],
-    ESCALATED:    ["UNDER_REVIEW", "RESOLVED", "CLOSED"],
+    SUBMITTED:    ["ACKNOWLEDGED", "UNDER_REVIEW", "UPHELD", "REJECTED", "CLOSED"],
+    ACKNOWLEDGED: ["UNDER_REVIEW", "ESCALATED", "UPHELD", "REJECTED", "CLOSED"],
+    UNDER_REVIEW: ["UPHELD", "REJECTED", "ESCALATED", "CLOSED"],
+    ESCALATED:    ["UNDER_REVIEW", "UPHELD", "REJECTED", "CLOSED"],
   };
   const allowed = ALLOWED_TRANSITIONS[appeal.status] ?? [];
   if (!allowed.includes(body.data.status)) {
@@ -53,29 +56,34 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     );
   }
 
-  const resolved = ["RESOLVED", "CLOSED"].includes(body.data.status);
+  const resolved = ["UPHELD", "REJECTED", "CLOSED"].includes(body.data.status);
 
-  const updated = await db.appeal.update({
-    where: { id },
-    data: {
-      status: body.data.status,
-      resolution: body.data.resolution ?? null,
-      resolvedAt: resolved ? new Date() : null,
-      assignedTo: body.data.assignedTo !== undefined ? body.data.assignedTo : appeal.assignedTo,
-    },
-  });
+  try {
+    const updated = await db.appeal.update({
+      where: { id },
+      data: {
+        status: body.data.status,
+        resolution: body.data.resolution ?? null,
+        resolvedAt: resolved ? new Date() : null,
+        assignedTo: body.data.assignedTo !== undefined ? body.data.assignedTo : appeal.assignedTo,
+      },
+    });
 
-  await auditLog({
-    userId: session.user.id,
-    action: "APPEAL_STATUS_UPDATED",
-    entityType: "Appeal",
-    entityId: id,
-    metadata: {
-      previousStatus: appeal.status,
-      newStatus: body.data.status,
-      resolution: body.data.resolution ?? null,
-    },
-  });
+    await auditLog({
+      userId: session.user.id,
+      action: "APPEAL_STATUS_UPDATED",
+      entityType: "Appeal",
+      entityId: id,
+      metadata: {
+        previousStatus: appeal.status,
+        newStatus: body.data.status,
+        resolution: body.data.resolution ?? null,
+      },
+    });
 
-  return NextResponse.json(updated);
+    return NextResponse.json(updated);
+  } catch (err) {
+    console.error("[appeals PATCH]", err);
+    return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 });
+  }
 }

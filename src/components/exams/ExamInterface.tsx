@@ -275,7 +275,9 @@ export default function ExamInterface({
           toast.error("Your exam session was terminated by the server.", { duration: 8000 });
           handleSubmitRef.current(true);
         }
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error("[heartbeat] network error", err);
+      });
     }, 30_000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -296,7 +298,7 @@ export default function ExamInterface({
             type: "fullscreen_exit",
             details: "Candidate exited fullscreen during exam",
           }),
-        }).catch(() => {});
+        }).catch((err) => console.error("[incident]", err));
       }
     }
     document.addEventListener("fullscreenchange", onFullscreenChange);
@@ -457,7 +459,7 @@ export default function ExamInterface({
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ proctoringSessionId: examState.proctoringSessionId,
                   type: "looking_away", details: `Candidate looking away from screen (turn: ${turnRatio.toFixed(2)})` }),
-              }).catch(() => {});
+              }).catch((err) => console.error("[incident]", err));
               toast.warning("You appear to be looking away from the screen.", { duration: 4000 });
             }
           } else {
@@ -478,7 +480,7 @@ export default function ExamInterface({
                   method: "POST", headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ proctoringSessionId: examState.proctoringSessionId,
                     type: "talking_detected", details: `Sustained mouth movement detected (MAR: ${mar.toFixed(2)})` }),
-                }).catch(() => {});
+                }).catch((err) => console.error("[incident]", err));
                 toast.warning("Talking detected — this session is recorded.", { duration: 5000 });
                 mouthOpenStreakRef.current = 0; // reset so it fires again after another 15 s
               }

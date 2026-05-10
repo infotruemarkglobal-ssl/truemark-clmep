@@ -62,7 +62,12 @@ export async function POST(req: NextRequest) {
       })
     );
   }
-  await db.$transaction(txOps);
+  try {
+    await db.$transaction(txOps);
+  } catch (err) {
+    console.error("[re-enrol] transaction failed", err);
+    return NextResponse.json({ error: "Re-enrolment failed. Please try again." }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -16,28 +16,33 @@ const schema = z.object({
 
 // GET /api/users/me
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await auth();
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = await db.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      id: true, firstName: true, lastName: true, email: true,
-      phone: true, photoUrl: true, role: true, status: true,
-      mfaEnabled: true, lastLoginAt: true, createdAt: true,
-      profile: {
-        select: {
-          professionalTitle: true,
-          employer: true,
-          country: true,
-          linkedinUrl: true,
-          registrationType: true,
+    const user = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        id: true, firstName: true, lastName: true, email: true,
+        phone: true, photoUrl: true, role: true, status: true,
+        mfaEnabled: true, lastLoginAt: true, createdAt: true,
+        profile: {
+          select: {
+            professionalTitle: true,
+            employer: true,
+            country: true,
+            linkedinUrl: true,
+            registrationType: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  return NextResponse.json(user);
+    return NextResponse.json(user);
+  } catch (err) {
+    console.error("[/api/users/me GET]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
 // PATCH /api/users/me

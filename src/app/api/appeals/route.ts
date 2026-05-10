@@ -16,15 +16,19 @@ export async function GET(_req?: NextRequest) {
 
   const isAdmin = (ADMIN_ROLES as string[]).includes(session.user.role);
 
-  const appeals = await db.appeal.findMany({
-    where: isAdmin ? undefined : { userId: session.user.id },
-    orderBy: { submittedAt: "desc" },
-    include: {
-      user: { select: { firstName: true, lastName: true, email: true } },
-    },
-  });
-
-  return NextResponse.json(appeals);
+  try {
+    const appeals = await db.appeal.findMany({
+      where: isAdmin ? undefined : { userId: session.user.id },
+      orderBy: { submittedAt: "desc" },
+      include: {
+        user: { select: { firstName: true, lastName: true, email: true } },
+      },
+    });
+    return NextResponse.json(appeals);
+  } catch (err) {
+    console.error("[appeals GET]", err);
+    return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 });
+  }
 }
 
 const schema = z.object({
@@ -43,26 +47,31 @@ export async function POST(req: NextRequest) {
 
   const reference = `APL-${crypto.randomUUID().replace(/-/g, "").substring(0, 8).toUpperCase()}`;
 
-  const appeal = await db.appeal.create({
-    data: {
-      reference,
+  try {
+    const appeal = await db.appeal.create({
+      data: {
+        reference,
+        userId: session.user.id,
+        type: body.data.type,
+        subjectId: body.data.subjectId ?? null,
+        description: body.data.description,
+        evidenceUrls: body.data.evidenceUrls ? JSON.stringify(body.data.evidenceUrls) : null,
+        status: "SUBMITTED",
+        dueAt: addDays(new Date(), APPEAL_DEADLINE_DAYS),
+      },
+    });
+
+    await auditLog({
       userId: session.user.id,
-      type: body.data.type,
-      subjectId: body.data.subjectId ?? null,
-      description: body.data.description,
-      evidenceUrls: body.data.evidenceUrls ? JSON.stringify(body.data.evidenceUrls) : null,
-      status: "SUBMITTED",
-      dueAt: addDays(new Date(), APPEAL_DEADLINE_DAYS),
-    },
-  });
+      action: "APPEAL_SUBMITTED",
+      entityType: "Appeal",
+      entityId: appeal.id,
+      metadata: { reference, type: body.data.type },
+    });
 
-  await auditLog({
-    userId: session.user.id,
-    action: "APPEAL_SUBMITTED",
-    entityType: "Appeal",
-    entityId: appeal.id,
-    metadata: { reference, type: body.data.type },
-  });
-
-  return NextResponse.json(appeal, { status: 201 });
+    return NextResponse.json(appeal, { status: 201 });
+  } catch (err) {
+    console.error("[appeals POST]", err);
+    return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 });
+  }
 }

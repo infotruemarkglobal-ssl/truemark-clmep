@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { paystackVerify, toSmallestUnit } from "@/lib/paystack";
@@ -6,6 +7,11 @@ import { paystackVerify, toSmallestUnit } from "@/lib/paystack";
 // Called by the frontend /payments/callback page after Paystack redirects back.
 // Returns JSON so the callback page can show loading → success/failure UI.
 export async function GET(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ ok: false, status: "failed", error: "Unauthorized" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const reference = searchParams.get("reference");
   const courseId = searchParams.get("courseId");
@@ -47,6 +53,11 @@ export async function GET(req: NextRequest) {
   const purchase = await db.purchase.findUnique({ where: { paystackReference: reference } });
   if (!purchase) {
     return NextResponse.json({ ok: false, status: "error", error: "Purchase record not found" }, { status: 404 });
+  }
+
+  // Scope to the authenticated user — prevents one user from processing another's payment.
+  if (purchase.userId && purchase.userId !== session.user.id) {
+    return NextResponse.json({ ok: false, status: "error", error: "Forbidden" }, { status: 403 });
   }
 
   if (purchase.status === "PAID") {

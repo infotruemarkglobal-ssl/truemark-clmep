@@ -804,7 +804,7 @@ function AIContentModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 z-60 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 shrink-0">
           <Sparkles className="w-5 h-5 text-primary" />

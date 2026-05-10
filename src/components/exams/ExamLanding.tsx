@@ -144,7 +144,7 @@ export default function ExamLanding({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ courseId: course.id }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Re-enrolment failed");
       toast.success("Re-enrolled successfully. Your progress has been reset.");
       router.refresh();
