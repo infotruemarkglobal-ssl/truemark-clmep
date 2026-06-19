@@ -18,10 +18,10 @@ export default function LoginPage() {
         }}
       />
 
-      <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-8 items-center relative z-10">
+      <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-20 items-center relative z-10">
         {/* ── Left branding ── */}
-        <div className="text-white space-y-6 hidden lg:block">
-          <div className="mb-8">
+        <div className="text-white space-y-8 hidden lg:flex lg:flex-col lg:justify-center">
+          <div>
             <TruemarkLogo className="w-56 h-20" />
           </div>
 
@@ -33,7 +33,7 @@ export default function LoginPage() {
             individuals and organisations worldwide.
           </p>
 
-          <div className="grid grid-cols-2 gap-4 mt-8">
+          <div className="grid grid-cols-2 gap-4">
             {[
               { icon: Shield, label: "ISO 17024", sub: "Compliant" },
               { icon: Globe, label: "Global", sub: "Recognition" },
