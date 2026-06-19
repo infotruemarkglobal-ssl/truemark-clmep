@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import LoginForm from "@/components/auth/LoginForm";
 import { TruemarkLogo } from "@/components/TruemarkLogo";
 import { Shield, Globe, Bot, Award } from "lucide-react";
+
 export const metadata: Metadata = { title: "Sign In" };
+
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-[oklch(0.41_0.13_162.5)] to-slate-900 p-6 lg:p-12 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-[oklch(0.41_0.13_162.5)] to-slate-900 p-4 relative overflow-hidden">
       {/* dot grid background */}
       <div
         className="absolute inset-0 opacity-10 pointer-events-none"
@@ -15,12 +17,14 @@ export default function LoginPage() {
           backgroundSize: "40px 40px",
         }}
       />
-      <div className="w-full max-w-5xl grid lg:grid-cols-[1fr_440px] gap-16 items-center relative z-10">
+
+      <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-8 items-center relative z-10">
         {/* ── Left branding ── */}
-        <div className="text-white space-y-6 hidden lg:block pl-4">
+        <div className="text-white space-y-6 hidden lg:block">
           <div className="mb-8">
             <TruemarkLogo className="w-56 h-20" />
           </div>
+
           <h2 className="text-4xl font-bold leading-tight">
             Certification Learning Management &amp; Examination Platform
           </h2>
@@ -28,6 +32,7 @@ export default function LoginPage() {
             ISO/IEC 17024 compliant personnel certification system for
             individuals and organisations worldwide.
           </p>
+
           <div className="grid grid-cols-2 gap-4 mt-8">
             {[
               { icon: Shield, label: "ISO 17024", sub: "Compliant" },
@@ -46,6 +51,7 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
+
         {/* ── Right form panel ── */}
         <div>
           <div className="bg-white rounded-2xl shadow-2xl p-8">
