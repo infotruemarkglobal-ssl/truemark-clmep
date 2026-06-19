@@ -232,7 +232,7 @@ export async function proxy(req: NextRequest) {
     // a full server render of the protected page before the redirect fires.
     const url = req.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("next", pathname);
+    if (pathname !== "/") url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
@@ -267,7 +267,7 @@ export async function proxy(req: NextRequest) {
 
     const url = req.nextUrl.clone();
     url.pathname = "/mfa-verify";
-    url.searchParams.set("next", pathname);
+    if (pathname !== "/") url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
