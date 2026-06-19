@@ -8,6 +8,7 @@ export function TruemarkLogo({ className }: { className?: string }) {
         src="/truemark-logo.png"
         alt="TrueMark Global Standards & Solutions Limited"
         fill
+        sizes="(max-width: 768px) 160px, 192px"
         className="object-contain brightness-0 invert"
         priority
       />
@@ -22,6 +23,7 @@ export function TruemarkLogoColour({ className }: { className?: string }) {
         src="/truemark-logo.png"
         alt="TrueMark Global Standards & Solutions Limited"
         fill
+        sizes="(max-width: 768px) 160px, 192px"
         className="object-contain"
         priority
       />

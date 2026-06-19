@@ -73,7 +73,7 @@ export default function LoginForm() {
     <>
       {/* Mobile logo */}
       <div className="text-center mb-8 lg:hidden">
-        <TruemarkLogoColour className="w-48 h-16 mx-auto" />
+        <TruemarkLogoColour className="w-52 h-[72px] mx-auto" />
       </div>
 
       {/* Tab selector */}
