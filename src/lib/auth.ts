@@ -115,10 +115,12 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
       },
     }),
     Google({
+      allowDangerousEmailAccountLinking: true,
       clientId: process.env.AUTH_GOOGLE_ID ?? "",
       clientSecret: process.env.AUTH_GOOGLE_SECRET ?? "",
     }),
     MicrosoftEntraID({
+      allowDangerousEmailAccountLinking: true,
       clientId: process.env.AUTH_MICROSOFT_ENTRA_ID ?? "",
       clientSecret: process.env.AUTH_MICROSOFT_ENTRA_SECRET ?? "",
     }),
