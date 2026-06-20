@@ -30,6 +30,9 @@ const baseSecurityHeaders = [
   // cross-origin. Prevents sensitive URL path segments appearing in third-party
   // access logs (e.g. /certificates/{id}/download).
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
 
   // Permissions-Policy: explicitly scope browser feature access.
   //   camera/microphone — required by the proctoring module (same-origin only)
