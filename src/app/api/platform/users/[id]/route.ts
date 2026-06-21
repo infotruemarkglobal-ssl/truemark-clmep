@@ -67,6 +67,7 @@ const putSchema = z.object({
   mustChangePassword: z.boolean().optional(),
   firstName: z.string().min(2).optional(),
   lastName: z.string().min(2).optional(),
+  email: z.string().email().optional(),
   lockedUntil: z.null().optional(),
   failedLoginCount: z.number().int().min(0).optional(),
 });

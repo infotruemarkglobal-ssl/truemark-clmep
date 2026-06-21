@@ -7,7 +7,8 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   ChevronLeft, Shield, ShieldOff, AlertTriangle, KeyRound,
-  Lock, Unlock, CheckCircle2, XCircle, Clock, Building2, Loader2,
+  Lock, Unlock, Building2, Loader2,
+  Pencil, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +45,20 @@ type UserDetail = {
   createdAt: string;
   organisationMemberships: OrgMembership[];
 };
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const ALL_ROLES = [
+  { value: "SUPER_ADMIN",           label: "Super Admin" },
+  { value: "CERTIFICATION_OFFICER", label: "Certification Officer" },
+  { value: "EXAMINER",              label: "Examiner" },
+  { value: "TRAINER",               label: "Trainer" },
+  { value: "PROCTOR",               label: "Proctor" },
+  { value: "AUDITOR",               label: "Auditor" },
+  { value: "ORG_MANAGER",           label: "Org Manager" },
+  { value: "CANDIDATE",             label: "Candidate" },
+  { value: "SUPPORT_AGENT",         label: "Support Agent" },
+];
 
 // ── Style maps ────────────────────────────────────────────────────────────────
 
@@ -135,9 +150,52 @@ export default function PlatformUserDetail({
   const [user, setUser] = useState(initialUser);
   const [loading, setLoading] = useState(false);
   const [confirm, setConfirm] = useState<null | "reset" | "suspend" | "unlock">(null);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    firstName: initialUser.firstName,
+    lastName: initialUser.lastName,
+    email: initialUser.email,
+    role: initialUser.role,
+  });
+  const [editLoading, setEditLoading] = useState(false);
 
   const isLocked = user.lockedUntil && new Date(user.lockedUntil) > new Date();
   const initials = `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+
+  function openEdit() {
+    setEditForm({ firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role });
+    setEditing(true);
+  }
+
+  async function saveEdits() {
+    setEditLoading(true);
+    try {
+      const res = await fetch(`/api/platform/users/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: editForm.firstName.trim(),
+          lastName: editForm.lastName.trim(),
+          email: editForm.email.trim().toLowerCase(),
+          ...(isSelf ? {} : { role: editForm.role }),
+        }),
+      });
+      const data = await res.json() as { firstName?: string; lastName?: string; email?: string; role?: string; error?: string };
+      if (!res.ok) { toast.error(data.error ?? "Failed to save"); return; }
+      setUser((u) => ({
+        ...u,
+        firstName: data.firstName ?? u.firstName,
+        lastName: data.lastName ?? u.lastName,
+        email: data.email ?? u.email,
+        role: data.role ?? u.role,
+      }));
+      setEditing(false);
+      toast.success("User details updated");
+      router.refresh();
+    } finally {
+      setEditLoading(false);
+    }
+  }
 
   async function runAction(action: "reset" | "suspend" | "unlock") {
     setLoading(true);
@@ -189,7 +247,7 @@ export default function PlatformUserDetail({
 
       {/* Header card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-start gap-4 flex-wrap">
           <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xl font-bold shrink-0">
             {initials}
           </div>
@@ -218,8 +276,89 @@ export default function PlatformUserDetail({
               )}
             </div>
           </div>
+          {!editing && (
+            <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={openEdit}>
+              <Pencil className="w-3.5 h-3.5" /> Edit Details
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Inline edit form */}
+      {editing && (
+        <div className="bg-white rounded-2xl border border-indigo-200 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Edit Details</h2>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="text-slate-400 hover:text-slate-600 transition"
+              aria-label="Cancel edit"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-600">First Name</label>
+              <input
+                type="text"
+                value={editForm.firstName}
+                onChange={(e) => setEditForm((f) => ({ ...f, firstName: e.target.value }))}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-600">Last Name</label>
+              <input
+                type="text"
+                value={editForm.lastName}
+                onChange={(e) => setEditForm((f) => ({ ...f, lastName: e.target.value }))}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <label className="text-xs font-medium text-slate-600">Email</label>
+              <input
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <label className="text-xs font-medium text-slate-600">
+                Role
+                {isSelf && <span className="ml-1 text-slate-400 font-normal">(cannot change your own role)</span>}
+              </label>
+              <select
+                value={editForm.role}
+                onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}
+                disabled={isSelf}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {ALL_ROLES.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t border-slate-100">
+            <Button variant="outline" size="sm" onClick={() => setEditing(false)} disabled={editLoading}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={saveEdits}
+              disabled={editLoading || !editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.email.trim()}
+              className="gap-1.5"
+            >
+              {editLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {editLoading ? "Saving…" : "Save Changes"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Account details */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
