@@ -52,3 +52,5 @@ next-env.d.ts
 
 # Private file uploads (served via /api/files/url, not statically)
 private-uploads/
+zap-report*.html
+zap.yaml
