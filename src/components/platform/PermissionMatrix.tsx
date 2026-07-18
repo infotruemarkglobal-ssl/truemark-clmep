@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, Trash2, Loader2, ShieldCheck } from "lucide-react";
+import { Plus, Trash2, Loader2, ShieldCheck, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Permission = {
@@ -69,7 +69,9 @@ export default function PermissionMatrix({
   const [editingBaseRole, setEditingBaseRole] = useState<string | null>(null); // roleId being edited
   const [creating, startCreate] = useTransition();
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const categories = groupByCategory(initialPermissions);
 
@@ -171,6 +173,22 @@ export default function PermissionMatrix({
     setEditingBaseRole(null);
   }
 
+  async function handleSyncPermissions() {
+    setSyncing(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const res = await fetch("/api/platform/permissions", { method: "POST" });
+      const data = await res.json() as { ok?: boolean; permissionsUpserted?: number; systemRolesUpserted?: number; error?: string };
+      if (!res.ok) { setError(data.error ?? "Sync failed"); return; }
+      setSuccessMsg(`Synced ${data.permissionsUpserted} permissions across ${data.systemRolesUpserted} system roles. Reload the page to see the updated matrix.`);
+    } catch {
+      setError("Could not connect to the server.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function handleDeleteRole(roleId: string) {
     setDeleting(roleId);
     setError(null);
@@ -195,12 +213,23 @@ export default function PermissionMatrix({
             {roles.length} roles · {initialPermissions.length} permissions — click any cell to toggle
           </p>
         </div>
-        <button
-          onClick={() => setShowNewRole((v) => !v)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition"
-        >
-          <Plus className="w-4 h-4" /> New Role
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncPermissions}
+            disabled={syncing}
+            title="Re-seed permission definitions and system role defaults from code"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 disabled:opacity-50 transition"
+          >
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sync Permissions
+          </button>
+          <button
+            onClick={() => setShowNewRole((v) => !v)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition"
+          >
+            <Plus className="w-4 h-4" /> New Role
+          </button>
+        </div>
       </div>
 
       {/* New role form */}
@@ -257,8 +286,15 @@ export default function PermissionMatrix({
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
-          {error}
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-start justify-between gap-3">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="shrink-0 text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+      {successMsg && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-lg px-4 py-3 flex items-start justify-between gap-3">
+          <span>{successMsg}</span>
+          <button onClick={() => setSuccessMsg(null)} className="shrink-0 text-emerald-400 hover:text-emerald-600">✕</button>
         </div>
       )}
 

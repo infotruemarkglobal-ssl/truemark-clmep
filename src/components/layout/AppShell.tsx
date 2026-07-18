@@ -31,6 +31,7 @@ export default function AppShell({
       <div className="flex pt-16 min-h-screen">
         <Sidebar
           role={session.user.role}
+          permissions={session.user.permissions}
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
         />

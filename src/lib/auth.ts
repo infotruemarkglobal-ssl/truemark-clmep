@@ -9,6 +9,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { ACCOUNT_STATUS, MFA_REQUIRED_ROLES, SECURITY } from "@/lib/constants";
 import type { UserRole } from "@/lib/constants";
+import { serializePermissions } from "@/lib/permissions";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -164,6 +165,8 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         }
         // mfaVerified always starts false; TOTP flow promotes it via trigger=update.
         token.mfaVerified = false;
+        // Load custom-role permissions. null = pure built-in role (no matrix constraint).
+        token.permissions = await serializePermissions(token.id as string).catch(() => null);
       }
       if (trigger === "update") {
         // Preserve mfaVerified=true when set by the MFA verification flow
@@ -176,6 +179,8 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
           token.mfaEnabled = dbUser.mfaEnabled;
           token.mustChangePassword = dbUser.mustChangePassword;
         }
+        // Re-fetch permissions so matrix changes reflect within the updateAge window.
+        token.permissions = await serializePermissions(token.id as string).catch(() => null);
       }
       return token;
     },
@@ -186,6 +191,8 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         session.user.mfaEnabled = token.mfaEnabled as boolean;
         session.user.mfaVerified = token.mfaVerified as boolean;
         session.user.mustChangePassword = (token.mustChangePassword as boolean) ?? false;
+        // null = pure role user; string[] = custom role user whose matrix applies
+        session.user.permissions = (token.permissions as string[] | null | undefined) ?? null;
       }
       return session;
     },
@@ -238,6 +245,11 @@ declare module "next-auth" {
       mfaEnabled: boolean;
       mfaVerified: boolean;
       mustChangePassword: boolean;
+      /**
+       * null  — pure built-in role user; role-based guards apply, no matrix constraint.
+       * string[] — custom-role user; this array is the ONLY source of truth for access.
+       */
+      permissions: string[] | null;
     };
   }
 }

@@ -4,6 +4,29 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 
+const ROLE_PRIORITY: Record<string, number> = {
+  SUPER_ADMIN: 9, CERTIFICATION_OFFICER: 8, EXAMINER: 7, TRAINER: 6,
+  PROCTOR: 5, AUDITOR: 4, ORG_MANAGER: 3, SUPPORT_AGENT: 2, CANDIDATE: 1,
+};
+
+async function highestBaseRole(userId: string): Promise<string> {
+  const roles = await db.userCustomRole.findMany({
+    where: { userId },
+    select: { role: { select: { baseRole: true } } },
+  });
+  if (roles.length === 0) return "CANDIDATE";
+  return roles.reduce((best, r) => {
+    const p = ROLE_PRIORITY[r.role.baseRole] ?? 0;
+    return p > (ROLE_PRIORITY[best] ?? 0) ? r.role.baseRole : best;
+  }, "CANDIDATE");
+}
+
+function canManageRoles(session: Awaited<ReturnType<typeof auth>>) {
+  if (!session?.user) return false;
+  if (session.user.role === "SUPER_ADMIN" && session.user.permissions === null) return true;
+  return session.user.permissions?.includes("permissions:manage") ?? false;
+}
+
 // GET /api/platform/users/[id]/roles — get roles assigned to a user
 export async function GET(
   _req: NextRequest,
@@ -11,7 +34,7 @@ export async function GET(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!canManageRoles(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id: userId } = await params;
 
@@ -30,7 +53,7 @@ export async function POST(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!canManageRoles(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id: userId } = await params;
 
@@ -55,13 +78,12 @@ export async function POST(
     update: {},
   });
 
-  // Promote the user's built-in role to the custom role's baseRole so the
-  // sidebar and page guards (which only read user.role) reflect the correct
-  // access level. Without this, a user assigned an "Admin" custom role would
-  // still see the CANDIDATE sidebar because session.user.role stays unchanged.
+  // Recalculate the user's built-in role as the highest baseRole among all
+  // their custom roles so assigning a lower-priority role never downgrades them.
+  const newBaseRole = await highestBaseRole(userId);
   await db.user.update({
     where: { id: userId },
-    data: { role: role.baseRole },
+    data: { role: newBaseRole },
   });
 
   await auditLog({
@@ -89,7 +111,7 @@ export async function DELETE(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!canManageRoles(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id: userId } = await params;
 
@@ -106,6 +128,10 @@ export async function DELETE(
   await db.userCustomRole.deleteMany({
     where: { userId, roleId: parsed.data.roleId },
   });
+
+  // Recalculate user.role from remaining custom roles; if none remain, reset to CANDIDATE.
+  const newBaseRole = await highestBaseRole(userId);
+  await db.user.update({ where: { id: userId }, data: { role: newBaseRole } });
 
   await auditLog({
     userId: session.user.id,

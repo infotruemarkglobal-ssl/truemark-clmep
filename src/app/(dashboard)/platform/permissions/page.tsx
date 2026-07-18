@@ -1,10 +1,20 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import PermissionMatrix from "@/components/platform/PermissionMatrix";
 
 export const metadata: Metadata = { title: "Permission Matrix — TrueMark Platform" };
+// Permission data must always be fresh — never serve a cached snapshot.
+export const dynamic = "force-dynamic";
 
 export default async function PermissionsPage() {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  // Only SUPER_ADMIN (pure role, no matrix constraint) can manage permissions
+  if (session.user.role !== "SUPER_ADMIN" || session.user.permissions !== null) {
+    redirect("/dashboard");
+  }
   const [permissions, roles] = await Promise.all([
     db.permission.findMany({
       orderBy: [{ category: "asc" }, { resource: "asc" }, { action: "asc" }],

@@ -12,7 +12,9 @@ import {
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
 
-type NavItem = { label: string; href: string; icon: React.ElementType };
+// requiredPermission: "resource:action" — only shown when user's custom-role permissions include it.
+// Omit to always show (e.g. Dashboard, Profile).
+type NavItem = { label: string; href: string; icon: React.ElementType; requiredPermission?: string };
 type NavSection = { heading?: string; items: NavItem[] };
 
 // ── Per-role navigation maps ──────────────────────────────────────────────────
@@ -168,33 +170,33 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Owner Panel",
       items: [
-        { label: "Platform Overview",  href: "/platform",                icon: Crown      },
-        { label: "Organisations",      href: "/platform/organisations",  icon: Building2  },
-        { label: "All Users",          href: "/platform/users",          icon: Users      },
-        { label: "Payments",           href: "/platform/payments",       icon: CreditCard },
-        { label: "Registrations",      href: "/platform/registrations",  icon: BookOpen   },
-        { label: "Permissions",        href: "/platform/permissions",    icon: KeyRound   },
+        { label: "Platform Overview",  href: "/platform",                icon: Crown,      requiredPermission: undefined },
+        { label: "Organisations",      href: "/platform/organisations",  icon: Building2,  requiredPermission: "organisations:read"   },
+        { label: "All Users",          href: "/platform/users",          icon: Users,      requiredPermission: "users:read"          },
+        { label: "Payments",           href: "/platform/payments",       icon: CreditCard, requiredPermission: "payments:read"        },
+        { label: "Registrations",      href: "/platform/registrations",  icon: BookOpen,   requiredPermission: "enrolments:read"     },
+        { label: "Permissions",        href: "/platform/permissions",    icon: KeyRound,   requiredPermission: "permissions:manage"  },
       ],
     },
     {
       heading: "Operations",
       items: [
-        { label: "Courses",               href: "/manage/courses",       icon: BookOpen      },
-        { label: "Exam Papers",           href: "/manage/exams",         icon: ClipboardList },
-        { label: "SCORM Packages",        href: "/manage/scorm",         icon: Package       },
-        { label: "Applications",          href: "/manage/applications",  icon: ClipboardList },
-        { label: "Certification Decisions", href: "/manage/decisions",   icon: BadgeCheck    },
-        { label: "Manage Certificates",   href: "/manage/certificates",  icon: Award         },
-        { label: "Certification Schemes", href: "/manage/schemes",       icon: Shield        },
-        { label: "Manage Complaints",     href: "/manage/complaints",    icon: MessageSquare },
-        { label: "Appeals",               href: "/appeals",              icon: Scale         },
-        { label: "Support Queue",         href: "/support",              icon: MessageSquare },
+        { label: "Courses",               href: "/manage/courses",       icon: BookOpen,      requiredPermission: "courses:read"          },
+        { label: "Exam Papers",           href: "/manage/exams",         icon: ClipboardList, requiredPermission: "exams:read"            },
+        { label: "SCORM Packages",        href: "/manage/scorm",         icon: Package,       requiredPermission: "scorm:read"            },
+        { label: "Applications",          href: "/manage/applications",  icon: ClipboardList, requiredPermission: "certifications:read"   },
+        { label: "Certification Decisions", href: "/manage/decisions",   icon: BadgeCheck,    requiredPermission: "decisions:read"        },
+        { label: "Manage Certificates",   href: "/manage/certificates",  icon: Award,         requiredPermission: "certifications:read"   },
+        { label: "Certification Schemes", href: "/manage/schemes",       icon: Shield,        requiredPermission: undefined               },
+        { label: "Manage Complaints",     href: "/manage/complaints",    icon: MessageSquare, requiredPermission: "appeals:read"          },
+        { label: "Appeals",               href: "/appeals",              icon: Scale,         requiredPermission: "appeals:read"          },
+        { label: "Support Queue",         href: "/support",              icon: MessageSquare, requiredPermission: undefined               },
       ],
     },
     {
       heading: "People & Organisations",
       items: [
-        { label: "Staff", href: "/staff", icon: Users },
+        { label: "Staff", href: "/staff", icon: Users, requiredPermission: "staff:manage" },
       ],
     },
     {
@@ -239,15 +241,30 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
 
 export default function Sidebar({
   role,
+  permissions,
   open,
   onClose,
 }: {
   role: UserRole;
+  /** null = pure role user (show all items). string[] = custom-role user (filter by permissions). */
+  permissions: string[] | null;
   open: boolean;
   onClose: () => void;
 }) {
   const pathname = usePathname();
-  const sections = ROLE_NAV[role] ?? ROLE_NAV.CANDIDATE;
+  const permSet = permissions !== null ? new Set(permissions) : null;
+
+  // For custom-role users: filter nav items by requiredPermission.
+  // For pure role users (permSet === null): show everything.
+  const rawSections = ROLE_NAV[role] ?? ROLE_NAV.CANDIDATE;
+  const sections = rawSections.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => {
+      if (permSet === null) return true; // pure role user — no filtering
+      if (!item.requiredPermission) return true; // no permission required
+      return permSet.has(item.requiredPermission);
+    }),
+  })).filter((section) => section.items.length > 0);
 
   // Close on Escape key — standard for modal-style overlays (WCAG 2.1 SC 2.1.2)
   useEffect(() => {

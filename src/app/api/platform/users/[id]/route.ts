@@ -5,6 +5,14 @@ import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
 
+import type { Session } from "next-auth";
+
+function canManageUsers(session: Session | null, action: "read" | "update" | "suspend" = "read") {
+  if (!session?.user) return false;
+  if (session.user.role === "SUPER_ADMIN" && session.user.permissions === null) return true;
+  return session.user.permissions?.includes(`users:${action}`) ?? false;
+}
+
 // GET /api/platform/users/[id] — full user profile for SUPER_ADMIN
 export async function GET(
   _req: NextRequest,
@@ -12,7 +20,7 @@ export async function GET(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) {
+  if (!canManageUsers(session, "read")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -79,7 +87,7 @@ export async function PUT(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) {
+  if (!canManageUsers(session, "update")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

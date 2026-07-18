@@ -8,8 +8,9 @@ import { toast } from "sonner";
 import {
   ChevronLeft, Shield, ShieldOff, AlertTriangle, KeyRound,
   Lock, Unlock, Building2, Loader2,
-  Pencil, X,
+  Pencil, X, ShieldCheck, Plus, Trash2,
 } from "lucide-react";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +23,19 @@ import {
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type CustomRoleAssignment = {
+  id: string;
+  roleId: string;
+  role: { id: string; name: string; isSystem: boolean };
+};
+
+type AvailableRole = {
+  id: string;
+  name: string;
+  baseRole: string;
+  isSystem: boolean;
+};
 
 type OrgMembership = {
   id: string;
@@ -158,6 +172,71 @@ export default function PlatformUserDetail({
     role: initialUser.role,
   });
   const [editLoading, setEditLoading] = useState(false);
+
+  const [customRoles, setCustomRoles] = useState<CustomRoleAssignment[]>([]);
+  const [availableRoles, setAvailableRoles] = useState<AvailableRole[]>([]);
+  const [rolesLoading, setRolesLoading] = useState(true);
+  const [selectedRoleId, setSelectedRoleId] = useState("");
+  const [assigningRole, setAssigningRole] = useState(false);
+  const [removingRoleId, setRemovingRoleId] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadRoles() {
+      setRolesLoading(true);
+      const [assignedRes, availableRes] = await Promise.all([
+        fetch(`/api/platform/users/${initialUser.id}/roles`),
+        fetch("/api/platform/roles"),
+      ]);
+      if (assignedRes.ok) setCustomRoles(await assignedRes.json() as CustomRoleAssignment[]);
+      if (availableRes.ok) setAvailableRoles(await availableRes.json() as AvailableRole[]);
+      setRolesLoading(false);
+    }
+    loadRoles().catch(() => setRolesLoading(false));
+  }, [initialUser.id]);
+
+  async function assignRole() {
+    if (!selectedRoleId) return;
+    setAssigningRole(true);
+    try {
+      const res = await fetch(`/api/platform/users/${user.id}/roles`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleId: selectedRoleId }),
+      });
+      const data = await res.json() as { error?: string; id?: string; roleId?: string };
+      if (!res.ok) { toast.error(data.error ?? "Failed to assign role"); return; }
+      const found = availableRoles.find((r) => r.id === selectedRoleId);
+      if (found && !customRoles.find((cr) => cr.roleId === selectedRoleId)) {
+        setCustomRoles((prev) => [
+          ...prev,
+          { id: data.id ?? selectedRoleId, roleId: selectedRoleId, role: { id: found.id, name: found.name, isSystem: found.isSystem } },
+        ]);
+      }
+      setSelectedRoleId("");
+      toast.success("Role assigned");
+      router.refresh();
+    } finally {
+      setAssigningRole(false);
+    }
+  }
+
+  async function removeRole(roleId: string) {
+    setRemovingRoleId(roleId);
+    try {
+      const res = await fetch(`/api/platform/users/${user.id}/roles`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleId }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { toast.error(data.error ?? "Failed to remove role"); return; }
+      setCustomRoles((prev) => prev.filter((cr) => cr.roleId !== roleId));
+      toast.success("Role removed");
+      router.refresh();
+    } finally {
+      setRemovingRoleId(null);
+    }
+  }
 
   const isLocked = user.lockedUntil && new Date(user.lockedUntil) > new Date();
   const initials = `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
@@ -408,6 +487,81 @@ export default function PlatformUserDetail({
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* Custom Roles */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+        <h2 className="font-semibold text-slate-900 mb-4 text-sm uppercase tracking-wide flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-slate-400" /> Custom Roles
+        </h2>
+
+        {rolesLoading ? (
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading roles…
+          </div>
+        ) : (
+          <>
+            {customRoles.length === 0 ? (
+              <p className="text-sm text-slate-400 mb-4">No custom roles assigned.</p>
+            ) : (
+              <div className="divide-y divide-slate-100 mb-4">
+                {customRoles.map((cr) => (
+                  <div key={cr.roleId} className="flex items-center justify-between py-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-800">{cr.role.name}</span>
+                      {cr.role.isSystem && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
+                          System
+                        </span>
+                      )}
+                    </div>
+                    {!isSelf && (
+                      <button
+                        type="button"
+                        onClick={() => removeRole(cr.roleId)}
+                        disabled={removingRoleId === cr.roleId}
+                        className="text-slate-400 hover:text-red-600 transition disabled:opacity-40"
+                        aria-label={`Remove ${cr.role.name}`}
+                      >
+                        {removingRoleId === cr.roleId
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Trash2 className="w-4 h-4" />}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!isSelf && (
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                <select
+                  value={selectedRoleId}
+                  onChange={(e) => setSelectedRoleId(e.target.value)}
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                >
+                  <option value="">Select a role to assign…</option>
+                  {availableRoles
+                    .filter((r) => !customRoles.find((cr) => cr.roleId === r.id))
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} ({r.baseRole.replace(/_/g, " ")})
+                      </option>
+                    ))}
+                </select>
+                <Button
+                  size="sm"
+                  onClick={assignRole}
+                  disabled={!selectedRoleId || assigningRole}
+                  className="gap-1.5 shrink-0"
+                >
+                  {assigningRole ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  {assigningRole ? "Assigning…" : "Assign"}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
