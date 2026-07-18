@@ -31,7 +31,6 @@ export async function GET(req: NextRequest) {
       where: { paystackReference: reference },
       data: { status: "FAILED" },
     });
-    // ISO 27001 A.8.15 — log payment failure for financial audit trail
     if (failedPurchase?.userId) {
       await auditLog({
         userId: failedPurchase.userId,
@@ -41,10 +40,13 @@ export async function GET(req: NextRequest) {
         metadata: { reference, courseId: failedPurchase.courseId, reason: "PAYSTACK_VERIFICATION_FAILED" },
       }).catch(() => {});
     }
+    const failedCourseSlug = failedPurchase?.courseId
+      ? await db.course.findUnique({ where: { id: failedPurchase.courseId }, select: { slug: true } }).then((c) => c?.slug ?? null)
+      : null;
     return NextResponse.json({
       ok: false,
       status: "failed",
-      courseId: failedPurchase?.courseId ?? courseId ?? null,
+      courseSlug: failedCourseSlug,
       error: "Payment verification failed. No charge was made.",
     });
   }

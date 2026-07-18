@@ -158,8 +158,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           if (enrolment) {
             await db.lessonProgress.upsert({
               where: { enrolmentId_lessonId: { enrolmentId: enrolment.id, lessonId: pkg.lessonId } },
-              create: { enrolmentId: enrolment.id, lessonId: pkg.lessonId, completed: true },
-              update: { completed: true },
+              create: { enrolmentId: enrolment.id, lessonId: pkg.lessonId, completed: true, completedAt: new Date() },
+              update: { completed: true, completedAt: new Date() },
+            });
+
+            // Recalculate overall course progress so exam eligibility stays in sync.
+            // Without this, candidates who complete lessons via SCORM player never
+            // reach minProgressToExam and are blocked from booking the exam.
+            const allLessons = await db.courseLesson.count({
+              where: { module: { courseId: module.courseId } },
+            });
+            const completedCount = await db.lessonProgress.count({
+              where: { enrolmentId: enrolment.id, completed: true },
+            });
+            const progressPct = allLessons > 0 ? Math.round((completedCount / allLessons) * 100) : 0;
+            await db.enrolment.update({
+              where: { id: enrolment.id },
+              data: {
+                progress: progressPct,
+                ...(progressPct === 100 ? { status: "COMPLETED", completedAt: new Date() } : {}),
+              },
             });
           }
         }

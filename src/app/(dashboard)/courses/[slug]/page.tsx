@@ -32,6 +32,8 @@ export default async function CourseDetailPage({
       cpdHours: true,
       durationHours: true,
       minProgressToExam: true,
+      examOnly: true,
+      examPaperId: true,
       price: true,
       currency: true,
       scheme: { select: { id: true, name: true, code: true, validityMonths: true } },
@@ -68,19 +70,23 @@ export default async function CourseDetailPage({
       })
     : null;
 
-  // Check exam availability
-  const examPaper = course.scheme
-    ? await db.examPaper.findFirst({ where: { schemeId: course.scheme.id, isActive: true } })
-    : null;
+  // Resolve the exam paper: use direct link first, then fall back to scheme lookup
+  const examPaper = course.examPaperId
+    ? await db.examPaper.findUnique({ where: { id: course.examPaperId, isActive: true } })
+    : course.scheme
+      ? await db.examPaper.findFirst({ where: { schemeId: course.scheme.id, isActive: true } })
+      : null;
 
+  // Exam-only courses: enrolled candidate is immediately eligible (no training progress needed)
   const examEligible =
     !!enrolment &&
-    enrolment.progress >= course.minProgressToExam &&
+    (course.examOnly || enrolment.progress >= course.minProgressToExam) &&
     !!examPaper;
 
   // Serialise modules/lessons (convert scormPackage to scormPackageId)
   const serialisedCourse = {
     ...course,
+    examPaper: undefined, // already captured above; don't pass full object
     modules: course.modules.map((m) => ({
       ...m,
       lessons: m.lessons.map((l) => ({

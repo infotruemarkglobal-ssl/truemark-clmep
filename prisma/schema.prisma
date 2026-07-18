@@ -322,12 +322,15 @@ model Course {
   durationHours         Float?
   prerequisiteCourseIds String?
   minProgressToExam     Int       @default(100)
+  examOnly              Boolean   @default(false) // skip training; candidate goes straight to exam after enrol
+  examPaperId           String?   // direct exam paper link for exam-only courses (bypasses scheme lookup)
   version               Int       @default(1)
   publishedAt           DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
   scheme      CertificationScheme? @relation(fields: [schemeId], references: [id])
+  examPaper   ExamPaper?           @relation("CourseExamPaper", fields: [examPaperId], references: [id])
   creator     User                 @relation("CourseCreator", fields: [creatorId], references: [id])
   modules     CourseModule[]
   enrolments  Enrolment[]
@@ -459,10 +462,11 @@ model ExamPaper {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  scheme   CertificationScheme? @relation(fields: [schemeId], references: [id])
-  creator  User                 @relation("ExamCreator", fields: [creatorId], references: [id])
-  sections ExamSection[]
-  attempts ExamAttempt[]
+  scheme         CertificationScheme? @relation(fields: [schemeId], references: [id])
+  creator        User                 @relation("ExamCreator", fields: [creatorId], references: [id])
+  sections       ExamSection[]
+  attempts       ExamAttempt[]
+  directCourses  Course[]             @relation("CourseExamPaper")
 
   @@index([schemeId])
   @@index([creatorId])

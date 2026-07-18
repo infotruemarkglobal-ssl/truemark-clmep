@@ -78,6 +78,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     durationHours: course.durationHours,
     minProgressToExam: course.minProgressToExam,
     thumbnailUrl: course.thumbnailUrl,
+    examOnly: course.examOnly,
+    examPaperId: course.examPaperId,
     scheme: course.scheme,
     modules: course.modules.map((m) => ({
       id: m.id,

@@ -97,7 +97,11 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
+  // NEXTAUTH_URL is the canonical production URL (must be correct for auth to work).
+  // NEXT_PUBLIC_APP_URL is a fallback. Never fall back to a localhost URL in a
+  // payment callback — Paystack would redirect the user's browser to their own
+  // machine after payment, making every paid enrolment appear to fail.
+  const appUrl = (process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
   const result = await paystackInitialize({
     email: session.user.email!,

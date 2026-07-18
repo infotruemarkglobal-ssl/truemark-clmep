@@ -34,6 +34,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     durationHours: z.number().min(0).nullable().optional(),
     minProgressToExam: z.number().min(0).max(100).optional(),
     thumbnailUrl: z.string().url().nullable().optional(),
+    examOnly: z.boolean().optional(),
+    examPaperId: z.string().nullable().optional(),
   });
 
   const body = schema.safeParse(await req.json());

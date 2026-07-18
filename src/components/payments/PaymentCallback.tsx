@@ -1,20 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, XCircle, AlertCircle, Loader2, BookOpen, RotateCcw, LayoutDashboard } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, BookOpen, RotateCcw, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type VerifyResult =
   | { ok: true;  status: "success";      courseSlug: string | null }
   | { ok: true;  status: "already_paid"; courseSlug: string | null }
-  | { ok: false; status: "failed" | "error"; courseId?: string | null; error?: string };
+  | { ok: false; status: "failed" | "error"; courseSlug?: string | null; error?: string };
 
 type Props = { reference: string; courseId?: string };
 
 export default function PaymentCallback({ reference, courseId }: Props) {
+  const router = useRouter();
   const [result, setResult] = useState<VerifyResult | null>(null);
+  const [countdown, setCountdown] = useState(4);
+  const redirected = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams({ reference });
@@ -27,6 +31,28 @@ export default function PaymentCallback({ reference, courseId }: Props) {
         setResult({ ok: false, status: "error", error: "Could not connect to the payment server. Please try again." }),
       );
   }, [reference, courseId]);
+
+  // Auto-redirect to the course 4 seconds after a successful payment
+  useEffect(() => {
+    if (!result || result.status === "failed" || result.status === "error") return;
+    const slug = result.courseSlug;
+    if (!slug || redirected.current) return;
+
+    const interval = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(interval);
+          if (!redirected.current) {
+            redirected.current = true;
+            router.push(`/courses/${slug}`);
+          }
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [result, router]);
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (!result) {
@@ -48,11 +74,21 @@ export default function PaymentCallback({ reference, courseId }: Props) {
         title="Payment successful!"
         description="Your payment has been confirmed and you are now enrolled. Start learning whenever you're ready."
       >
-        {result.courseSlug && (
-          <Link href={`/courses/${result.courseSlug}`}>
+        {result.courseSlug ? (
+          <>
+            <p className="text-xs text-slate-400">Redirecting to course in {countdown}s…</p>
+            <Link href={`/courses/${result.courseSlug}`}>
+              <Button className="gap-2">
+                <BookOpen className="w-4 h-4" />
+                Go to course now
+              </Button>
+            </Link>
+          </>
+        ) : (
+          <Link href="/courses">
             <Button className="gap-2">
               <BookOpen className="w-4 h-4" />
-              Go to course
+              Browse courses
             </Button>
           </Link>
         )}
@@ -75,23 +111,27 @@ export default function PaymentCallback({ reference, courseId }: Props) {
         title="Already enrolled"
         description="You are already enrolled in this course. Head over whenever you're ready."
       >
-        {result.courseSlug && (
-          <Link href={`/courses/${result.courseSlug}`}>
-            <Button className="gap-2">
-              <BookOpen className="w-4 h-4" />
-              Go to course
-            </Button>
+        {result.courseSlug ? (
+          <>
+            <p className="text-xs text-slate-400">Redirecting in {countdown}s…</p>
+            <Link href={`/courses/${result.courseSlug}`}>
+              <Button className="gap-2">
+                <BookOpen className="w-4 h-4" />
+                Go to course
+              </Button>
+            </Link>
+          </>
+        ) : (
+          <Link href="/courses">
+            <Button variant="outline">Browse courses</Button>
           </Link>
         )}
-        <Link href="/courses">
-          <Button variant="outline">Browse courses</Button>
-        </Link>
       </StatusCard>
     );
   }
 
   // ── Failed / error ─────────────────────────────────────────────────────────
-  const failedCourseId = "courseId" in result ? result.courseId : courseId;
+  const failedSlug = "courseSlug" in result ? result.courseSlug : null;
   return (
     <StatusCard
       icon={<XCircle className="w-8 h-8 text-red-500" />}
@@ -99,16 +139,26 @@ export default function PaymentCallback({ reference, courseId }: Props) {
       title="Payment failed"
       description={result.error ?? "Your payment could not be verified. You have not been charged."}
     >
-      {failedCourseId && (
-        <Link href={`/courses/${failedCourseId}`}>
+      {failedSlug ? (
+        <Link href={`/courses/${failedSlug}`}>
           <Button className="gap-2">
             <RotateCcw className="w-4 h-4" />
             Try again
           </Button>
         </Link>
+      ) : (
+        <Link href="/courses">
+          <Button className="gap-2">
+            <RotateCcw className="w-4 h-4" />
+            Browse courses
+          </Button>
+        </Link>
       )}
-      <Link href="/courses">
-        <Button variant="outline">Browse courses</Button>
+      <Link href="/dashboard">
+        <Button variant="outline" className="gap-2">
+          <LayoutDashboard className="w-4 h-4" />
+          Dashboard
+        </Button>
       </Link>
       <p className="text-xs text-slate-400 mt-2">
         If you were charged, please{" "}

@@ -27,6 +27,7 @@ type Course = {
   cpdHours: number;
   durationHours: number | null;
   minProgressToExam: number;
+  examOnly: boolean;
   price: number;
   currency: string;
   modules: Module[];
@@ -505,10 +506,15 @@ export default function CoursePlayer({
 
           {/* Stats */}
           <div className="flex flex-wrap gap-4 text-sm text-slate-600 mb-4">
-            {course.durationHours && (
+            {course.durationHours && !course.examOnly && (
               <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-slate-400" />{course.durationHours}h total</span>
             )}
-            <span className="flex items-center gap-1.5"><BookOpen className="w-4 h-4 text-slate-400" />{totalLessons} lessons</span>
+            {!course.examOnly && (
+              <span className="flex items-center gap-1.5"><BookOpen className="w-4 h-4 text-slate-400" />{totalLessons} lessons</span>
+            )}
+            {course.examOnly && (
+              <span className="flex items-center gap-1.5"><Award className="w-4 h-4 text-slate-400" />Exam only</span>
+            )}
             {course.cpdHours > 0 && (
               <span className="flex items-center gap-1.5"><Award className="w-4 h-4 text-slate-400" />{course.cpdHours} CPD hours</span>
             )}
@@ -517,8 +523,8 @@ export default function CoursePlayer({
             )}
           </div>
 
-          {/* Progress */}
-          {isEnrolled && (
+          {/* Progress — hidden for exam-only courses (no lessons to track) */}
+          {isEnrolled && !course.examOnly && (
             <div>
               <div className="flex justify-between text-xs text-slate-500 mb-1.5">
                 <span>{completedCount}/{totalLessons} lessons completed</span>
@@ -533,7 +539,11 @@ export default function CoursePlayer({
             <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-4">
               <div>
                 <p className="font-semibold text-emerald-800 text-sm">Ready for your certification exam!</p>
-                <p className="text-xs text-emerald-700 mt-0.5">You&apos;ve met the minimum progress requirement.</p>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  {course.examOnly
+                    ? "You are enrolled. Book your exam below."
+                    : "You’ve met the minimum progress requirement."}
+                </p>
               </div>
               <Button size="sm" onClick={() => router.push(`/exams/${examPaperId}`)}>
                 Book Exam <ChevronRight className="w-3 h-3 ml-1" />
@@ -542,8 +552,32 @@ export default function CoursePlayer({
           )}
         </div>
 
-        {/* Active lesson content */}
-        {activeLesson ? (
+        {/* Exam-only: enrolled view — no training to show, guide straight to exam */}
+        {course.examOnly && isEnrolled ? (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-5">
+              <Award className="w-8 h-8 text-primary" />
+            </div>
+            <h2 className="text-lg font-bold text-slate-900 mb-2">You&apos;re enrolled and ready</h2>
+            <p className="text-slate-500 text-sm mb-6 max-w-sm mx-auto">
+              This is an exam-only course — there are no training modules.
+              Use the panel on the right to review the scheme details, then book your exam when you&apos;re ready.
+            </p>
+            {examPaperId && (
+              <Button onClick={() => router.push(`/exams/${examPaperId}`)} className="gap-2">
+                Book Exam <ChevronRight className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        ) : course.examOnly && !isEnrolled ? (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center">
+            <Award className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+            <h2 className="text-lg font-bold text-slate-900 mb-2">Exam-Only Course</h2>
+            <p className="text-slate-500 text-sm max-w-sm mx-auto">
+              Enrol in this course to access the exam. No training modules are required.
+            </p>
+          </div>
+        ) : !course.examOnly && activeLesson ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             {/* Content viewer */}
             {activeLesson.contentType === "video" && activeLesson.contentUrl ? (
@@ -728,80 +762,142 @@ export default function CoursePlayer({
         )}
       </div>
 
-      {/* ── Sidebar curriculum ── */}
+      {/* ── Sidebar ── */}
       <aside className="lg:w-80 shrink-0">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm sticky top-20 overflow-hidden">
-          <div className="p-4 border-b border-slate-100">
-            <h2 className="font-semibold text-slate-900 text-sm">Course Curriculum</h2>
-            <p className="text-xs text-slate-500 mt-0.5">{totalLessons} lessons · {course.modules.length} modules</p>
-          </div>
-
-          <div className="overflow-y-auto max-h-[calc(100vh-14rem)]">
-            {course.modules.map((module) => {
-              const expanded = expandedModules.has(module.id);
-              const moduleCompleted = module.lessons.every((l) => completedLessonIds.has(l.id));
-
-              return (
-                <div key={module.id} className="border-b border-slate-100 last:border-0">
-                  <button
-                    onClick={() => toggleModule(module.id)}
-                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition text-left"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {moduleCompleted ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                      ) : (
-                        <div className="w-4 h-4 rounded-full border-2 border-slate-300 shrink-0" />
-                      )}
-                      <span className="text-sm font-medium text-slate-800 truncate">{module.title}</span>
-                    </div>
-                    {expanded ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
-                  </button>
-
-                  {expanded && (
-                    <div className="pb-1">
-                      {module.lessons.map((lesson) => {
-                        const Icon = CONTENT_ICONS[lesson.contentType] ?? BookOpen;
-                        const completed = completedLessonIds.has(lesson.id);
-                        const canAccess = isEnrolled || lesson.isPreview;
-                        const active = activeLesson?.id === lesson.id;
-
-                        return (
-                          <button
-                            key={lesson.id}
-                            onClick={() => canAccess && setActiveLesson(lesson)}
-                            disabled={!canAccess}
-                            className={cn(
-                              "w-full flex items-center gap-3 px-6 py-2.5 text-left transition group",
-                              active ? "bg-accent text-primary" : "hover:bg-slate-50",
-                              !canAccess ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                            )}
-                          >
-                            {completed ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                            ) : !canAccess ? (
-                              <Lock className="w-4 h-4 text-slate-300 shrink-0" />
-                            ) : (
-                              <Icon className={cn("w-4 h-4 shrink-0", active ? "text-primary" : "text-slate-400")} />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className={cn("text-xs font-medium truncate", active ? "text-primary" : "text-slate-700")}>
-                                {lesson.title}
-                              </p>
-                              {lesson.durationMins && (
-                                <p className="text-[10px] text-slate-400">{lesson.durationMins}m</p>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+        {course.examOnly ? (
+          /* Exam-only: show scheme/exam details instead of curriculum */
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm sticky top-20 overflow-hidden">
+            <div className="p-4 border-b border-slate-100">
+              <h2 className="font-semibold text-slate-900 text-sm">Exam Details</h2>
+              <p className="text-xs text-slate-500 mt-0.5">No training modules — exam only</p>
+            </div>
+            <div className="p-4 space-y-4">
+              {course.scheme && (
+                <div className="flex items-start gap-3">
+                  <Award className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">Certification Scheme</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{course.scheme.name}</p>
+                    <Badge className="mt-1 text-[10px] bg-primary/10 text-primary border-0">{course.scheme.code}</Badge>
+                  </div>
                 </div>
-              );
-            })}
+              )}
+              {course.scheme?.validityMonths && (
+                <div className="flex items-start gap-3">
+                  <Clock className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">Certificate Validity</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{course.scheme.validityMonths} months from issue date</p>
+                  </div>
+                </div>
+              )}
+              {course.cpdHours > 0 && (
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">CPD Hours</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{course.cpdHours} hours awarded on pass</p>
+                  </div>
+                </div>
+              )}
+              {isEnrolled && examPaperId && (
+                <div className="pt-2 border-t border-slate-100">
+                  <Button
+                    className="w-full gap-2"
+                    size="sm"
+                    onClick={() => router.push(`/exams/${examPaperId}`)}
+                  >
+                    <Award className="w-4 h-4" /> Book Exam
+                  </Button>
+                </div>
+              )}
+              {isEnrolled && !examPaperId && (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  No exam paper is currently linked to this course. Please contact your certification officer.
+                </p>
+              )}
+              {!isEnrolled && (
+                <p className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
+                  Enrol in this course to access the exam booking.
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          /* Standard courses: show curriculum */
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm sticky top-20 overflow-hidden">
+            <div className="p-4 border-b border-slate-100">
+              <h2 className="font-semibold text-slate-900 text-sm">Course Curriculum</h2>
+              <p className="text-xs text-slate-500 mt-0.5">{totalLessons} lessons · {course.modules.length} modules</p>
+            </div>
+
+            <div className="overflow-y-auto max-h-[calc(100vh-14rem)]">
+              {course.modules.map((module) => {
+                const expanded = expandedModules.has(module.id);
+                const moduleCompleted = module.lessons.every((l) => completedLessonIds.has(l.id));
+
+                return (
+                  <div key={module.id} className="border-b border-slate-100 last:border-0">
+                    <button
+                      onClick={() => toggleModule(module.id)}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition text-left"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {moduleCompleted ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                        ) : (
+                          <div className="w-4 h-4 rounded-full border-2 border-slate-300 shrink-0" />
+                        )}
+                        <span className="text-sm font-medium text-slate-800 truncate">{module.title}</span>
+                      </div>
+                      {expanded ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+                    </button>
+
+                    {expanded && (
+                      <div className="pb-1">
+                        {module.lessons.map((lesson) => {
+                          const Icon = CONTENT_ICONS[lesson.contentType] ?? BookOpen;
+                          const completed = completedLessonIds.has(lesson.id);
+                          const canAccess = isEnrolled || lesson.isPreview;
+                          const active = activeLesson?.id === lesson.id;
+
+                          return (
+                            <button
+                              key={lesson.id}
+                              onClick={() => canAccess && setActiveLesson(lesson)}
+                              disabled={!canAccess}
+                              className={cn(
+                                "w-full flex items-center gap-3 px-6 py-2.5 text-left transition group",
+                                active ? "bg-accent text-primary" : "hover:bg-slate-50",
+                                !canAccess ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                              )}
+                            >
+                              {completed ? (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                              ) : !canAccess ? (
+                                <Lock className="w-4 h-4 text-slate-300 shrink-0" />
+                              ) : (
+                                <Icon className={cn("w-4 h-4 shrink-0", active ? "text-primary" : "text-slate-400")} />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className={cn("text-xs font-medium truncate", active ? "text-primary" : "text-slate-700")}>
+                                  {lesson.title}
+                                </p>
+                                {lesson.durationMins && (
+                                  <p className="text-[10px] text-slate-400">{lesson.durationMins}m</p>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </aside>
     </div>
     </>

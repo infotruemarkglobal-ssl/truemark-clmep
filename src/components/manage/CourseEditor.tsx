@@ -48,6 +48,8 @@ type Course = {
   cpdHours: number;
   durationHours: number | null;
   minProgressToExam: number;
+  examOnly: boolean;
+  examPaperId: string | null;
   thumbnailUrl: string | null;
   scheme: { id: string; name: string; code: string } | null;
   modules: Module[];
@@ -96,6 +98,8 @@ export default function CourseEditor({
     durationHours: course.durationHours ? String(course.durationHours) : "",
     minProgressToExam: String(course.minProgressToExam),
     thumbnailUrl: course.thumbnailUrl ?? "",
+    examOnly: course.examOnly,
+    examPaperId: course.examPaperId ?? "",
   });
 
   // Warn before leaving with unsaved settings changes
@@ -281,6 +285,8 @@ export default function CourseEditor({
           durationHours: settings.durationHours ? parseFloat(settings.durationHours) : null,
           minProgressToExam: parseInt(settings.minProgressToExam) || 80,
           thumbnailUrl: settings.thumbnailUrl || null,
+          examOnly: settings.examOnly,
+          examPaperId: settings.examPaperId || null,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
@@ -522,8 +528,53 @@ export default function CourseEditor({
           </div>
           <div>
             <Label>Min. Progress to Unlock Exam (%)</Label>
-            <Input type="number" min="0" max="100" className="mt-1" value={settings.minProgressToExam} onChange={(e) => setSettings((s) => ({ ...s, minProgressToExam: e.target.value }))} />
+            <Input type="number" min="0" max="100" className="mt-1" value={settings.minProgressToExam} onChange={(e) => setSettings((s) => ({ ...s, minProgressToExam: e.target.value }))} disabled={settings.examOnly} />
+            {settings.examOnly && <p className="text-xs text-slate-400 mt-1">Not applicable for exam-only courses.</p>}
           </div>
+
+          {/* Exam-only toggle */}
+          <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-semibold">Exam-Only Course</Label>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  No training modules — candidates go straight to exam after enrolment.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.examOnly}
+                onClick={() => setSettings((s) => ({ ...s, examOnly: !s.examOnly }))}
+                className={cn(
+                  "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                  settings.examOnly ? "bg-primary" : "bg-slate-200"
+                )}
+              >
+                <span
+                  className={cn(
+                    "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform duration-200",
+                    settings.examOnly ? "translate-x-5" : "translate-x-0"
+                  )}
+                />
+              </button>
+            </div>
+            {settings.examOnly && (
+              <div>
+                <Label className="text-xs">Exam Paper ID (optional)</Label>
+                <Input
+                  className="mt-1 text-xs font-mono"
+                  placeholder="Leave blank to use scheme's active exam paper"
+                  value={settings.examPaperId}
+                  onChange={(e) => setSettings((s) => ({ ...s, examPaperId: e.target.value }))}
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  If set, this specific exam paper is always used. Otherwise the course&apos;s scheme is checked.
+                </p>
+              </div>
+            )}
+          </div>
+
           <div className="pt-2">
             <Button onClick={saveSettings} disabled={saving} className="gap-2">
               <Save className="w-4 h-4" /> {saving ? "Saving…" : "Save Settings"}
