@@ -32,15 +32,22 @@ export async function GET(
     id: role.id,
     name: role.name,
     description: role.description,
+    baseRole: role.baseRole,
     isSystem: role.isSystem,
     permissionIds: role.rolePermissions.map((rp) => rp.permissionId),
     userCount: role._count.userRoles,
   });
 }
 
+const VALID_BASE_ROLES = [
+  "SUPER_ADMIN", "CERTIFICATION_OFFICER", "EXAMINER", "TRAINER",
+  "PROCTOR", "AUDITOR", "ORG_MANAGER", "CANDIDATE", "SUPPORT_AGENT",
+] as const;
+
 const patchSchema = z.object({
   name: z.string().min(2).max(60).optional(),
   description: z.string().max(200).optional().nullable(),
+  baseRole: z.enum(VALID_BASE_ROLES).optional(),
   permissionIds: z.array(z.string()).optional(),
 });
 
@@ -62,7 +69,7 @@ export async function PATCH(
   const role = await db.customRole.findUnique({ where: { id } });
   if (!role) return NextResponse.json({ error: "Role not found" }, { status: 404 });
 
-  const { name, description, permissionIds } = parsed.data;
+  const { name, description, baseRole, permissionIds } = parsed.data;
 
   // System roles: name and description are immutable
   if (role.isSystem && (name !== undefined || description !== undefined)) {
@@ -75,9 +82,10 @@ export async function PATCH(
   // Build the atomic operation set
   const txOps: Prisma.PrismaPromise<unknown>[] = [];
 
-  const roleData: { name?: string; description?: string | null } = {};
+  const roleData: { name?: string; description?: string | null; baseRole?: string } = {};
   if (name !== undefined) roleData.name = name;
   if (description !== undefined) roleData.description = description;
+  if (baseRole !== undefined && !role.isSystem) roleData.baseRole = baseRole;
   if (Object.keys(roleData).length > 0) {
     txOps.push(db.customRole.update({ where: { id }, data: roleData }));
   }
@@ -122,6 +130,7 @@ export async function PATCH(
     id: updated!.id,
     name: updated!.name,
     description: updated!.description,
+    baseRole: updated!.baseRole,
     isSystem: updated!.isSystem,
     permissionIds: updated!.rolePermissions.map((rp) => rp.permissionId),
     userCount: updated!._count.userRoles,

@@ -16,6 +16,7 @@ type Role = {
   id: string;
   name: string;
   description: string | null;
+  baseRole: string;
   isSystem: boolean;
   permissionIds: string[];
   userCount: number;
@@ -63,7 +64,9 @@ export default function PermissionMatrix({
   const [pendingCell, setPendingCell] = useState<string | null>(null); // "roleId:permId"
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDesc, setNewRoleDesc] = useState("");
+  const [newRoleBase, setNewRoleBase] = useState("CANDIDATE");
   const [showNewRole, setShowNewRole] = useState(false);
+  const [editingBaseRole, setEditingBaseRole] = useState<string | null>(null); // roleId being edited
   const [creating, startCreate] = useTransition();
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +117,18 @@ export default function PermissionMatrix({
     }
   }
 
+  const BASE_ROLE_OPTIONS = [
+    { value: "SUPER_ADMIN",           label: "Super Admin" },
+    { value: "CERTIFICATION_OFFICER", label: "Certification Officer" },
+    { value: "EXAMINER",              label: "Examiner" },
+    { value: "TRAINER",               label: "Trainer" },
+    { value: "PROCTOR",               label: "Proctor" },
+    { value: "AUDITOR",               label: "Auditor" },
+    { value: "ORG_MANAGER",           label: "Org Manager" },
+    { value: "SUPPORT_AGENT",         label: "Support Agent" },
+    { value: "CANDIDATE",             label: "Candidate (read-only)" },
+  ];
+
   function handleCreateRole() {
     if (!newRoleName.trim()) return;
     setError(null);
@@ -121,18 +136,39 @@ export default function PermissionMatrix({
       const res = await fetch("/api/platform/roles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newRoleName.trim(), description: newRoleDesc.trim() || undefined }),
+        body: JSON.stringify({
+          name: newRoleName.trim(),
+          description: newRoleDesc.trim() || undefined,
+          baseRole: newRoleBase,
+        }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Failed to create role"); return; }
+      const data = await res.json() as Role & { error?: string };
+      if (!res.ok) { setError((data as { error?: string }).error ?? "Failed to create role"); return; }
 
       const newRole: Role = { ...data, permissionIds: [], userCount: 0 };
       setRoles((prev) => [...prev, newRole]);
       setGranted((prev) => { const next = new Map(prev); next.set(data.id, new Set()); return next; });
       setNewRoleName("");
       setNewRoleDesc("");
+      setNewRoleBase("CANDIDATE");
       setShowNewRole(false);
     });
+  }
+
+  async function handleUpdateBaseRole(roleId: string, baseRole: string) {
+    setError(null);
+    const res = await fetch(`/api/platform/roles/${roleId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseRole }),
+    });
+    if (!res.ok) {
+      const data = await res.json() as { error?: string };
+      setError(data.error ?? "Failed to update base role");
+    } else {
+      setRoles((prev) => prev.map((r) => r.id === roleId ? { ...r, baseRole } : r));
+    }
+    setEditingBaseRole(null);
   }
 
   async function handleDeleteRole(roleId: string) {
@@ -171,35 +207,52 @@ export default function PermissionMatrix({
       {showNewRole && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
           <h3 className="font-semibold text-slate-800">Create Custom Role</h3>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <input
-              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="flex-1 min-w-40 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               placeholder="Role name (e.g. Content Reviewer)"
               value={newRoleName}
               onChange={(e) => setNewRoleName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreateRole()}
             />
             <input
-              className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="flex-1 min-w-35 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               placeholder="Description (optional)"
               value={newRoleDesc}
               onChange={(e) => setNewRoleDesc(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreateRole()}
             />
-            <button
-              onClick={handleCreateRole}
-              disabled={creating || !newRoleName.trim()}
-              className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition flex items-center gap-2"
-            >
-              {creating && <Loader2 className="w-3 h-3 animate-spin" />} Create
-            </button>
-            <button
-              onClick={() => setShowNewRole(false)}
-              className="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition"
-            >
-              Cancel
-            </button>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide pl-1">Base access level</label>
+              <select
+                value={newRoleBase}
+                onChange={(e) => setNewRoleBase(e.target.value)}
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
+              >
+                {BASE_ROLE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end gap-2">
+              <button
+                onClick={handleCreateRole}
+                disabled={creating || !newRoleName.trim()}
+                className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition flex items-center gap-2"
+              >
+                {creating && <Loader2 className="w-3 h-3 animate-spin" />} Create
+              </button>
+              <button
+                onClick={() => setShowNewRole(false)}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
+          <p className="text-xs text-slate-400">
+            <strong>Base access level</strong> controls which sidebar and pages users assigned this role can see. Permissions above then grant or restrict specific actions on top of that.
+          </p>
         </div>
       )}
 
@@ -231,23 +284,46 @@ export default function PermissionMatrix({
                       <span className="text-[10px] text-slate-400 flex items-center gap-0.5">
                         <ShieldCheck className="w-3 h-3" /> system
                       </span>
-                    ) : role.userCount > 0 ? (
-                      <span className="text-[10px] text-slate-400">in use</span>
                     ) : (
-                      <button
-                        onClick={() => handleDeleteRole(role.id)}
-                        disabled={deleting === role.id}
-                        title="Delete this role"
-                        className="text-red-400 hover:text-red-600 transition"
-                      >
-                        {deleting === role.id
-                          ? <Loader2 className="w-3 h-3 animate-spin" />
-                          : <Trash2 className="w-3 h-3" />
-                        }
-                      </button>
-                    )}
-                    {role.userCount > 0 && (
-                      <span className="text-[10px] text-slate-400">{role.userCount} user{role.userCount !== 1 ? "s" : ""}</span>
+                      <>
+                        {/* Base role selector for custom roles */}
+                        {editingBaseRole === role.id ? (
+                          <select
+                            autoFocus
+                            defaultValue={role.baseRole}
+                            onBlur={(e) => handleUpdateBaseRole(role.id, e.target.value)}
+                            onChange={(e) => handleUpdateBaseRole(role.id, e.target.value)}
+                            className="text-[10px] border border-primary/40 rounded px-1 py-0.5 bg-white focus:outline-none"
+                          >
+                            {BASE_ROLE_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <button
+                            onClick={() => setEditingBaseRole(role.id)}
+                            title="Click to change base access level"
+                            className="text-[10px] text-indigo-500 hover:text-indigo-700 transition underline decoration-dotted"
+                          >
+                            {BASE_ROLE_OPTIONS.find((o) => o.value === role.baseRole)?.label ?? role.baseRole}
+                          </button>
+                        )}
+                        {role.userCount > 0 ? (
+                          <span className="text-[10px] text-slate-400">{role.userCount} user{role.userCount !== 1 ? "s" : ""}</span>
+                        ) : (
+                          <button
+                            onClick={() => handleDeleteRole(role.id)}
+                            disabled={deleting === role.id}
+                            title="Delete this role"
+                            className="text-red-400 hover:text-red-600 transition"
+                          >
+                            {deleting === role.id
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : <Trash2 className="w-3 h-3" />
+                            }
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </th>

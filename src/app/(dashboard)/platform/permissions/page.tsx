@@ -22,6 +22,7 @@ export default async function PermissionsPage() {
     id: r.id,
     name: r.name,
     description: r.description,
+    baseRole: r.baseRole,
     isSystem: r.isSystem,
     permissionIds: r.rolePermissions.map((rp) => rp.permissionId),
     userCount: r._count.userRoles,

@@ -27,6 +27,7 @@ export async function GET() {
       id: r.id,
       name: r.name,
       description: r.description,
+      baseRole: r.baseRole,
       isSystem: r.isSystem,
       permissionIds: r.rolePermissions.map((rp) => rp.permissionId),
       userCount: r._count.userRoles,
@@ -40,9 +41,15 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isSuperAdmin(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const VALID_BASE_ROLES = [
+    "SUPER_ADMIN", "CERTIFICATION_OFFICER", "EXAMINER", "TRAINER",
+    "PROCTOR", "AUDITOR", "ORG_MANAGER", "CANDIDATE", "SUPPORT_AGENT",
+  ] as const;
+
   const schema = z.object({
     name: z.string().min(2).max(60),
     description: z.string().max(200).optional(),
+    baseRole: z.enum(VALID_BASE_ROLES).default("CANDIDATE"),
   });
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -51,7 +58,12 @@ export async function POST(req: NextRequest) {
   if (existing) return NextResponse.json({ error: "A role with that name already exists" }, { status: 409 });
 
   const role = await db.customRole.create({
-    data: { name: parsed.data.name, description: parsed.data.description, isSystem: false },
+    data: {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      baseRole: parsed.data.baseRole,
+      isSystem: false,
+    },
   });
 
   await auditLog({

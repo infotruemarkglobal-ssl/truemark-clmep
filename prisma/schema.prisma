@@ -1124,6 +1124,7 @@ model CustomRole {
   id          String   @id @default(cuid())
   name        String   @unique
   description String?
+  baseRole    String   @default("CANDIDATE") // which built-in role's sidebar/access level this custom role grants
   isSystem    Boolean  @default(false) // true = maps to a built-in role, cannot be deleted
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

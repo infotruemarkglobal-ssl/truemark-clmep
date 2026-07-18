@@ -55,6 +55,15 @@ export async function POST(
     update: {},
   });
 
+  // Promote the user's built-in role to the custom role's baseRole so the
+  // sidebar and page guards (which only read user.role) reflect the correct
+  // access level. Without this, a user assigned an "Admin" custom role would
+  // still see the CANDIDATE sidebar because session.user.role stays unchanged.
+  await db.user.update({
+    where: { id: userId },
+    data: { role: role.baseRole },
+  });
+
   await auditLog({
     userId: session.user.id,
     action: "USER_ROLE_ASSIGNED",
