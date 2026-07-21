@@ -179,7 +179,17 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
           token.mfaEnabled = dbUser.mfaEnabled;
           token.mustChangePassword = dbUser.mustChangePassword;
         }
-        // Re-fetch permissions so matrix changes reflect within the updateAge window.
+        token.permissions = await serializePermissions(token.id as string).catch(() => null);
+      }
+      // Periodic rotation (no user, no explicit trigger): refresh role + permissions from DB.
+      // This fires at most once per updateAge window (5 min), keeping the sidebar in sync
+      // with matrix changes even for users who stay logged in without a full re-login.
+      if (!user && trigger !== "update" && token.id) {
+        const rotUser = await db.user.findUnique({
+          where: { id: token.id as string },
+          select: { role: true },
+        });
+        if (rotUser) token.role = rotUser.role as UserRole;
         token.permissions = await serializePermissions(token.id as string).catch(() => null);
       }
       return token;

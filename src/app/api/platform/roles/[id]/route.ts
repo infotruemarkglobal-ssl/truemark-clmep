@@ -4,10 +4,7 @@ import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
-
-function isSuperAdmin(role: string) {
-  return role === "SUPER_ADMIN";
-}
+import { can } from "@/lib/permissions";
 
 // GET /api/platform/roles/[id] — single role with permissions and user count
 export async function GET(
@@ -16,7 +13,7 @@ export async function GET(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isSuperAdmin(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await can(session, "permissions:manage", ["SUPER_ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
   const role = await db.customRole.findUnique({
@@ -58,7 +55,7 @@ export async function PATCH(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isSuperAdmin(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await can(session, "permissions:manage", ["SUPER_ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
   const parsed = patchSchema.safeParse(await req.json());
@@ -144,7 +141,7 @@ export async function DELETE(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isSuperAdmin(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await can(session, "permissions:manage", ["SUPER_ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
   const role = await db.customRole.findUnique({

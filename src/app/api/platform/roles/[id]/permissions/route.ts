@@ -3,14 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
-
-import type { Session } from "next-auth";
-
-function canManagePermissions(session: Session | null): boolean {
-  if (!session?.user) return false;
-  if (session.user.role === "SUPER_ADMIN" && session.user.permissions === null) return true;
-  return session.user.permissions?.includes("permissions:manage") ?? false;
-}
+import { can } from "@/lib/permissions";
 
 // PUT /api/platform/roles/[id]/permissions — toggle a single permission on/off
 export async function PUT(
@@ -19,7 +12,7 @@ export async function PUT(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canManagePermissions(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await can(session, "permissions:manage", ["SUPER_ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id: roleId } = await params;
 
@@ -80,7 +73,7 @@ export async function DELETE(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canManagePermissions(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await can(session, "permissions:manage", ["SUPER_ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
 

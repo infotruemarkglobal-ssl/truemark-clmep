@@ -4,14 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
-
-import type { Session } from "next-auth";
-
-function canManageUsers(session: Session | null, action: "read" | "update" | "suspend" = "read") {
-  if (!session?.user) return false;
-  if (session.user.role === "SUPER_ADMIN" && session.user.permissions === null) return true;
-  return session.user.permissions?.includes(`users:${action}`) ?? false;
-}
+import { can } from "@/lib/permissions";
 
 // GET /api/platform/users/[id] — full user profile for SUPER_ADMIN
 export async function GET(
@@ -20,7 +13,7 @@ export async function GET(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canManageUsers(session, "read")) {
+  if (!await can(session, "users:read", [USER_ROLES.SUPER_ADMIN])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -87,7 +80,7 @@ export async function PUT(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canManageUsers(session, "update")) {
+  if (!await can(session, "users:update", [USER_ROLES.SUPER_ADMIN])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -4,19 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
-
-import type { Session } from "next-auth";
-
-function can(session: Session | null, permission: string): boolean {
-  if (!session?.user) return false;
-  const { role, permissions } = session.user;
-  if (permissions === null) {
-    // Pure built-in role — use role-based guards (existing behaviour)
-    const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.TRAINER];
-    return (ALLOWED as string[]).includes(role);
-  }
-  return permissions.includes(permission);
-}
+import { can } from "@/lib/permissions";
 
 const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.TRAINER];
 const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
@@ -24,7 +12,7 @@ const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!can(session, "courses:update")) {
+  if (!await can(session, "courses:update", ALLOWED)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -76,7 +64,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!can(session, "courses:delete")) {
+  if (!await can(session, "courses:delete", ADMIN_ROLES)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
+import { can } from "@/lib/permissions";
 
 const ROLE_PRIORITY: Record<string, number> = {
   SUPER_ADMIN: 9, CERTIFICATION_OFFICER: 8, EXAMINER: 7, TRAINER: 6,
@@ -21,11 +22,6 @@ async function highestBaseRole(userId: string): Promise<string> {
   }, "CANDIDATE");
 }
 
-function canManageRoles(session: Awaited<ReturnType<typeof auth>>) {
-  if (!session?.user) return false;
-  if (session.user.role === "SUPER_ADMIN" && session.user.permissions === null) return true;
-  return session.user.permissions?.includes("permissions:manage") ?? false;
-}
 
 // GET /api/platform/users/[id]/roles — get roles assigned to a user
 export async function GET(
@@ -34,7 +30,7 @@ export async function GET(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canManageRoles(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await can(session, "permissions:manage", ["SUPER_ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id: userId } = await params;
 
@@ -53,7 +49,7 @@ export async function POST(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canManageRoles(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await can(session, "permissions:manage", ["SUPER_ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id: userId } = await params;
 
@@ -111,7 +107,7 @@ export async function DELETE(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!canManageRoles(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await can(session, "permissions:manage", ["SUPER_ADMIN"])) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id: userId } = await params;
 

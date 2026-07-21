@@ -1,4 +1,6 @@
+import { cache } from "react";
 import { db } from "@/lib/db";
+import type { Session } from "next-auth";
 
 /**
  * Permissions for pure built-in role users are implied by their role (the existing
@@ -52,4 +54,48 @@ export async function serializePermissions(userId: string): Promise<string[] | n
   const perms = await getUserPermissions(userId);
   if (perms === null) return null;
   return Array.from(perms);
+}
+
+/**
+ * Per-request cache of getUserPermissions.
+ * React cache() scopes deduplication to a single request, so multiple can() calls
+ * in the same route handler share one DB round-trip rather than N separate queries.
+ */
+export const getCachedUserPermissions = cache(getUserPermissions);
+
+/**
+ * Unified access check for API routes — the single function all route handlers should call.
+ *
+ * Pure role users (session.user.permissions === null):
+ *   Falls back to allowedRoles list — existing behaviour, zero DB cost.
+ *
+ * Custom-role users (session.user.permissions is string[]):
+ *   Reads permissions LIVE from DB so matrix changes take effect immediately,
+ *   bypassing the stale JWT entirely. The per-request cache means this DB hit
+ *   happens at most once per route invocation regardless of how many checks run.
+ *
+ * @param session      NextAuth session object (or null for unauthenticated requests)
+ * @param permission   "resource:action" key from the permission catalogue
+ * @param allowedRoles Built-in role values that may access this resource (pure-role fallback)
+ */
+export async function can(
+  session: Session | null,
+  permission: string,
+  allowedRoles: string[] = [],
+): Promise<boolean> {
+  if (!session?.user) return false;
+  const { id, role, permissions } = session.user;
+
+  if (permissions === null) {
+    // Pure built-in role user: role-based gate (no matrix applies)
+    return (allowedRoles as string[]).includes(role);
+  }
+
+  // Custom-role user: live DB read so unchecking a permission takes effect immediately
+  const livePerms = await getCachedUserPermissions(id);
+  if (livePerms === null) {
+    // Session says custom-role but DB disagrees — safe fallback
+    return (allowedRoles as string[]).includes(role);
+  }
+  return livePerms.has(permission);
 }

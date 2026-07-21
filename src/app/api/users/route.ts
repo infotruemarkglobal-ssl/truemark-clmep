@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
 import bcrypt from "bcryptjs";
+import { can } from "@/lib/permissions";
 
 const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.ORG_MANAGER];
 
@@ -12,7 +13,7 @@ const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, U
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ADMIN_ROLES as string[]).includes(session.user.role)) {
+  if (!await can(session, "users:read", ADMIN_ROLES)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -91,7 +92,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) {
+  if (!await can(session, "staff:manage", [USER_ROLES.SUPER_ADMIN])) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
