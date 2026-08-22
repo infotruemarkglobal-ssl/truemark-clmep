@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import { auth } from "@/lib/auth";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
-import { uploadFile, getFileUrl } from "@/lib/storage";
+import { uploadFile } from "@/lib/storage";
 import { inngest, EVENTS } from "@/inngest/client";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -128,7 +128,9 @@ export async function POST(req: NextRequest) {
     },
   }).catch((err) => console.error("[candidate-upload] Failed to enqueue malware scan:", err));
 
-  const url = await getFileUrl(result.key);
+  // Stable auth-gated proxy (mints a fresh pre-signed URL per request) rather than
+  // a raw pre-signed URL, which would go stale 15 minutes after this response.
+  const url = `/api/files/url?key=${encodeURIComponent(result.key)}`;
 
   return NextResponse.json({ url, key: result.key }, { status: 201 });
 }

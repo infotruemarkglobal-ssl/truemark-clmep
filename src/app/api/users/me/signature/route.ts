@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { USER_ROLES } from "@/lib/constants";
-import { uploadFile, deleteFile, getFileUrl } from "@/lib/storage";
+import { uploadFile, deleteFile } from "@/lib/storage";
 
 const ALLOWED_ROLES = [USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.SUPER_ADMIN] as string[];
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -76,8 +76,9 @@ export async function POST(req: NextRequest) {
     metadata: { storageKey: key },
   });
 
-  const signatureUrl = await getFileUrl(key);
-  return NextResponse.json({ ok: true, signatureUrl });
+  // Stable auth-gated proxy (mints a fresh pre-signed URL per request) rather than
+  // a raw pre-signed URL, which would go stale 15 minutes after this response.
+  return NextResponse.json({ ok: true, signatureUrl: `/api/files/url?key=${encodeURIComponent(key)}` });
 }
 
 // DELETE /api/users/me/signature — remove the stored signature.

@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { USER_ROLES } from "@/lib/constants";
-import { uploadFile, getFileUrl } from "@/lib/storage";
+import { uploadFile } from "@/lib/storage";
 import path from "path";
 
 const ALLOWED_TYPES: Record<string, string> = {
@@ -67,7 +67,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const key = `org-documents/${orgId}-${Date.now()}${ext}`;
 
   const result = await uploadFile({ buffer, key, contentType: file.type });
-  const url = await getFileUrl(result.key);
+  // Stable auth-gated proxy (mints a fresh pre-signed URL per request) rather than
+  // a raw pre-signed URL, which would go stale 15 minutes after this response.
+  const url = `/api/files/url?key=${encodeURIComponent(result.key)}`;
 
   await db.organisation.update({
     where: { id: orgId },

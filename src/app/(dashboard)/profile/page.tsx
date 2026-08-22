@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getFileUrl } from "@/lib/storage";
 import ProfilePage from "@/components/settings/ProfilePage";
 
 export const metadata: Metadata = { title: "My Profile" };
@@ -39,7 +38,12 @@ export default async function ProfileRoute() {
 
   if (!user) redirect("/login");
 
-  const signatureUrl = user.signatureUrl ? await getFileUrl(user.signatureUrl) : null;
+  // Use the stable auth-gated proxy (mints a fresh pre-signed URL per request)
+  // instead of baking a 15-minute pre-signed URL into the page — the latter goes
+  // stale as soon as the user leaves this page open for a while.
+  const signatureUrl = user.signatureUrl
+    ? `/api/files/url?key=${encodeURIComponent(user.signatureUrl)}`
+    : null;
 
   return (
     <ProfilePage

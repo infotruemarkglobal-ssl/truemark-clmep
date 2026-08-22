@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
-import { uploadFile, getFileUrl } from "@/lib/storage";
+import { uploadFile } from "@/lib/storage";
 import { inngest, EVENTS } from "@/inngest/client";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
 
   // Return the proxy URL (auth-gated) rather than a direct S3/public URL.
   // Callers that need a fresh URL later should call GET /api/files/url?key=...
-  const url = await getFileUrl(result.key);
+  const url = `/api/files/url?key=${encodeURIComponent(result.key)}`;
 
   return NextResponse.json({ url, key: result.key, name: file.name, size: file.size }, { status: 201 });
 }

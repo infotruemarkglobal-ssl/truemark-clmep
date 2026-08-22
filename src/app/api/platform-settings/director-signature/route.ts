@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { USER_ROLES } from "@/lib/constants";
-import { uploadFile, deleteFile, getFileUrl } from "@/lib/storage";
+import { uploadFile, deleteFile } from "@/lib/storage";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg"];
@@ -74,7 +74,8 @@ export async function POST(req: NextRequest) {
     metadata: { storageKey: key },
   });
 
-  // Resolve the storage key to a serving URL so the client can display it immediately.
-  const signatureUrl = await getFileUrl(key);
-  return NextResponse.json({ ok: true, signatureUrl });
+  // Return the stable auth-gated proxy URL (mints a fresh pre-signed URL on every
+  // request) rather than a raw pre-signed URL — the latter expires in 15 minutes,
+  // which would break the image as soon as the admin leaves this page open a while.
+  return NextResponse.json({ ok: true, signatureUrl: `/api/files/url?key=${encodeURIComponent(key)}` });
 }
