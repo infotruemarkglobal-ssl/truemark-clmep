@@ -14,8 +14,6 @@ type CartCourse = { id: string; title: string; currency: string; price: number }
 type CartItem = { id: string; courseId: string; seats: number; unitPrice: string; course: CartCourse };
 type Cart = { items: CartItem[] };
 
-type PaymentMethod = "stripe" | "paystack";
-
 function PaystackIcon() {
   return (
     <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none">
@@ -25,24 +23,12 @@ function PaystackIcon() {
   );
 }
 
-function StripeIcon() {
-  return (
-    <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none">
-      <rect width="32" height="32" rx="6" fill="#635BFF" />
-      <path d="M14.5 12.5c0-1.1.9-1.5 2.3-1.5 2 0 4.6.6 6.2 1.7V8.3C21.3 7.5 19.1 7 16.8 7c-4.4 0-7.3 2.3-7.3 6.1 0 6 8.3 5 8.3 7.6 0 1.3-1.1 1.7-2.6 1.7-2.2 0-5.1-.9-7-2.2v4.4c2 .9 4 1.4 7 1.4 4.5 0 7.6-2.2 7.6-6.1-.1-6.4-8.3-5.3-8.3-7.4z" fill="white" />
-    </svg>
-  );
-}
-
 export default function CheckoutPage() {
   const router = useRouter();
   const [cart, setCart] = useState<Cart | null>(null);
   const [loading, setLoading] = useState(true);
   const [country, setCountry] = useState<string>(""); // loaded from profile/org
-  const [method, setMethod] = useState<PaymentMethod>("stripe");
   const [paying, setPaying] = useState(false);
-
-  const isNigerian = country.toUpperCase() === "NIGERIA";
 
   const fetchData = useCallback(async () => {
     try {
@@ -56,8 +42,6 @@ export default function CheckoutPage() {
       if (profileRes.ok) {
         const { country: c } = await profileRes.json() as { country: string };
         setCountry(c ?? "");
-        // Nigerian users default to Paystack; international default to Stripe
-        setMethod(c?.toUpperCase() === "NIGERIA" ? "paystack" : "stripe");
       }
     } catch {
       toast.error("Failed to load checkout");
@@ -71,11 +55,7 @@ export default function CheckoutPage() {
   async function handlePay() {
     setPaying(true);
     try {
-      const endpoint = method === "stripe"
-        ? "/api/payments/stripe/initiate"
-        : "/api/payments/paystack/cart";
-
-      const res = await fetch(endpoint, { method: "POST" });
+      const res = await fetch("/api/payments/paystack/cart", { method: "POST" });
       const data = await res.json();
 
       if (!res.ok) {
@@ -83,8 +63,7 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Stripe returns { url }, Paystack returns { authorizationUrl }
-      const redirectUrl: string = data.url ?? data.authorizationUrl;
+      const redirectUrl: string = data.authorizationUrl;
       if (!redirectUrl) {
         toast.error("No redirect URL from payment provider");
         return;
@@ -135,7 +114,7 @@ export default function CheckoutPage() {
 
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Checkout</h1>
-        <p className="text-sm text-slate-500 mt-1">Review your order and choose a payment method.</p>
+        <p className="text-sm text-slate-500 mt-1">Review your order and complete payment.</p>
       </div>
 
       {/* Order summary */}
@@ -177,44 +156,13 @@ export default function CheckoutPage() {
       {/* Payment method */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
         <h2 className="font-semibold text-slate-900">Payment Method</h2>
-        <div className="space-y-2">
-          {/* Stripe — always shown */}
-          <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${method === "stripe" ? "border-primary bg-primary/5" : "border-slate-200 hover:border-slate-300"}`}>
-            <input
-              type="radio"
-              name="method"
-              value="stripe"
-              checked={method === "stripe"}
-              onChange={() => setMethod("stripe")}
-              className="sr-only"
-            />
-            <StripeIcon />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-900">Pay with Stripe</p>
-              <p className="text-xs text-slate-500">Cards, Apple Pay, Google Pay — international</p>
-            </div>
-            {method === "stripe" && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
-          </label>
-
-          {/* Paystack — Nigerian users only */}
-          {isNigerian && (
-            <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${method === "paystack" ? "border-primary bg-primary/5" : "border-slate-200 hover:border-slate-300"}`}>
-              <input
-                type="radio"
-                name="method"
-                value="paystack"
-                checked={method === "paystack"}
-                onChange={() => setMethod("paystack")}
-                className="sr-only"
-              />
-              <PaystackIcon />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-slate-900">Pay with Paystack</p>
-                <p className="text-xs text-slate-500">Cards, bank transfer, USSD — Nigeria</p>
-              </div>
-              {method === "paystack" && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
-            </label>
-          )}
+        <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-primary bg-primary/5">
+          <PaystackIcon />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-slate-900">Pay with Paystack</p>
+            <p className="text-xs text-slate-500">Cards, bank transfer, USSD</p>
+          </div>
+          <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
         </div>
       </div>
 

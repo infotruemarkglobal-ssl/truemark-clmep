@@ -152,11 +152,18 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         // mustChangePassword. Fetch these from the DB so MFA and password-change
         // enforcement apply equally to OAuth and credential sign-ins (L4 fix).
         if (account?.provider && account.provider !== "credentials") {
-          const dbUser = await db.user.findUnique({ where: { id: user.id as string } });
-          if (dbUser) {
-            token.role = dbUser.role as UserRole;
-            token.mfaEnabled = dbUser.mfaEnabled;
-            token.mustChangePassword = dbUser.mustChangePassword;
+          // A transient DB error here must not crash the sign-in flow — fail closed
+          // by leaving role/mfa fields unset (downstream role checks deny by default)
+          // rather than letting the error bubble up and abort the callback entirely.
+          try {
+            const dbUser = await db.user.findUnique({ where: { id: user.id as string } });
+            if (dbUser) {
+              token.role = dbUser.role as UserRole;
+              token.mfaEnabled = dbUser.mfaEnabled;
+              token.mustChangePassword = dbUser.mustChangePassword;
+            }
+          } catch {
+            // leave role/mfaEnabled/mustChangePassword unset; sign-in still completes
           }
         } else {
           token.role = (user as { role: UserRole }).role;
@@ -173,24 +180,38 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         if ((session as { user?: { mfaVerified?: boolean } })?.user?.mfaVerified === true) {
           token.mfaVerified = true;
         }
-        const dbUser = await db.user.findUnique({ where: { id: token.id as string } });
-        if (dbUser) {
-          token.role = dbUser.role as UserRole;
-          token.mfaEnabled = dbUser.mfaEnabled;
-          token.mustChangePassword = dbUser.mustChangePassword;
+        // A transient DB error here must not abort the update (e.g. the MFA
+        // verification flow calling unstable_update()) — keep the token's existing
+        // role/mfa/permissions rather than letting the error null out the session.
+        try {
+          const dbUser = await db.user.findUnique({ where: { id: token.id as string } });
+          if (dbUser) {
+            token.role = dbUser.role as UserRole;
+            token.mfaEnabled = dbUser.mfaEnabled;
+            token.mustChangePassword = dbUser.mustChangePassword;
+          }
+          token.permissions = await serializePermissions(token.id as string).catch(() => null);
+        } catch {
+          // keep existing token.role / mfaEnabled / mustChangePassword / permissions
         }
-        token.permissions = await serializePermissions(token.id as string).catch(() => null);
       }
       // Periodic rotation (no user, no explicit trigger): refresh role + permissions from DB.
       // This fires at most once per updateAge window (5 min), keeping the sidebar in sync
       // with matrix changes even for users who stay logged in without a full re-login.
+      // A transient DB error here (e.g. a dropped Neon/PgBouncer connection) must not
+      // invalidate an otherwise-valid session — fall back to the token's existing role/
+      // permissions rather than letting the error bubble up and null out the whole session.
       if (!user && trigger !== "update" && token.id) {
-        const rotUser = await db.user.findUnique({
-          where: { id: token.id as string },
-          select: { role: true },
-        });
-        if (rotUser) token.role = rotUser.role as UserRole;
-        token.permissions = await serializePermissions(token.id as string).catch(() => null);
+        try {
+          const rotUser = await db.user.findUnique({
+            where: { id: token.id as string },
+            select: { role: true },
+          });
+          if (rotUser) token.role = rotUser.role as UserRole;
+          token.permissions = await serializePermissions(token.id as string).catch(() => null);
+        } catch {
+          // keep existing token.role / token.permissions; next request retries rotation
+        }
       }
       return token;
     },
