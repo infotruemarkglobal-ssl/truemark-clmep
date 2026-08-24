@@ -12,7 +12,11 @@ import type { UserRole } from "@/lib/constants";
 import { serializePermissions } from "@/lib/permissions";
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  // Registration and every other email-lookup route in this codebase already
+  // normalise to lowercase before hitting the DB (an exact-match Postgres
+  // query, case-sensitive by default) — login was the one place that didn't,
+  // so "Name@x.com" would fail to match a stored "name@x.com".
+  email: z.string().email().toLowerCase(),
   password: z.string().min(1),
 });
 
