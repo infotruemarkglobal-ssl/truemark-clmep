@@ -132,7 +132,7 @@ export default async function PlatformOrganisationsPage() {
                   <td className="px-5 py-3 text-right tabular-nums text-slate-700">{org._count.enrolments}</td>
                   <td className="px-5 py-3 text-right tabular-nums text-slate-700">{org._count.purchases}</td>
                   <td className="px-5 py-3 text-slate-500 text-xs whitespace-nowrap">
-                    {org.createdAt.toLocaleDateString("en-GB")}
+                    {new Date(org.createdAt).toLocaleDateString("en-GB")}
                   </td>
                   <td className="px-5 py-3 text-right">
                     <Link
