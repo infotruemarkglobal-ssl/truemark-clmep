@@ -82,97 +82,121 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // ── 5. Idempotency + optimistic lock ──────────────────────────────────────
-  // Two Paystack retries can arrive concurrently. Rather than read-then-update
-  // (TOCTOU), we issue a single conditional UPDATE that only matches when the
-  // purchase is still in PENDING state. PostgreSQL serialises this at row level.
-  // If the row was already PAID (count === 0) we return 200 immediately — the
-  // enrolment was already created on the first delivery.
-  const purchase = await db.purchase.findUnique({ where: { paystackReference: reference } });
-  if (!purchase) {
+  // ── 5. Find every Purchase row for this checkout ──────────────────────────
+  // A cart checkout creates ONE Purchase per item, but only the first item's
+  // row carries `reference` as its own paystackReference column (needed since
+  // that column is unique and Paystack only issues one reference per checkout).
+  // Every row's metadata carries the true shared reference regardless, so match
+  // on either to reliably find all items in a multi-course cart, not just the
+  // first (previously, non-first items were unreachable and stuck PENDING forever).
+  const purchases = await db.purchase.findMany({
+    where: { OR: [{ paystackReference: reference }, { metadata: { contains: reference } }] },
+  });
+  if (purchases.length === 0) {
     // Unknown reference — log but 200 so Paystack doesn't retry endlessly
     console.warn(`[webhook] Unknown paystackReference: ${reference}`);
     return NextResponse.json({ received: true });
   }
 
   // ── 6. Amount verification ────────────────────────────────────────────────
-  // purchase.amount is stored in main currency units (e.g. 5000 NGN).
-  // Paystack sends paidSmallestUnit in the smallest denomination (kobo = NGN × 100).
-  // Never trust the webhook amount for enrolment decisions — compare against the
-  // DB-stored expected amount so a price-manipulation attack cannot grant access.
-  const expectedSmallestUnit = Math.round(purchase.amount * 100);
-  if (paidSmallestUnit !== expectedSmallestUnit) {
+  // purchase.amount is stored in main currency units per item, EXCLUSIVE of VAT.
+  // Paystack's paidSmallestUnit is the full checkout total INCLUSIVE of VAT (see
+  // lib/tax.ts — applied on top of the item subtotal at checkout time but never
+  // persisted per-item). Comparing for exact equality here would mismatch on
+  // every VAT-applicable purchase (e.g. every Nigerian checkout, 7.5% VAT) and
+  // permanently strand it PENDING. Use a floor check instead: reject only if
+  // Paystack collected LESS than the sum of item subtotals — VAT and rounding
+  // only ever add on top, never subtract, so this still catches genuine
+  // price-manipulation attempts without false-flagging legitimate VAT-inclusive
+  // payments.
+  const expectedSubtotalSmallestUnit = Math.round(
+    purchases.reduce((sum, p) => sum + p.amount, 0) * 100,
+  );
+  if (paidSmallestUnit < expectedSubtotalSmallestUnit) {
     // Significant security event — log with full detail for the ops team
     console.error(
       `[webhook] AMOUNT MISMATCH ref=${reference} ` +
-      `expected=${expectedSmallestUnit} received=${paidSmallestUnit} ` +
-      `purchaseId=${purchase.id}`
+      `expectedAtLeast=${expectedSubtotalSmallestUnit} received=${paidSmallestUnit} ` +
+      `purchaseIds=${purchases.map((p) => p.id).join(",")}`
     );
     // Return 200 so Paystack stops retrying (retrying won't change the amount)
-    // The purchase stays PENDING; finance team must investigate manually.
+    // These purchases stay PENDING; finance team must investigate manually.
     return NextResponse.json({ received: true });
   }
 
-  // ── 7. Atomic PAID transition + enrolment in a single transaction ────────
-  // If mark-PAID succeeds but enrolment.upsert then fails, the purchase would
-  // be PAID with no enrolment — the candidate pays but gets no access.
-  // Wrapping both in $transaction ensures they either both commit or both roll back.
-  // The updateMany idempotency guard remains the concurrency lock: if two webhook
-  // deliveries race, only one wins the updateMany (count=1), the other gets
-  // count=0 and returns early before entering the transaction.
-  const updated = await db.purchase.updateMany({
-    where: { id: purchase.id, status: { not: "PAID" } },
-    data: { status: "PAID", paidAt: new Date(paid_at) },
-  });
-
-  if (updated.count === 0) {
+  // ── 7. Idempotency + optimistic lock ──────────────────────────────────────
+  // Two Paystack retries can arrive concurrently. Rather than read-then-update
+  // (TOCTOU) on the whole batch, claim each row individually with a conditional
+  // UPDATE that only matches while it's still PENDING — PostgreSQL serialises
+  // this at row level, so if a concurrent delivery already claimed a row, our
+  // update for that row simply matches zero rows and we skip it. This closes
+  // the same race the original single-purchase code guarded against, extended
+  // to a multi-item cart's whole set of purchases.
+  const newlyPaid: typeof purchases = [];
+  for (const p of purchases) {
+    if (p.status === "PAID") continue;
+    const claim = await db.purchase.updateMany({
+      where: { id: p.id, status: { not: "PAID" } },
+      data: { status: "PAID", paidAt: new Date(paid_at) },
+    });
+    if (claim.count === 1) newlyPaid.push(p);
+  }
+  if (newlyPaid.length === 0) {
     return NextResponse.json({ received: true });
   }
 
-  // Only one delivery reaches here per reference — safe to transact.
-  if (purchase.userId && purchase.courseId) {
+  // ── 8. Enrol each newly-paid item (or pool seats for org bulk purchases) ──
+  for (const purchase of newlyPaid) {
+    if (!purchase.userId || !purchase.courseId) continue;
+
+    const meta = purchase.metadata ? (JSON.parse(purchase.metadata) as { organisationId?: string | null }) : {};
     const [course, candidate] = await Promise.all([
-      db.course.findUnique({
-        where: { id: purchase.courseId },
-        select: { title: true, slug: true },
-      }),
-      db.user.findUnique({
-        where: { id: purchase.userId },
-        select: { email: true, firstName: true },
-      }),
+      db.course.findUnique({ where: { id: purchase.courseId }, select: { title: true, slug: true } }),
+      db.user.findUnique({ where: { id: purchase.userId }, select: { email: true, firstName: true } }),
     ]);
 
-    // ── 8. Enrolment + audit written atomically ───────────────────────────
     // Array form is PgBouncer transaction-pooling compatible (Supabase).
     // The interactive callback form is not — it holds a connection open across
     // async ticks, which conflicts with PgBouncer's connection reuse model.
-    await db.$transaction([
-      db.enrolment.upsert({
-        where: { userId_courseId: { userId: purchase.userId!, courseId: purchase.courseId! } },
-        create: {
-          userId: purchase.userId!,
-          courseId: purchase.courseId!,
-          purchaseId: purchase.id,
-          status: "ACTIVE",
-          progress: 0,
-        },
-        update: { status: "ACTIVE" },
-      }),
-      db.auditLog.create({
-        data: {
-          userId: purchase.userId,
-          action: "PAYMENT_RECEIVED",
-          entityType: "Purchase",
-          entityId: purchase.id,
-          metadata: JSON.stringify({
-            reference,
-            amountPaidKobo: paidSmallestUnit,
-            currency: event.data.currency,
-            courseId: purchase.courseId,
+    if (purchase.seats > 1 && (purchase.organisationId || meta.organisationId)) {
+      const organisationId = purchase.organisationId ?? meta.organisationId!;
+      const existingSeat = await db.courseSeat.findFirst({
+        where: { organisationId, courseId: purchase.courseId, purchaseId: purchase.id },
+      });
+      if (!existingSeat) {
+        await db.$transaction([
+          db.courseSeat.create({
+            data: { organisationId, courseId: purchase.courseId, purchaseId: purchase.id, totalSeats: purchase.seats },
           }),
-        },
-      }),
-    ]);
+          db.auditLog.create({
+            data: {
+              userId: purchase.userId,
+              action: "PAYMENT_RECEIVED",
+              entityType: "Purchase",
+              entityId: purchase.id,
+              metadata: JSON.stringify({ reference, amountPaidKobo: paidSmallestUnit, currency: event.data.currency, courseId: purchase.courseId, seats: purchase.seats }),
+            },
+          }),
+        ]);
+      }
+    } else {
+      await db.$transaction([
+        db.enrolment.upsert({
+          where: { userId_courseId: { userId: purchase.userId, courseId: purchase.courseId } },
+          create: { userId: purchase.userId, courseId: purchase.courseId, purchaseId: purchase.id, status: "ACTIVE", progress: 0 },
+          update: { status: "ACTIVE" },
+        }),
+        db.auditLog.create({
+          data: {
+            userId: purchase.userId,
+            action: "PAYMENT_RECEIVED",
+            entityType: "Purchase",
+            entityId: purchase.id,
+            metadata: JSON.stringify({ reference, amountPaidKobo: paidSmallestUnit, currency: event.data.currency, courseId: purchase.courseId }),
+          },
+        }),
+      ]);
+    }
 
     // Notification and email are best-effort — outside the transaction so a
     // failure here does not roll back the enrolment.

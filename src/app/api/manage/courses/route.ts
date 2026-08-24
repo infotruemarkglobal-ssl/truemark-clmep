@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       title: body.data.title,
       slug: body.data.slug,
       shortDescription: body.data.shortDescription ?? null,
-      schemeId: body.data.schemeId ?? null,
+      schemeId: body.data.schemeId || null,
       price: body.data.price,
       currency: body.data.currency,
       cpdHours: body.data.cpdHours,
