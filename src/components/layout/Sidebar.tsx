@@ -8,6 +8,7 @@ import {
   BarChart3, Shield, ShieldCheck, ClipboardList, FolderOpen, MessageSquare,
   Settings, HelpCircle, X, TrendingUp, Package, BadgeCheck, Bell,
   UserCircle, Eye, Scale, Crown, CreditCard, KeyRound, ClipboardCheck, ListChecks,
+  MessageSquareWarning,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/constants";
@@ -51,6 +52,7 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
       items: [
         { label: "My Tickets",    href: "/support",      icon: MessageSquare },
         { label: "Appeals",       href: "/appeals",      icon: Scale },
+        { label: "My Complaints", href: "/complaints",   icon: MessageSquareWarning },
       ],
     },
     PROFILE_SECTION,
@@ -112,8 +114,9 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Support",
       items: [
-        { label: "My Tickets",  href: "/support",  icon: MessageSquare },
-        { label: "Appeals",     href: "/appeals",  icon: Scale },
+        { label: "My Tickets",    href: "/support",    icon: MessageSquare },
+        { label: "Appeals",       href: "/appeals",    icon: Scale },
+        { label: "My Complaints", href: "/complaints", icon: MessageSquareWarning },
       ],
     },
     PROFILE_SECTION,
