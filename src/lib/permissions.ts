@@ -3,25 +3,32 @@ import { db } from "@/lib/db";
 import type { Session } from "next-auth";
 
 /**
- * Permissions for pure built-in role users are implied by their role (the existing
- * role-based guards handle access).  Permissions stored in `role_permissions` only
- * materialise as enforceable constraints for users who have been explicitly assigned
- * a custom role via `user_custom_roles`.
+ * Every user's effective permission set is resolved live from the database, every
+ * call — there is no "pure built-in role, no matrix applies" bypass. The set is the
+ * union of:
+ *   1. Permissions granted to any custom role the user has been explicitly assigned
+ *      (`user_custom_roles`), and
+ *   2. Permissions granted to the `isSystem` role matching the user's plain
+ *      `User.role` value (seeded by SYSTEM_ROLE_PERMISSIONS, live-editable via the
+ *      Permission Matrix UI) — so a built-in role's permissions are exactly as
+ *      DB-driven as a custom role's, and revoking one takes effect on the very next
+ *      request, not on the next deploy.
  *
- * Returns:
- *   null  – user has no custom role; caller should fall back to role-based checks.
- *   Set   – user has ≥1 custom role; the set is the union of all granted permissions.
- *           An empty set means "custom role assigned but no permissions checked yet."
+ * A user whose role can't be resolved to any grant (orphaned role, DB error) gets an
+ * empty set — fail closed, never fall back to trusting the caller's role list alone.
  */
-export async function getUserPermissions(userId: string): Promise<Set<string> | null> {
-  const customRoles = await db.userCustomRole.findMany({
-    where: { userId },
-    select: { roleId: true },
-  });
+export async function getUserPermissions(userId: string): Promise<Set<string>> {
+  const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (!user) return new Set();
 
-  if (customRoles.length === 0) return null;
+  const [explicit, systemRole] = await Promise.all([
+    db.userCustomRole.findMany({ where: { userId }, select: { roleId: true } }),
+    db.customRole.findFirst({ where: { name: user.role, isSystem: true }, select: { id: true } }),
+  ]);
 
-  const roleIds = customRoles.map((cr) => cr.roleId);
+  const roleIds = [...explicit.map((cr) => cr.roleId), ...(systemRole ? [systemRole.id] : [])];
+  if (roleIds.length === 0) return new Set();
+
   const rows = await db.rolePermission.findMany({
     where: { roleId: { in: roleIds } },
     select: { permission: { select: { resource: true, action: true } } },
@@ -30,29 +37,19 @@ export async function getUserPermissions(userId: string): Promise<Set<string> | 
   return new Set(rows.map((r) => `${r.permission.resource}:${r.permission.action}`));
 }
 
-/**
- * Check a single permission for a user.
- *
- * For custom-role users: returns true only if one of their custom roles grants it.
- * For pure role users (null): always returns true (caller must gate by role instead).
- */
+/** Check a single permission for a user, resolved live per the rules above. */
 export async function hasPermission(
   userId: string,
   resource: string,
   action: string,
 ): Promise<boolean> {
   const perms = await getUserPermissions(userId);
-  if (perms === null) return true; // pure role user — let role-based guards decide
   return perms.has(`${resource}:${action}`);
 }
 
-/**
- * Serialise permissions to a plain string array suitable for storing in a JWT.
- * Returns null for pure role users so the caller knows no matrix applies.
- */
-export async function serializePermissions(userId: string): Promise<string[] | null> {
+/** Serialise permissions to a plain string array suitable for storing in a JWT. */
+export async function serializePermissions(userId: string): Promise<string[]> {
   const perms = await getUserPermissions(userId);
-  if (perms === null) return null;
   return Array.from(perms);
 }
 
@@ -66,17 +63,18 @@ export const getCachedUserPermissions = cache(getUserPermissions);
 /**
  * Unified access check for API routes — the single function all route handlers should call.
  *
- * Pure role users (session.user.permissions === null):
- *   Falls back to allowedRoles list — existing behaviour, zero DB cost.
- *
- * Custom-role users (session.user.permissions is string[]):
- *   Reads permissions LIVE from DB so matrix changes take effect immediately,
- *   bypassing the stale JWT entirely. The per-request cache means this DB hit
- *   happens at most once per route invocation regardless of how many checks run.
+ * The live permission matrix is always the deciding factor. `allowedRoles`, when given,
+ * is an additional upper bound — the user's `session.user.role` must also be in that
+ * list — not a fallback used only when there's no matrix. This means: revoking a
+ * permission from a role denies access immediately regardless of allowedRoles, while
+ * granting a *new* role access to a resource still requires that role to be added to
+ * the relevant call site's allowedRoles list — a deliberate choice to widen an
+ * endpoint's audience, kept separate from a matrix edit that only ever narrows it.
+ * Routes migrated without an allowedRoles list rely on the matrix alone.
  *
  * @param session      NextAuth session object (or null for unauthenticated requests)
  * @param permission   "resource:action" key from the permission catalogue
- * @param allowedRoles Built-in role values that may access this resource (pure-role fallback)
+ * @param allowedRoles Optional upper bound on which built-in roles may access this resource
  */
 export async function can(
   session: Session | null,
@@ -84,18 +82,10 @@ export async function can(
   allowedRoles: string[] = [],
 ): Promise<boolean> {
   if (!session?.user) return false;
-  const { id, role, permissions } = session.user;
+  const { id, role } = session.user;
 
-  if (permissions === null) {
-    // Pure built-in role user: role-based gate (no matrix applies)
-    return (allowedRoles as string[]).includes(role);
-  }
+  if (allowedRoles.length > 0 && !allowedRoles.includes(role)) return false;
 
-  // Custom-role user: live DB read so unchecking a permission takes effect immediately
   const livePerms = await getCachedUserPermissions(id);
-  if (livePerms === null) {
-    // Session says custom-role but DB disagrees — safe fallback
-    return (allowedRoles as string[]).includes(role);
-  }
   return livePerms.has(permission);
 }

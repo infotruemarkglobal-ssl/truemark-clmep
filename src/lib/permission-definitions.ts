@@ -78,6 +78,10 @@ export const PERMISSIONS: PermissionDef[] = [
   { resource: "settings",    action: "manage", label: "Platform Settings",     description: "Configure global platform settings",                        category: "Platform" },
   { resource: "permissions", action: "manage", label: "Manage Roles & Permissions", description: "Create roles and assign permissions across the platform", category: "Platform" },
   { resource: "files",       action: "upload", label: "Upload Files",          description: "Upload files such as avatars and documents",                category: "Platform" },
+
+  // ── Support ───────────────────────────────────────────────────────────────
+  { resource: "tickets", action: "read",   label: "View Support Tickets",   description: "View submitted support tickets and their messages",           category: "Support" },
+  { resource: "tickets", action: "manage", label: "Respond to & Manage Tickets", description: "Reply to, assign, and close support tickets",             category: "Support" },
 ];
 
 // Which permissions each system role gets by default.
@@ -87,7 +91,9 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, Array<[string, string]>> = 
 
   CERTIFICATION_OFFICER: [
     ["courses",       "read"],
+    ["courses",       "create"],
     ["courses",       "update"],
+    ["courses",       "delete"],
     ["courses",       "publish"],
     ["scorm",         "read"],
     ["exams",         "read"],
@@ -181,5 +187,12 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, Array<[string, string]>> = 
     ["cpd",           "read"],
     ["cpd",           "manage"],
     ["files",         "upload"],
+  ],
+
+  SUPPORT_AGENT: [
+    ["tickets", "read"],
+    ["tickets", "manage"],
+    ["users",   "read"],
+    ["files",   "upload"],
   ],
 };

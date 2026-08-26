@@ -769,22 +769,29 @@ Topics include process approach, risk-based thinking, audit planning, checklist 
       update: { description: roleDescriptions[roleName], isSystem: true },
     });
 
-    // Resolve permission IDs from resource+action pairs
+    // Only seed default permissions the FIRST time this role has none — never wipe an
+    // already-populated role. The Permission Matrix UI now live-edits these rows
+    // directly (that's the whole fix), so a re-run of this script in an environment
+    // that's already been through admin edits must never clobber them back to the
+    // hardcoded SYSTEM_ROLE_PERMISSIONS defaults.
+    const existingGrantCount = await db.rolePermission.count({ where: { roleId: role.id } });
+    if (existingGrantCount > 0) {
+      console.log(`  ↷ Role "${roleName}": already has ${existingGrantCount} grants, leaving as-is`);
+      continue;
+    }
+
     const pairs = SYSTEM_ROLE_PERMISSIONS[roleName];
     const permRecords = await db.permission.findMany({
       where: { OR: pairs.map(([resource, action]) => ({ resource, action })) },
       select: { id: true },
     });
-
-    // Wipe and re-assign so changes to SYSTEM_ROLE_PERMISSIONS always take effect
-    await db.rolePermission.deleteMany({ where: { roleId: role.id } });
     if (permRecords.length > 0) {
       await db.rolePermission.createMany({
         data: permRecords.map((p) => ({ roleId: role.id, permissionId: p.id })),
         skipDuplicates: true,
       });
     }
-    console.log(`  ✓ Role "${roleName}": ${permRecords.length} permissions`);
+    console.log(`  ✓ Role "${roleName}": ${permRecords.length} default permissions (first seed)`);
   }
 
   console.log("\n✅ Seed complete!");

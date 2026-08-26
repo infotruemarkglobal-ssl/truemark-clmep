@@ -249,22 +249,24 @@ export default function Sidebar({
   onClose,
 }: {
   role: UserRole;
-  /** null = pure role user (show all items). string[] = custom-role user (filter by permissions). */
+  /** Live-resolved permission set (built-in role + any custom-role grants). Null only
+   *  on a genuine resolution failure — treated as empty (fail closed), never as "show
+   *  everything unfiltered". */
   permissions: string[] | null;
   open: boolean;
   onClose: () => void;
 }) {
   const pathname = usePathname();
-  const permSet = permissions !== null ? new Set(permissions) : null;
+  const permSet = new Set(permissions ?? []);
 
-  // For custom-role users: filter nav items by requiredPermission.
-  // For pure role users (permSet === null): show everything.
+  // Every item with a requiredPermission is filtered by the live matrix, for every
+  // user — built-in role or custom role alike. Items with no requiredPermission
+  // annotation are ungated here and rely solely on ROLE_NAV's section selection.
   const rawSections = ROLE_NAV[role] ?? ROLE_NAV.CANDIDATE;
   const sections = rawSections.map((section) => ({
     ...section,
     items: section.items.filter((item) => {
-      if (permSet === null) return true; // pure role user — no filtering
-      if (!item.requiredPermission) return true; // no permission required
+      if (!item.requiredPermission) return true;
       return permSet.has(item.requiredPermission);
     }),
   })).filter((section) => section.items.length > 0);

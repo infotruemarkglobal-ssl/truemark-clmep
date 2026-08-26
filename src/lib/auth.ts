@@ -176,7 +176,10 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         }
         // mfaVerified always starts false; TOTP flow promotes it via trigger=update.
         token.mfaVerified = false;
-        // Load custom-role permissions. null = pure built-in role (no matrix constraint).
+        // Live-resolved permission matrix (built-in role + any custom-role grants).
+        // null here means resolution itself failed (DB error), not "no matrix applies" —
+        // can() re-resolves live on every check regardless, so this JWT copy is only
+        // used as a routing/display hint (e.g. the Sidebar), never the source of truth.
         token.permissions = await serializePermissions(token.id as string).catch(() => null);
       }
       if (trigger === "update") {
