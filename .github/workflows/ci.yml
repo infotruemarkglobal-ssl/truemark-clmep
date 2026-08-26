@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+
+    # A local, disposable Postgres — used ONLY as scratch space for the schema-drift
+    # check below. It holds no real data and is never touched by the test suite,
+    # which runs against the real Neon CI branch (TEST_DIRECT_URL secret) so it
+    # exercises the actual driver adapter and Postgres behavior the app runs on.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: clmep_ci
+          POSTGRES_USER: clmep
+          POSTGRES_PASSWORD: clmep_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U clmep -d clmep_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Lint
+        run: npm run lint
+
+      # The check this workflow exists for: schema.prisma and the committed migration
+      # history must always describe the same database. If someone edits
+      # schema.prisma without generating a migration (or runs `prisma db push`
+      # instead of `migrate dev`), this fails the build here — instead of a real
+      # user finding a "column does not exist" 500 in production, which is exactly
+      # what happened before this check existed. Uses the disposable local Postgres
+      # purely as scratch space to compute the diff; touches no real data.
+      - name: Check schema/migration drift
+        env:
+          SHADOW_DATABASE_URL: postgresql://clmep:clmep_ci_password@localhost:5432/clmep_ci
+        run: |
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema prisma/schema.prisma \
+            --script \
+            --exit-code
+
+      # Runs against the real Neon CI branch — matches this repo's existing
+      # TEST_DATABASE_URL/TEST_DIRECT_URL convention (see prisma.config.ts and the
+      # __tests__/*.integration.test.ts files, which read TEST_DATABASE_URL
+      # directly). Keeps migrations on that branch current before testing against it.
+      - name: Apply migrations to the CI test database
+        env:
+          TEST_DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
+        run: npx prisma migrate deploy
+
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          TEST_DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+        run: npm run test:ci

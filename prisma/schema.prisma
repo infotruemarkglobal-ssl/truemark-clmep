@@ -774,6 +774,7 @@ model Purchase {
   paystackReference  String?   @unique
   paystackAccessCode String?
   amount             Float
+  vatAmount          Float     @default(0)
   currency           String    @default("NGN")
   status             String    @default("PENDING")
   seats              Int       @default(1)

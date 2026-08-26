@@ -58,16 +58,22 @@ export async function POST() {
   const reference = `CLMEP-CART-${session.user.id.slice(0, 8)}-${cart.id.slice(0, 8)}-${Date.now()}`;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
 
-  // Persist one Purchase per cart item
+  // Persist one Purchase per cart item, each carrying its own share of VAT (computed
+  // per-item rather than split from the aggregate, so every row is independently
+  // accounting-accurate — and summing amount + vatAmount across a checkout's rows
+  // equals exactly what Paystack charged).
   for (const item of cart.items) {
     const isFirst = item === cart.items[0];
+    const itemSubtotal = Number(item.unitPrice) * item.seats;
+    const itemVat = calculateVAT(country, itemSubtotal);
     await db.purchase.create({
       data: {
         userId: session.user.id,
         courseId: item.courseId,
         organisationId: organisationId ?? undefined,
         paystackReference: isFirst ? reference : `${reference}-${item.courseId.slice(0, 6)}`,
-        amount: Number(item.unitPrice) * item.seats,
+        amount: itemSubtotal,
+        vatAmount: itemVat.amount,
         currency,
         seats: item.seats,
         status: "PENDING",

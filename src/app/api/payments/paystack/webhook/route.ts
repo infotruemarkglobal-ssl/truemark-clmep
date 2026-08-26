@@ -99,18 +99,14 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 6. Amount verification ────────────────────────────────────────────────
-  // purchase.amount is stored in main currency units per item, EXCLUSIVE of VAT.
-  // Paystack's paidSmallestUnit is the full checkout total INCLUSIVE of VAT (see
-  // lib/tax.ts — applied on top of the item subtotal at checkout time but never
-  // persisted per-item). Comparing for exact equality here would mismatch on
-  // every VAT-applicable purchase (e.g. every Nigerian checkout, 7.5% VAT) and
-  // permanently strand it PENDING. Use a floor check instead: reject only if
-  // Paystack collected LESS than the sum of item subtotals — VAT and rounding
-  // only ever add on top, never subtract, so this still catches genuine
-  // price-manipulation attempts without false-flagging legitimate VAT-inclusive
-  // payments.
+  // purchase.amount + purchase.vatAmount is the full expected charge per item,
+  // INCLUSIVE of VAT (vatAmount is now persisted at checkout — see lib/tax.ts).
+  // Still a floor check, not exact equality: rounding across currencies/gateways
+  // can differ by a fraction of a unit, and it costs nothing to tolerate a
+  // payment that rounds a hair high. What it no longer tolerates is a payment
+  // missing VAT entirely, which the previous subtotal-only floor did.
   const expectedSubtotalSmallestUnit = Math.round(
-    purchases.reduce((sum, p) => sum + p.amount, 0) * 100,
+    purchases.reduce((sum, p) => sum + p.amount + p.vatAmount, 0) * 100,
   );
   if (paidSmallestUnit < expectedSubtotalSmallestUnit) {
     // Significant security event — log with full detail for the ops team

@@ -41,5 +41,9 @@ export default defineConfig({
   },
   datasource: {
     url: directUrl || process.env.DATABASE_URL || "",
+    // Only used by `prisma migrate diff`/`migrate dev` when they need a scratch
+    // database to compute a schema diff (see the CI drift-check workflow) — unset
+    // in every other context, including local dev, so it's a no-op there.
+    shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
   },
 });

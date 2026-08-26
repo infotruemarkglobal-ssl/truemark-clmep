@@ -77,13 +77,16 @@ export async function GET(req: NextRequest) {
 
   // Verify the amount Paystack received covers what we recorded — prevents
   // price-manipulation attacks where the buyer alters the amount in-flight.
-  // purchase.amount is stored per item, EXCLUSIVE of VAT; Paystack's amount is
-  // the full checkout total INCLUSIVE of VAT (applied at checkout, never
-  // persisted per-item — see lib/tax.ts). Use a floor check, not exact equality:
-  // VAT and rounding only ever add on top, never subtract, so this still catches
-  // genuine price manipulation without false-flagging legitimate VAT-inclusive
-  // payments.
-  const expectedSubtotalKobo = purchases.reduce((sum, p) => sum + toSmallestUnit(p.amount, p.currency ?? "NGN"), 0);
+  // purchase.amount + purchase.vatAmount is the full expected charge per item,
+  // INCLUSIVE of VAT (vatAmount is now persisted at checkout — see lib/tax.ts).
+  // Still a floor check, not exact equality: rounding across currencies/gateways
+  // can differ by a fraction of a unit, and it costs nothing to tolerate a
+  // payment that rounds a hair high. What it no longer tolerates is a payment
+  // missing VAT entirely, which a subtotal-only floor would.
+  const expectedSubtotalKobo = purchases.reduce(
+    (sum, p) => sum + toSmallestUnit(p.amount + p.vatAmount, p.currency ?? "NGN"),
+    0,
+  );
   if (result.data.amount < expectedSubtotalKobo) {
     await db.purchase.updateMany({ where: { id: { in: purchases.map((p) => p.id) } }, data: { status: "FAILED" } });
     await auditLog({
