@@ -83,15 +83,15 @@ async function mkLesson(creatorId: string) {
   });
   cleanup.courseIds.push(course.id);
 
-  const module = await db.courseModule.create({
+  const courseModule = await db.courseModule.create({
     data: { title: "Module 1", courseId: course.id, order: 1 },
   });
 
   const lesson = await db.courseLesson.create({
-    data: { title: "SCORM Lesson", moduleId: module.id, order: 1, contentType: "scorm" },
+    data: { title: "SCORM Lesson", moduleId: courseModule.id, order: 1, contentType: "scorm" },
   });
 
-  return { lesson, course, module };
+  return { lesson, course, module: courseModule };
 }
 
 // ── Zip builder helpers ───────────────────────────────────────────────────────

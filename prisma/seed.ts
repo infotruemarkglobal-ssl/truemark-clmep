@@ -182,14 +182,14 @@ Topics include process approach, risk-based thinking, audit planning, checklist 
 
     for (let mi = 0; mi < modulesData.length; mi++) {
       const mod = modulesData[mi];
-      const module = await db.courseModule.create({
+      const courseModule = await db.courseModule.create({
         data: { courseId: course.id, title: mod.title, order: mi + 1 },
       });
 
       for (let li = 0; li < mod.lessons.length; li++) {
         await db.courseLesson.create({
           data: {
-            moduleId: module.id,
+            moduleId: courseModule.id,
             title: mod.lessons[li].title,
             contentType: mod.lessons[li].contentType,
             durationMins: mod.lessons[li].durationMins,
