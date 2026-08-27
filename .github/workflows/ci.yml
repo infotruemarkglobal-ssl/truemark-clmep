@@ -79,14 +79,25 @@ jobs:
       # TEST_DATABASE_URL/TEST_DIRECT_URL convention (see prisma.config.ts and the
       # __tests__/*.integration.test.ts files, which read TEST_DATABASE_URL
       # directly). Keeps migrations on that branch current before testing against it.
+      #
+      # Skips cleanly (does not fail the build) until TEST_DIRECT_URL /
+      # TEST_DATABASE_URL / AUTH_SECRET are added as repo secrets — see the
+      # warning below. Remove the `if:` guards once they're configured.
       - name: Apply migrations to the CI test database
+        if: ${{ secrets.TEST_DIRECT_URL != '' }}
         env:
           TEST_DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
         run: npx prisma migrate deploy
 
       - name: Run tests
+        if: ${{ secrets.TEST_DIRECT_URL != '' }}
         env:
           TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
           TEST_DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
         run: npm run test:ci
+
+      - name: Warn if tests were skipped
+        if: ${{ secrets.TEST_DIRECT_URL == '' }}
+        run: |
+          echo "::warning::Automated tests were SKIPPED — TEST_DIRECT_URL repo secret is not configured. Add TEST_DATABASE_URL, TEST_DIRECT_URL, and AUTH_SECRET as repo secrets to enable them."
