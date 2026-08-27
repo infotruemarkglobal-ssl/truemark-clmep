@@ -18,12 +18,16 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_DB: clmep_ci
-          POSTGRES_USER: clmep
+          # Superuser must be named "postgres" — migration 20260422000010_rls_app_role
+          # grants neondb_app TO postgres and sets ALTER DEFAULT PRIVILEGES FOR ROLE
+          # postgres, matching Neon's superuser name in production. A differently-named
+          # superuser here would make that migration fail replaying against this scratch DB.
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: clmep_ci_password
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U clmep -d clmep_ci"
+          --health-cmd "pg_isready -U postgres -d clmep_ci"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -63,7 +67,7 @@ jobs:
           # (even though this command never connects to it — only SHADOW_DATABASE_URL
           # is actually used, as the scratch DB the diff is computed against).
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
-          SHADOW_DATABASE_URL: postgresql://clmep:clmep_ci_password@localhost:5432/clmep_ci
+          SHADOW_DATABASE_URL: postgresql://postgres:clmep_ci_password@localhost:5432/clmep_ci
         run: |
           npx prisma migrate diff \
             --from-migrations prisma/migrations \
