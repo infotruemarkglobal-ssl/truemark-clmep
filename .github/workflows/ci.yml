@@ -32,6 +32,14 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
+    # GitHub Actions forbids reading `secrets` directly inside step `if:`
+    # conditions — it's only usable in `env:`/`with:`. Route it through a
+    # job-level env var (env context IS allowed in `if:`) so the two test
+    # steps below can check whether the secret exists without failing to
+    # parse the workflow.
+    env:
+      HAS_TEST_SECRETS: ${{ secrets.TEST_DIRECT_URL != '' }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -84,13 +92,13 @@ jobs:
       # TEST_DATABASE_URL / AUTH_SECRET are added as repo secrets — see the
       # warning below. Remove the `if:` guards once they're configured.
       - name: Apply migrations to the CI test database
-        if: ${{ secrets.TEST_DIRECT_URL != '' }}
+        if: ${{ env.HAS_TEST_SECRETS == 'true' }}
         env:
           TEST_DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
         run: npx prisma migrate deploy
 
       - name: Run tests
-        if: ${{ secrets.TEST_DIRECT_URL != '' }}
+        if: ${{ env.HAS_TEST_SECRETS == 'true' }}
         env:
           TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
           TEST_DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
@@ -98,6 +106,6 @@ jobs:
         run: npm run test:ci
 
       - name: Warn if tests were skipped
-        if: ${{ secrets.TEST_DIRECT_URL == '' }}
+        if: ${{ env.HAS_TEST_SECRETS != 'true' }}
         run: |
           echo "::warning::Automated tests were SKIPPED — TEST_DIRECT_URL repo secret is not configured. Add TEST_DATABASE_URL, TEST_DIRECT_URL, and AUTH_SECRET as repo secrets to enable them."
