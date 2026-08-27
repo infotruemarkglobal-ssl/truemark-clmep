@@ -38,6 +38,8 @@ jobs:
 
       - run: npm ci
 
+      - run: npx prisma generate
+
       - name: Typecheck
         run: npx tsc --noEmit -p tsconfig.json
 
