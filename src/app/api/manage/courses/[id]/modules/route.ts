@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const count = await db.courseModule.count({ where: { courseId } });
 
-  const module = await db.courseModule.create({
+  const courseModule = await db.courseModule.create({
     data: { courseId, title: body.data.title, description: body.data.description ?? null, order: count + 1 },
     include: { lessons: { orderBy: { order: "asc" } } },
   });
@@ -35,14 +35,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     userId: session.user.id,
     action: "COURSE_MODULE_CREATED",
     entityType: "CourseModule",
-    entityId: module.id,
+    entityId: courseModule.id,
     metadata: {
       courseId,
       title: body.data.title,
-      order: module.order,
+      order: courseModule.order,
       severity: "MEDIUM",
     },
   });
 
-  return NextResponse.json(module, { status: 201 });
+  return NextResponse.json(courseModule, { status: 201 });
 }

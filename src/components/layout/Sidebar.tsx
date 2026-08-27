@@ -240,48 +240,23 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
   ],
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Nav content (shared between the desktop and mobile shells) ─────────────────
+// Declared outside Sidebar so it isn't recreated as a new component identity on
+// every render — everything it needs is passed in explicitly rather than
+// captured via closure.
 
-export default function Sidebar({
+function SidebarContent({
+  sections,
+  pathname,
   role,
-  permissions,
-  open,
   onClose,
 }: {
+  sections: NavSection[];
+  pathname: string;
   role: UserRole;
-  /** Live-resolved permission set (built-in role + any custom-role grants). Null only
-   *  on a genuine resolution failure — treated as empty (fail closed), never as "show
-   *  everything unfiltered". */
-  permissions: string[] | null;
-  open: boolean;
   onClose: () => void;
 }) {
-  const pathname = usePathname();
-  const permSet = new Set(permissions ?? []);
-
-  // Every item with a requiredPermission is filtered by the live matrix, for every
-  // user — built-in role or custom role alike. Items with no requiredPermission
-  // annotation are ungated here and rely solely on ROLE_NAV's section selection.
-  const rawSections = ROLE_NAV[role] ?? ROLE_NAV.CANDIDATE;
-  const sections = rawSections.map((section) => ({
-    ...section,
-    items: section.items.filter((item) => {
-      if (!item.requiredPermission) return true;
-      return permSet.has(item.requiredPermission);
-    }),
-  })).filter((section) => section.items.length > 0);
-
-  // Close on Escape key — standard for modal-style overlays (WCAG 2.1 SC 2.1.2)
-  useEffect(() => {
-    if (!open) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
-
-  const SidebarContent = () => (
+  return (
     <div className="flex flex-col h-full">
       <nav className="flex-1 px-3 py-4 overflow-y-auto" aria-label="Main navigation">
         {sections.map((section, si) => (
@@ -346,12 +321,54 @@ export default function Sidebar({
       )}
     </div>
   );
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export default function Sidebar({
+  role,
+  permissions,
+  open,
+  onClose,
+}: {
+  role: UserRole;
+  /** Live-resolved permission set (built-in role + any custom-role grants). Null only
+   *  on a genuine resolution failure — treated as empty (fail closed), never as "show
+   *  everything unfiltered". */
+  permissions: string[] | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const pathname = usePathname();
+  const permSet = new Set(permissions ?? []);
+
+  // Every item with a requiredPermission is filtered by the live matrix, for every
+  // user — built-in role or custom role alike. Items with no requiredPermission
+  // annotation are ungated here and rely solely on ROLE_NAV's section selection.
+  const rawSections = ROLE_NAV[role] ?? ROLE_NAV.CANDIDATE;
+  const sections = rawSections.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => {
+      if (!item.requiredPermission) return true;
+      return permSet.has(item.requiredPermission);
+    }),
+  })).filter((section) => section.items.length > 0);
+
+  // Close on Escape key — standard for modal-style overlays (WCAG 2.1 SC 2.1.2)
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col fixed left-0 top-16 bottom-0 w-64 bg-white border-r border-slate-200 z-30 overflow-y-auto">
-        <SidebarContent />
+        <SidebarContent sections={sections} pathname={pathname} role={role} onClose={onClose} />
       </aside>
 
       {/* Mobile overlay */}
@@ -379,7 +396,7 @@ export default function Sidebar({
                 <X className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
-            <SidebarContent />
+            <SidebarContent sections={sections} pathname={pathname} role={role} onClose={onClose} />
           </aside>
         </div>
       )}

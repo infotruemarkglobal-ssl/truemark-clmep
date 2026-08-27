@@ -74,10 +74,11 @@ export default async function CandidateDashboard() {
     hasCertificate: certificates.length > 0,
   };
 
+  const now = new Date();
   const activeCerts = certificates.filter((c) => c.status === "ACTIVE");
   const expiringSoon = certificates.filter((c) => {
     if (!c.expiresAt) return false;
-    const daysLeft = Math.floor((new Date(c.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    const daysLeft = Math.floor((new Date(c.expiresAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     return daysLeft <= 90 && daysLeft > 0 && c.status === "ACTIVE";
   });
 

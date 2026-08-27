@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Lock, Eye, EyeOff, ShieldCheck, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -155,12 +156,12 @@ export default function ChangePasswordPage() {
           </form>
 
           <div className="mt-6 pt-5 border-t border-slate-100 text-center">
-            <a
+            <Link
               href="/api/auth/signout?callbackUrl=/login"
               className="text-xs text-slate-400 hover:text-slate-600 transition"
             >
               Sign out instead
-            </a>
+            </Link>
           </div>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import LoginForm from "@/components/auth/LoginForm";
 import { TruemarkLogo } from "@/components/TruemarkLogo";
 import { Shield, Globe, Bot, Award } from "lucide-react";
@@ -59,13 +60,13 @@ export default function LoginPage() {
           </div>
           {/* Public service links — accessible without an account */}
           <p className="text-center text-xs text-gray-200 mt-4 space-x-3">
-            <a href="/verify/TG-2025-00000000" className="hover:text-white hover:underline transition-colors">
+            <Link href="/verify/TG-2025-00000000" className="hover:text-white hover:underline transition-colors">
               Verify a certificate
-            </a>
+            </Link>
             <span aria-hidden="true">·</span>
-            <a href="/registry" className="hover:text-white hover:underline transition-colors">
+            <Link href="/registry" className="hover:text-white hover:underline transition-colors">
               Certificate Register
-            </a>
+            </Link>
             <span aria-hidden="true">·</span>
             <a href="/about" className="hover:text-white hover:underline transition-colors">
               About TrueMark Global

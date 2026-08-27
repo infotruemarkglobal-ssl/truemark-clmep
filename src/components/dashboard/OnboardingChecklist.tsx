@@ -1,12 +1,28 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { CheckCircle2, Circle, X, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 
 const DISMISS_KEY = "onboarding_checklist_dismissed";
+
+// Reading localStorage safely (no hydration mismatch) belongs in
+// useSyncExternalStore, not a setState-in-effect: it renders `false` on the
+// server and on the client's first (hydrating) pass, then React corrects it to
+// the real persisted value immediately after mount, synchronously, with no
+// visible flash. No live cross-tab subscription is needed — dismissing in this
+// session is tracked directly via local state below — so `subscribe` is a no-op.
+function subscribeNoop() {
+  return () => {};
+}
+function getPersistedDismissed() {
+  return localStorage.getItem(DISMISS_KEY) === "1";
+}
+function getServerDismissed() {
+  return false;
+}
 
 type Props = {
   hasPhone: boolean;
@@ -25,13 +41,10 @@ const STEPS = [
 ] as const;
 
 export default function OnboardingChecklist(props: Props) {
-  const [dismissed, setDismissed] = useState<boolean | null>(null);
+  const persistedDismissed = useSyncExternalStore(subscribeNoop, getPersistedDismissed, getServerDismissed);
+  const [justDismissed, setJustDismissed] = useState(false);
+  const dismissed = persistedDismissed || justDismissed;
 
-  useEffect(() => {
-    setDismissed(localStorage.getItem(DISMISS_KEY) === "1");
-  }, []);
-
-  if (dismissed === null) return null;
   if (dismissed) return null;
 
   const completed = STEPS.filter((s) => props[s.key]).length;
@@ -40,7 +53,7 @@ export default function OnboardingChecklist(props: Props) {
 
   function dismiss() {
     localStorage.setItem(DISMISS_KEY, "1");
-    setDismissed(true);
+    setJustDismissed(true);
   }
 
   return (

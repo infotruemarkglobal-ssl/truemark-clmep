@@ -15,6 +15,9 @@ export default async function Page() {
   const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.AUDITOR];
   if (!(ALLOWED as string[]).includes(session.user.role)) redirect("/dashboard");
 
+  const now = new Date();
+  const ninetyDaysFromNow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+
   const [
     activeSchemes,
     activeExamPapers,
@@ -41,8 +44,8 @@ export default async function Page() {
     cacheQuery(() => db.cOIDeclaration.count({ where: { status: "UNDER_REVIEW" } }), ["compliance-coi-review"], [CACHE_TAGS.compliance], 300),
     cacheQuery(() => db.dataSubjectRequest.count({ where: { status: "pending" } }), ["compliance-dsr"], [CACHE_TAGS.compliance], 300),
     cacheQuery(() => db.nonConformity.count({ where: { status: "OPEN" } }), ["compliance-nc-open"], [CACHE_TAGS.compliance], 300),
-    cacheQuery(() => db.correctiveAction.count({ where: { completedAt: null, dueDate: { lt: new Date() } } }), ["compliance-ca-overdue"], [CACHE_TAGS.compliance], 300),
-    cacheQuery(() => db.certificate.count({ where: { status: "ACTIVE", expiresAt: { gt: new Date(), lt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) } } }), ["compliance-certs-expiring"], [CACHE_TAGS.compliance, CACHE_TAGS.certificate], 300),
+    cacheQuery(() => db.correctiveAction.count({ where: { completedAt: null, dueDate: { lt: now } } }), ["compliance-ca-overdue"], [CACHE_TAGS.compliance], 300),
+    cacheQuery(() => db.certificate.count({ where: { status: "ACTIVE", expiresAt: { gt: now, lt: ninetyDaysFromNow } } }), ["compliance-certs-expiring"], [CACHE_TAGS.compliance, CACHE_TAGS.certificate], 300),
   ]);
 
   const serialisedAudits = recentAudits.map((a) => ({

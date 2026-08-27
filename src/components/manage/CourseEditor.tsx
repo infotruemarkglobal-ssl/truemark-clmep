@@ -719,6 +719,15 @@ function generatedContentToHtml(content: Record<string, unknown>, contentType: s
   return JSON.stringify(content, null, 2);
 }
 
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+      {children}
+    </div>
+  );
+}
+
 function ContentPreview({
   content,
   contentType,
@@ -726,14 +735,6 @@ function ContentPreview({
   content: Record<string, unknown>;
   contentType: string;
 }) {
-  function Section({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-      <div>
-        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
-        {children}
-      </div>
-    );
-  }
   if (contentType === "lesson") {
     const c = content as LessonContent;
     return (

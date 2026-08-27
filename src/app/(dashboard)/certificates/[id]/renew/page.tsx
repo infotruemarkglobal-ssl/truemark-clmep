@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 
 type RenewalData = {
   certificate: {
@@ -67,6 +68,17 @@ export default function CertificateRenewPage() {
     });
   }
 
+  const expiresAtIso = data?.certificate.expiresAt ?? null;
+  const certStatus = data?.certificate.status ?? null;
+  // Date.now() must not be called directly during render (its result would differ on
+  // every re-render); useMemo scopes the impure read to only recompute when the
+  // certificate's own expiry/status actually changes, not on unrelated re-renders.
+  const { daysUntilExpiry, isExpired } = useMemo(() => {
+    if (!expiresAtIso) return { daysUntilExpiry: null, isExpired: certStatus === "EXPIRED" };
+    const days = Math.ceil((new Date(expiresAtIso).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+    return { daysUntilExpiry: days, isExpired: certStatus === "EXPIRED" || days < 0 };
+  }, [expiresAtIso, certStatus]);
+
   if (error) {
     return (
       <div className="max-w-2xl mx-auto p-6">
@@ -89,10 +101,6 @@ export default function CertificateRenewPage() {
 
   const { certificate: cert, cpd, renewal } = data;
   const expiresAt = cert.expiresAt ? new Date(cert.expiresAt) : null;
-  const daysUntilExpiry = expiresAt
-    ? Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    : null;
-  const isExpired = cert.status === "EXPIRED" || (daysUntilExpiry !== null && daysUntilExpiry < 0);
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
@@ -184,12 +192,12 @@ export default function CertificateRenewPage() {
             <strong>{cert.scheme.name}</strong> exam within{" "}
             <strong>{renewal.examWindowMonths} months</strong> before your renewal date.
           </p>
-          <a
+          <Link
             href="/exams"
             className="inline-flex items-center gap-1 text-sm font-semibold text-amber-800 underline hover:text-amber-900 transition-colors"
           >
             Take Exam →
-          </a>
+          </Link>
         </div>
       )}
 
@@ -201,12 +209,12 @@ export default function CertificateRenewPage() {
             You need <strong>{(cpd.required - cpd.logged).toFixed(1)}h</strong> more CPD hours before you can
             request renewal. You have logged {cpd.logged}h of {cpd.required}h required.
           </p>
-          <a
+          <Link
             href="/cpd"
             className="inline-flex items-center gap-1 text-sm font-semibold text-amber-800 underline hover:text-amber-900 transition-colors"
           >
             Log CPD Hours →
-          </a>
+          </Link>
         </div>
       )}
 
@@ -253,7 +261,7 @@ export default function CertificateRenewPage() {
 
           {renewal.canIssue && renewal.requiresCPD && !cpd.met && cpd.required > 0 && (
             <p className="text-xs text-amber-600">
-              CPD requirement not fully met. As Certification Officer you may still issue the renewal — ensure you have reviewed and approved the candidate's CPD record before proceeding.
+              CPD requirement not fully met. As Certification Officer you may still issue the renewal — ensure you have reviewed and approved the candidate&apos;s CPD record before proceeding.
             </p>
           )}
         </div>

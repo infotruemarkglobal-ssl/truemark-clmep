@@ -147,13 +147,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         select: { moduleId: true },
       });
       if (lesson) {
-        const module = await db.courseModule.findUnique({
+        const courseModule = await db.courseModule.findUnique({
           where: { id: lesson.moduleId },
           select: { courseId: true },
         });
-        if (module) {
+        if (courseModule) {
           const enrolment = await db.enrolment.findUnique({
-            where: { userId_courseId: { userId: session.user.id, courseId: module.courseId } },
+            where: { userId_courseId: { userId: session.user.id, courseId: courseModule.courseId } },
           });
           if (enrolment) {
             await db.lessonProgress.upsert({
@@ -166,7 +166,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             // Without this, candidates who complete lessons via SCORM player never
             // reach minProgressToExam and are blocked from booking the exam.
             const allLessons = await db.courseLesson.count({
-              where: { module: { courseId: module.courseId } },
+              where: { module: { courseId: courseModule.courseId } },
             });
             const completedCount = await db.lessonProgress.count({
               where: { enrolmentId: enrolment.id, completed: true },

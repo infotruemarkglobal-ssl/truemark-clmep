@@ -34,6 +34,10 @@ export default async function Page({
 
   const from = params.from ? startOfDay(new Date(params.from)) : subMonths(new Date(), 12);
   const to = params.to ? endOfDay(new Date(params.to)) : new Date();
+  // Distinct from `to` (the report range's end, which may be a past date for a
+  // custom range) — these two checks are about current state as of right now.
+  const now = new Date();
+  const ninetyDaysFromNow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
 
   const [
     certsIssued, certsRevoked, activeCerts, examAttempts, passedAttempts,
@@ -57,8 +61,8 @@ export default async function Page({
     db.complaint.count({ where: { submittedAt: { gte: from, lte: to } } }),
     db.complaint.count({ where: { status: "RESOLVED", resolvedAt: { gte: from, lte: to } } }),
     db.nonConformity.count({ where: { status: "OPEN" } }),
-    db.correctiveAction.count({ where: { completedAt: null, dueDate: { lt: new Date() } } }),
-    db.certificate.count({ where: { status: "ACTIVE", expiresAt: { gt: new Date(), lt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) } } }),
+    db.correctiveAction.count({ where: { completedAt: null, dueDate: { lt: now } } }),
+    db.certificate.count({ where: { status: "ACTIVE", expiresAt: { gt: now, lt: ninetyDaysFromNow } } }),
     db.internalAudit.count({ where: { status: "COMPLETED", completedAt: { gte: from, lte: to } } }),
     db.internalAudit.findMany({
       where: { status: "COMPLETED", completedAt: { gte: from, lte: to } },

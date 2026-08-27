@@ -254,7 +254,7 @@ export default function TicketListPage({
               {tickets.length === 0 ? "No tickets yet" : "No tickets match your search"}
             </p>
             {tickets.length === 0 && canCreate && (
-              <p className="text-sm text-slate-400 mt-1">Click "New Ticket" to get help from the support team.</p>
+              <p className="text-sm text-slate-400 mt-1">Click &quot;New Ticket&quot; to get help from the support team.</p>
             )}
           </div>
         ) : (
