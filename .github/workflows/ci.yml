@@ -38,7 +38,11 @@ jobs:
 
       - run: npm ci
 
-      - run: npx prisma generate
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+          DIRECT_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+        run: npx prisma generate
 
       - name: Typecheck
         run: npx tsc --noEmit -p tsconfig.json
