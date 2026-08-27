@@ -59,6 +59,10 @@ jobs:
       # purely as scratch space to compute the diff; touches no real data.
       - name: Check schema/migration drift
         env:
+          # prisma.config.ts requires DIRECT_URL/DATABASE_URL to be set just to load
+          # (even though this command never connects to it — only SHADOW_DATABASE_URL
+          # is actually used, as the scratch DB the diff is computed against).
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
           SHADOW_DATABASE_URL: postgresql://clmep:clmep_ci_password@localhost:5432/clmep_ci
         run: |
           npx prisma migrate diff \
