@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
+import { can } from "@/lib/permissions";
 
 const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
 
@@ -52,7 +53,10 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ADMIN_ROLES as string[]).includes(session.user.role)) {
+  // documents:manage is held more broadly (TRAINER, AUDITOR, ORG_MANAGER too,
+  // for their own upload contexts) than this endpoint's original ADMIN_ROLES
+  // — creating a document-library entry stays CO/SUPER_ADMIN-only.
+  if (!(await can(session, "documents:manage", ["SUPER_ADMIN", "CERTIFICATION_OFFICER"]))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

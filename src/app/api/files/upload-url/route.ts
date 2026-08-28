@@ -28,12 +28,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { getPresignedUploadUrl } from "@/lib/storage";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
-
-const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.TRAINER];
 
 const ALLOWED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/ogg"] as const;
 const MAX_VIDEO_BYTES = 500 * 1024 * 1024; // 500 MB
@@ -47,7 +45,9 @@ const bodySchema = z.object({
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ALLOWED as string[]).includes(session.user.role)) {
+  // Same reasoning as /api/manage/upload: courses:update, not files:upload
+  // (granted far more broadly) — this is specifically for course video content.
+  if (!(await can(session, "courses:update"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

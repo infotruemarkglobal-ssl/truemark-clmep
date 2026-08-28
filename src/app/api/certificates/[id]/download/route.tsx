@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { format } from "date-fns";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import crypto from "crypto";
 
 async function fetchToBase64(src: string | null | undefined): Promise<string | null> {
@@ -69,8 +69,11 @@ export async function GET(
     );
   }
 
-  const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.AUDITOR];
-  const isAdmin = (ADMIN_ROLES as string[]).includes(session.user.role);
+  // CANDIDATE also holds certifications:read (for viewing their own certs) —
+  // a bare can() here would let any candidate download any certificate,
+  // bypassing both the ownership and active-status checks below. The
+  // allowedRoles ceiling restores the original ADMIN_ROLES-only exclusivity.
+  const isAdmin = await can(session, "certifications:read", ["SUPER_ADMIN", "CERTIFICATION_OFFICER", "AUDITOR"]);
 
   const [cert, directorNameSetting, directorSigSetting] = await Promise.all([
     db.certificate.findUnique({

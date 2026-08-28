@@ -130,6 +130,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, Array<[string, string]>> = 
     ["audit",         "read"],
     ["reports",       "read"],
     ["users",         "read"],
+    ["users",         "update"],
     ["files",         "upload"],
     ["gdpr",          "read"],
     ["gdpr",          "manage"],

@@ -2,15 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
-
-const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
+import { can } from "@/lib/permissions";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ADMIN_ROLES as string[]).includes(session.user.role)) {
+  if (!(await can(session, "appeals:manage"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

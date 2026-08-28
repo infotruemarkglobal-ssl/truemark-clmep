@@ -4,14 +4,13 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
-
-const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
+import { can } from "@/lib/permissions";
 
 // PATCH /api/users/[id]
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ADMIN_ROLES as string[]).includes(session.user.role)) {
+  if (!(await can(session, "users:update"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -78,7 +77,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) {
+  if (!(await can(session, "users:suspend"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
