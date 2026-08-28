@@ -3,21 +3,21 @@ import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { auditLog } from "@/lib/audit";
 import { inngest, EVENTS } from "@/inngest/client";
 
 // POST /api/platform/users/[id]/reset-password
-// SUPER_ADMIN only. Generates a temporary password, hashes it, sets
-// mustChangePassword=true, and emails it to the user via Inngest.
-// The temporary password is never returned in the API response.
+// Gated by users:update (currently SUPER_ADMIN only). Generates a temporary
+// password, hashes it, sets mustChangePassword=true, and emails it to the
+// user via Inngest. The temporary password is never returned in the API response.
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) {
+  if (!(await can(session, "users:update"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

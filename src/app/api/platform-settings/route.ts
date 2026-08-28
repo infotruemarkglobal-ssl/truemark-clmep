@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { z } from "zod";
 
-// Keys that are readable by any admin, writable only by SUPER_ADMIN.
+// Keys are gated by settings:manage for both read and write — there's no
+// separate settings:read permission, and in practice this has only ever
+// been SUPER_ADMIN-accessible (the only role settings:manage is granted to).
 const ALLOWED_KEYS = [
   "cert_director_name",
   "cert_director_signature_url",
@@ -22,7 +24,7 @@ const patchSchema = z.object({
 export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) {
+  if (!(await can(session, "settings:manage"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -47,7 +49,7 @@ export async function GET() {
 export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) {
+  if (!(await can(session, "settings:manage"))) {
     return NextResponse.json({ error: "Forbidden — Super Admin only" }, { status: 403 });
   }
 

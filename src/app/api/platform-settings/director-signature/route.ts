@@ -2,18 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { uploadFile, deleteFile } from "@/lib/storage";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg"];
 
 // POST /api/platform-settings/director-signature — upload the Director of Certification's signature image.
-// SUPER_ADMIN only.
+// Gated by settings:manage — currently SUPER_ADMIN only.
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) {
+  if (!(await can(session, "settings:manage"))) {
     return NextResponse.json({ error: "Forbidden — Super Admin only" }, { status: 403 });
   }
 
