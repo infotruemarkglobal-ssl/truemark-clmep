@@ -307,7 +307,11 @@ describe("f. Happy path — SCORM 1.2 upload", () => {
   });
 
   it("package content extracted to filesystem", () => {
-    const dir = path.join(process.cwd(), "public", "scorm-content", pkgId);
+    // SCORM content is stored via the storage abstraction (src/lib/storage.ts),
+    // not written directly to public/ — local mode lands under private-uploads/
+    // and is served through the auth-gated /api/scorm/content proxy route
+    // instead of Next.js's static file serving.
+    const dir = path.join(process.cwd(), "private-uploads", "scorm-content", pkgId);
     expect(fs.existsSync(dir)).toBe(true);
     expect(fs.existsSync(path.join(dir, "index.html"))).toBe(true);
   });

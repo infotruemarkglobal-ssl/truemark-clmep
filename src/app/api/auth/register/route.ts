@@ -149,11 +149,18 @@ export async function POST(req: NextRequest) {
   await db.verificationToken.create({ data: { identifier: email, token, expires } });
 
   const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
-  await inngest.send({
-    id: `email-verify-${user.id}`,
-    name: EVENTS.SEND_EMAIL_VERIFICATION,
-    data: { to: email, firstName, verifyUrl, userId: user.id },
-  });
-  
+  // Best-effort — the account, consent records, and audit log are already
+  // committed by this point. A transient Inngest failure must not fail
+  // registration itself; the user can always request the verification email
+  // again. Matches the .catch() pattern already used in seats/assign and the
+  // Stripe webhook for the same reason.
+  await inngest
+    .send({
+      id: `email-verify-${user.id}`,
+      name: EVENTS.SEND_EMAIL_VERIFICATION,
+      data: { to: email, firstName, verifyUrl, userId: user.id },
+    })
+    .catch((err) => console.error("[auth/register] inngest send failed:", err));
+
   return NextResponse.json({ ok: true }, { status: 201 });
 }

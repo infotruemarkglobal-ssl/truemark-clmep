@@ -40,9 +40,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // Enforce the status transition graph — prevents jumping to states out of order
   // (e.g., going straight from SUBMITTED to CLOSED without review).
+  // A merits decision (UPHELD/REJECTED) requires the appeal to have actually
+  // been reviewed first (ISO 17024 Cl.6.2.4 due process) — SUBMITTED and
+  // ACKNOWLEDGED can only reach UNDER_REVIEW/ESCALATED, or CLOSED for
+  // non-adjudicated closure (e.g. a withdrawn or duplicate appeal).
   const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-    SUBMITTED:    ["ACKNOWLEDGED", "UNDER_REVIEW", "UPHELD", "REJECTED", "CLOSED"],
-    ACKNOWLEDGED: ["UNDER_REVIEW", "ESCALATED", "UPHELD", "REJECTED", "CLOSED"],
+    SUBMITTED:    ["ACKNOWLEDGED", "UNDER_REVIEW", "CLOSED"],
+    ACKNOWLEDGED: ["UNDER_REVIEW", "ESCALATED", "CLOSED"],
     UNDER_REVIEW: ["UPHELD", "REJECTED", "ESCALATED", "CLOSED"],
     ESCALATED:    ["UNDER_REVIEW", "UPHELD", "REJECTED", "CLOSED"],
   };

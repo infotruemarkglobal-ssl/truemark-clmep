@@ -11,7 +11,7 @@
  *  f. PATCH — non-admin → 403
  *  g. PATCH — invalid transition → 422
  *  h. PATCH — valid transition SUBMITTED → UNDER_REVIEW → 200
- *  i. PATCH — already finalised (RESOLVED) → 409
+ *  i. PATCH — already finalised (UPHELD) → 409
  */
 
 jest.mock("@/lib/db", () => {
@@ -256,10 +256,10 @@ describe("g. PATCH — invalid transition rejected", () => {
     cleanup.appealIds.push(appealId);
   });
 
-  it("returns 422 for SUBMITTED → RESOLVED (skips UNDER_REVIEW)", async () => {
+  it("returns 422 for SUBMITTED → UPHELD (skips UNDER_REVIEW)", async () => {
     mockAuth.mockResolvedValue(makeSession(adminId, "CERTIFICATION_OFFICER") as never);
     const res = await appealPATCH(
-      patchReq({ status: "RESOLVED", resolution: "Resolved without review" }),
+      patchReq({ status: "UPHELD", resolution: "Resolved without review" }),
       { params: Promise.resolve({ id: appealId }) },
     );
     expect(res.status).toBe(422);
@@ -271,7 +271,7 @@ describe("g. PATCH — invalid transition rejected", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // h. PATCH — valid transition
 // ─────────────────────────────────────────────────────────────────────────────
-describe("h. PATCH — valid transition SUBMITTED → UNDER_REVIEW → RESOLVED", () => {
+describe("h. PATCH — valid transition SUBMITTED → UNDER_REVIEW → UPHELD", () => {
   let adminId: string;
   let appealId: string;
 
@@ -299,15 +299,15 @@ describe("h. PATCH — valid transition SUBMITTED → UNDER_REVIEW → RESOLVED"
     expect(json.status).toBe("UNDER_REVIEW");
   });
 
-  it("UNDER_REVIEW → RESOLVED succeeds", async () => {
+  it("UNDER_REVIEW → UPHELD succeeds", async () => {
     mockAuth.mockResolvedValue(makeSession(adminId, "SUPER_ADMIN") as never);
     const res = await appealPATCH(
-      patchReq({ status: "RESOLVED", resolution: "Appeal upheld after review" }),
+      patchReq({ status: "UPHELD", resolution: "Appeal upheld after review" }),
       { params: Promise.resolve({ id: appealId }) },
     );
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.status).toBe("RESOLVED");
+    expect(json.status).toBe("UPHELD");
     expect(json.resolvedAt).not.toBeNull();
   });
 });
@@ -328,14 +328,14 @@ describe("i. PATCH — already finalised appeal returns 409", () => {
         userId: candidateId,
         type: "exam_result",
         description: "Already finalised appeal",
-        status: "RESOLVED",
+        status: "UPHELD",
       },
     });
     appealId = appeal.id;
     cleanup.appealIds.push(appealId);
   });
 
-  it("returns 409 when trying to update a RESOLVED appeal", async () => {
+  it("returns 409 when trying to update an UPHELD appeal", async () => {
     mockAuth.mockResolvedValue(makeSession(adminId, "CERTIFICATION_OFFICER") as never);
     const res = await appealPATCH(patchReq({ status: "CLOSED" }), { params: Promise.resolve({ id: appealId }) });
     expect(res.status).toBe(409);

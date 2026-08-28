@@ -107,19 +107,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // C3: Guard — an "approved" decision must only be issued when the candidate
-  // actually passed. Check BEFORE any writes so we never orphan a decision record.
-  if (decision === "approved" && attempt.passed !== true) {
-    return NextResponse.json(
-      {
-        error:
-          `Cannot approve: the candidate's attempt has not been marked as passed ` +
-          `(passed=${attempt.passed ?? "null"}). Grade the attempt first.`,
-      },
-      { status: 422 },
-    );
-  }
-
   // ── Idempotent decision creation ───────────────────────────────────────────
   // If a prior request wrote the decision record but failed before issuing the
   // certificate (network error, generation failure, etc.), allow a retry by
@@ -167,6 +154,25 @@ export async function POST(req: NextRequest) {
       entityId: certDecision.id,
       metadata: { decision, attemptId, candidateId: attempt.userId, justification },
     });
+  }
+
+  // C3: Guard — an "approved" decision must only proceed to certificate issuance
+  // when the candidate actually passed. Checked AFTER the decision record is
+  // committed (TOCTOU-safe): a concurrent duplicate "approve" request is now
+  // caught by the existingDecision/idempotency path above instead of racing
+  // this check against a `passed` value that could change between the two
+  // requests' reads. The decision record is intentionally kept, not deleted —
+  // it's a legitimate audit trail entry that an officer attempted to approve
+  // an attempt that wasn't actually passed.
+  if (decision === "approved" && attempt.passed !== true) {
+    return NextResponse.json(
+      {
+        error:
+          `Cannot approve: the candidate's attempt has not been marked as passed ` +
+          `(passed=${attempt.passed ?? "null"}). Grade the attempt first.`,
+      },
+      { status: 422 },
+    );
   }
 
   if (decision !== "approved") {

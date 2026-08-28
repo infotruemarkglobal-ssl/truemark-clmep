@@ -45,7 +45,7 @@ jest.mock("@/lib/certificates", () => ({
       Promise.resolve(`TG-TEST-${Date.now()}-${Math.random().toString(36).slice(2)}`),
     ),
   generateOpenBadgeJwt: jest.fn().mockResolvedValue({
-    json: { "@context": "https://www.w3.org/ns/credentials/v2" },
+    json: JSON.stringify({ "@context": "https://www.w3.org/ns/credentials/v2" }),
     jwt: "test.badge.jwt.token",
   }),
   generateQrCode: jest.fn().mockResolvedValue("https://example.com/test-qr"),
