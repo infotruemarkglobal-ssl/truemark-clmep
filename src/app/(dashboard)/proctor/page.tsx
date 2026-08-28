@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import ProctorMonitorPage from "@/components/proctor/ProctorMonitorPage";
 
 export const metadata: Metadata = { title: "Live Exam Monitoring — TrueMark Platform" };
@@ -11,8 +11,7 @@ export default async function Page() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const allowed = [USER_ROLES.PROCTOR, USER_ROLES.SUPER_ADMIN] as string[];
-  if (!allowed.includes(session.user.role)) redirect("/dashboard");
+  if (!(await can(session, "exams:proctor"))) redirect("/dashboard");
 
   const sessions = await db.proctoringSession.findMany({
     where: { status: "active" },

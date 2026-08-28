@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import ScormManagePage from "@/components/manage/ScormManagePage";
 
 export const metadata: Metadata = { title: "SCORM Packages" };
@@ -11,8 +11,7 @@ export default async function Page() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.TRAINER];
-  if (!(ALLOWED as string[]).includes(session.user.role)) redirect("/dashboard");
+  if (!(await can(session, "scorm:manage"))) redirect("/dashboard");
 
   const [packages, lessons] = await Promise.all([
     db.sCORMPackage.findMany({

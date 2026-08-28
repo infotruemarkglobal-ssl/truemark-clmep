@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import StaffManagement from "@/components/staff/StaffManagement";
 
 export const metadata: Metadata = { title: "Staff Management" };
@@ -11,8 +12,13 @@ export default async function StaffPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const allowed = [USER_ROLES.SUPER_ADMIN, USER_ROLES.ORG_MANAGER] as string[];
-  if (!allowed.includes(session.user.role)) redirect("/dashboard");
+  // Two distinct capabilities gate the two branches below: SUPER_ADMIN manages
+  // staff platform-wide (staff:manage); ORG_MANAGER only views their own org's
+  // roster (organisations:members, which they already legitimately hold) —
+  // not staff:manage itself, which is a platform-wide capability.
+  const canManageStaff = await can(session, "staff:manage");
+  const canViewOrgMembers = await can(session, "organisations:members");
+  if (!canManageStaff && !canViewOrgMembers) redirect("/dashboard");
 
   const isOrgManager = session.user.role === USER_ROLES.ORG_MANAGER;
 

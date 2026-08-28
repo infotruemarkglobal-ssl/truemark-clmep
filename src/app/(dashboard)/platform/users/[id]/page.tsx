@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import PlatformUserDetail from "@/components/platform/PlatformUserDetail";
 
 export const metadata: Metadata = { title: "User Detail — TrueMark Platform" };
@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "User Detail — TrueMark Platform" }
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) redirect("/dashboard");
+  if (!(await can(session, "permissions:manage"))) redirect("/dashboard");
 
   const { id } = await params;
 

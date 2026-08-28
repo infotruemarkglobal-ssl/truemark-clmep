@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import OrganisationsPage from "@/components/organisations/OrganisationsPage";
 
 export const metadata: Metadata = { title: "Organisations" };
@@ -11,8 +12,7 @@ export default async function OrganisationsRoute() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const allowed = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.ORG_MANAGER] as string[];
-  if (!allowed.includes(session.user.role)) redirect("/dashboard");
+  if (!(await can(session, "organisations:read"))) redirect("/dashboard");
 
   // ORG_MANAGER goes straight to their organisation's detail page
   if (session.user.role === USER_ROLES.ORG_MANAGER) {

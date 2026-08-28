@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import SchemeManagementPage from "@/components/manage/SchemeManagementPage";
 
 export const metadata: Metadata = { title: "Certification Schemes" };
@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Certification Schemes" };
 export default async function Page() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) redirect("/dashboard");
+  if (!(await can(session, "schemes:read"))) redirect("/dashboard");
 
   const schemes = await db.certificationScheme.findMany({
     orderBy: { name: "asc" },

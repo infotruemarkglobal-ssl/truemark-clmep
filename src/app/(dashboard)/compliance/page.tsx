@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { cacheQuery, CACHE_TAGS } from "@/lib/cache";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import CompliancePage from "@/components/compliance/CompliancePage";
 
 export const metadata: Metadata = { title: "ISO 17024 Compliance" };
@@ -12,8 +12,7 @@ export default async function Page() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.AUDITOR];
-  if (!(ALLOWED as string[]).includes(session.user.role)) redirect("/dashboard");
+  if (!(await can(session, "compliance:read"))) redirect("/dashboard");
 
   const now = new Date();
   const ninetyDaysFromNow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);

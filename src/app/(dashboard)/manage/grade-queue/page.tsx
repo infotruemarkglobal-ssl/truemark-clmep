@@ -3,21 +3,19 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { format } from "date-fns";
 import { ListChecks, ChevronRight, Inbox } from "lucide-react";
 
 export const metadata: Metadata = { title: "Grade Queue" };
 export const dynamic = "force-dynamic";
 
-const ALLOWED = [USER_ROLES.EXAMINER, USER_ROLES.SUPER_ADMIN];
-
 const MANUAL_TYPES = ["essay", "fill_blank"];
 
 export default async function GradeQueuePage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (!ALLOWED.includes(session.user.role as (typeof ALLOWED)[number])) redirect("/dashboard");
+  if (!(await can(session, "exams:grade"))) redirect("/dashboard");
 
   // Fetch COMPLETED attempts with no ExamGrade that belong to papers containing
   // at least one manually-graded question (essay / fill_blank).

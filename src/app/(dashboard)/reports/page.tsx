@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import ReportsPage from "@/components/reports/ReportsPage";
 
 export const metadata: Metadata = { title: "Reports & Analytics" };
@@ -11,8 +12,7 @@ export default async function Page() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.AUDITOR, USER_ROLES.ORG_MANAGER];
-  if (!(ALLOWED as string[]).includes(session.user.role)) redirect("/dashboard");
+  if (!(await can(session, "reports:read"))) redirect("/dashboard");
 
   const now = new Date();
   const thirtyDaysAgo = new Date(now);

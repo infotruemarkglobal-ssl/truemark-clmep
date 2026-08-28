@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import CertificationDecisionsPage from "@/components/manage/CertificationDecisionsPage";
 
 export const metadata: Metadata = { title: "Certification Decisions" };
@@ -11,8 +11,7 @@ export default async function Page() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
-  if (!(ALLOWED as string[]).includes(session.user.role)) redirect("/dashboard");
+  if (!(await can(session, "decisions:manage"))) redirect("/dashboard");
 
   const [pendingAttempts, recentDecisions] = await Promise.all([
     db.examAttempt.findMany({

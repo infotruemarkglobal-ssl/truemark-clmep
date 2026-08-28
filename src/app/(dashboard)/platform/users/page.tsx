@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import PlatformUsersClient from "@/components/platform/PlatformUsersClient";
 
 export const metadata: Metadata = { title: "Manage Users — TrueMark Platform" };
@@ -36,7 +36,7 @@ export default async function PlatformUsersPage() {
   // but verify here too so this page is safe if the layout changes.
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) redirect("/dashboard");
+  if (!(await can(session, "permissions:manage"))) redirect("/dashboard");
 
   const [users, customRoles] = await Promise.all([
     getInternalUsers(),

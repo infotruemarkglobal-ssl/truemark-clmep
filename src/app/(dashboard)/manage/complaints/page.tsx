@@ -2,12 +2,10 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import ManageComplaintsPage from "@/components/manage/ManageComplaintsPage";
 
 export const metadata: Metadata = { title: "Manage Complaints" };
-
-const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
 
 export default async function Page({
   searchParams,
@@ -16,7 +14,7 @@ export default async function Page({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (!(ALLOWED as string[]).includes(session.user.role)) redirect("/dashboard");
+  if (!(await can(session, "appeals:manage"))) redirect("/dashboard");
 
   const { status, cursor } = await searchParams;
   const PAGE_SIZE = 25;

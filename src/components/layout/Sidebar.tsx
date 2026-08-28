@@ -41,18 +41,18 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Learning",
       items: [
-        { label: "My Courses",    href: "/courses",      icon: BookOpen  },
-        { label: "My Exams",      href: "/exams",        icon: FileText  },
-        { label: "Certificates",  href: "/certificates", icon: Award     },
-        { label: "CPD Log",       href: "/cpd",          icon: TrendingUp },
+        { label: "My Courses",    href: "/courses",      icon: BookOpen,   requiredPermission: "courses:read" },
+        { label: "My Exams",      href: "/exams",        icon: FileText,   requiredPermission: "exams:take" },
+        { label: "Certificates",  href: "/certificates", icon: Award,      requiredPermission: "certifications:read" },
+        { label: "CPD Log",       href: "/cpd",          icon: TrendingUp, requiredPermission: "cpd:read" },
       ],
     },
     {
       heading: "Support",
       items: [
         { label: "My Tickets",    href: "/support",      icon: MessageSquare },
-        { label: "Appeals",       href: "/appeals",      icon: Scale },
-        { label: "My Complaints", href: "/complaints",   icon: MessageSquareWarning },
+        { label: "Appeals",       href: "/appeals",      icon: Scale,                 requiredPermission: "appeals:submit" },
+        { label: "My Complaints", href: "/complaints",   icon: MessageSquareWarning,  requiredPermission: "appeals:submit" },
       ],
     },
     PROFILE_SECTION,
@@ -63,9 +63,9 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Content",
       items: [
-        { label: "Courses",          href: "/manage/courses", icon: BookOpen  },
-        { label: "SCORM Packages",   href: "/manage/scorm",   icon: Package   },
-        { label: "Document Library", href: "/documents",      icon: FolderOpen },
+        { label: "Courses",          href: "/manage/courses", icon: BookOpen,   requiredPermission: "courses:read" },
+        { label: "SCORM Packages",   href: "/manage/scorm",   icon: Package,    requiredPermission: "scorm:manage" },
+        { label: "Document Library", href: "/documents",      icon: FolderOpen, requiredPermission: "documents:read" },
       ],
     },
     PROFILE_SECTION,
@@ -76,9 +76,9 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Exams",
       items: [
-        { label: "Grade Queue",           href: "/manage/grade-queue", icon: ListChecks   },
-        { label: "Exam Papers & Grading", href: "/manage/exams",       icon: ClipboardList },
-        { label: "Documents",             href: "/documents",           icon: FolderOpen    },
+        { label: "Grade Queue",           href: "/manage/grade-queue", icon: ListChecks,    requiredPermission: "exams:grade" },
+        { label: "Exam Papers & Grading", href: "/manage/exams",       icon: ClipboardList, requiredPermission: "exams:read" },
+        { label: "Documents",             href: "/documents",           icon: FolderOpen,   requiredPermission: "documents:read" },
       ],
     },
     PROFILE_SECTION,
@@ -89,7 +89,7 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Monitoring",
       items: [
-        { label: "Live Monitoring", href: "/proctor", icon: Eye },
+        { label: "Live Monitoring", href: "/proctor", icon: Eye, requiredPermission: "exams:proctor" },
       ],
     },
     PROFILE_SECTION,
@@ -100,23 +100,23 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Organisation",
       items: [
-        { label: "My Organisation", href: "/organisations", icon: Building2 },
-        { label: "Members & Courses", href: "/organisations/members", icon: Users },
+        { label: "My Organisation", href: "/organisations", icon: Building2, requiredPermission: "organisations:read" },
+        { label: "Members & Courses", href: "/organisations/members", icon: Users, requiredPermission: "organisations:members" },
       ],
     },
     {
       heading: "Learning",
       items: [
-        { label: "Courses", href: "/courses", icon: BookOpen   },
-        { label: "CPD Log", href: "/cpd",     icon: TrendingUp },
+        { label: "Courses", href: "/courses", icon: BookOpen,   requiredPermission: "courses:read" },
+        { label: "CPD Log", href: "/cpd",     icon: TrendingUp, requiredPermission: "cpd:read" },
       ],
     },
     {
       heading: "Support",
       items: [
         { label: "My Tickets",    href: "/support",    icon: MessageSquare },
-        { label: "Appeals",       href: "/appeals",    icon: Scale },
-        { label: "My Complaints", href: "/complaints", icon: MessageSquareWarning },
+        { label: "Appeals",       href: "/appeals",    icon: Scale,                requiredPermission: "appeals:read" },
+        { label: "My Complaints", href: "/complaints", icon: MessageSquareWarning, requiredPermission: "appeals:submit" },
       ],
     },
     PROFILE_SECTION,
@@ -127,17 +127,17 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Compliance",
       items: [
-        { label: "ISO 17024 Status", href: "/compliance",        icon: ShieldCheck   },
-        { label: "Audit Programme",  href: "/audit-programme",   icon: ClipboardCheck },
-        { label: "Audit Log",        href: "/audit",             icon: ClipboardList  },
-        { label: "Reports",          href: "/reports",           icon: BarChart3      },
+        { label: "ISO 17024 Status", href: "/compliance",        icon: ShieldCheck,    requiredPermission: "compliance:read" },
+        { label: "Audit Programme",  href: "/audit-programme",   icon: ClipboardCheck, requiredPermission: "auditProgramme:read" },
+        { label: "Audit Log",        href: "/audit",             icon: ClipboardList,  requiredPermission: "audit:read" },
+        { label: "Reports",          href: "/reports",           icon: BarChart3,      requiredPermission: "reports:read" },
       ],
     },
     {
       heading: "Records",
       items: [
-        { label: "Certificate Records", href: "/manage/certificates", icon: Award      },
-        { label: "Documents",           href: "/documents",           icon: FolderOpen },
+        { label: "Certificate Records", href: "/manage/certificates", icon: Award,      requiredPermission: "certifications:read" },
+        { label: "Documents",           href: "/documents",           icon: FolderOpen, requiredPermission: "documents:read" },
       ],
     },
     PROFILE_SECTION,
@@ -148,21 +148,21 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Certification",
       items: [
-        { label: "Applications",        href: "/manage/applications",  icon: ClipboardList },
-        { label: "Decisions",           href: "/manage/decisions",     icon: BadgeCheck    },
-        { label: "Manage Certificates", href: "/manage/certificates",  icon: Award         },
-        { label: "Manage Complaints",   href: "/manage/complaints",    icon: MessageSquare },
-        { label: "Appeals",             href: "/appeals",              icon: Scale         },
+        { label: "Applications",        href: "/manage/applications",  icon: ClipboardList, requiredPermission: "applications:read" },
+        { label: "Decisions",           href: "/manage/decisions",     icon: BadgeCheck,    requiredPermission: "decisions:manage" },
+        { label: "Manage Certificates", href: "/manage/certificates",  icon: Award,         requiredPermission: "certifications:read" },
+        { label: "Manage Complaints",   href: "/manage/complaints",    icon: MessageSquare, requiredPermission: "appeals:manage" },
+        { label: "Appeals",             href: "/appeals",              icon: Scale,         requiredPermission: "appeals:read" },
       ],
     },
     {
       heading: "Management",
       items: [
-        { label: "Courses",        href: "/manage/courses", icon: BookOpen      },
-        { label: "Exam Papers",    href: "/manage/exams",   icon: ClipboardList },
-        { label: "Organisations",  href: "/organisations",  icon: Building2     },
-        { label: "Reports",        href: "/reports",        icon: BarChart3     },
-        { label: "Documents",      href: "/documents",      icon: FolderOpen    },
+        { label: "Courses",        href: "/manage/courses", icon: BookOpen,      requiredPermission: "courses:read" },
+        { label: "Exam Papers",    href: "/manage/exams",   icon: ClipboardList, requiredPermission: "exams:read" },
+        { label: "Organisations",  href: "/organisations",  icon: Building2,     requiredPermission: "organisations:read" },
+        { label: "Reports",        href: "/reports",        icon: BarChart3,     requiredPermission: "reports:read" },
+        { label: "Documents",      href: "/documents",      icon: FolderOpen,    requiredPermission: "documents:read" },
       ],
     },
     PROFILE_SECTION,
@@ -186,14 +186,14 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
       items: [
         { label: "Courses",               href: "/manage/courses",       icon: BookOpen,      requiredPermission: "courses:read"          },
         { label: "Exam Papers",           href: "/manage/exams",         icon: ClipboardList, requiredPermission: "exams:read"            },
-        { label: "SCORM Packages",        href: "/manage/scorm",         icon: Package,       requiredPermission: "scorm:read"            },
-        { label: "Applications",          href: "/manage/applications",  icon: ClipboardList, requiredPermission: "certifications:read"   },
-        { label: "Certification Decisions", href: "/manage/decisions",   icon: BadgeCheck,    requiredPermission: "decisions:read"        },
+        { label: "SCORM Packages",        href: "/manage/scorm",         icon: Package,       requiredPermission: "scorm:manage"           },
+        { label: "Applications",          href: "/manage/applications",  icon: ClipboardList, requiredPermission: "applications:read"     },
+        { label: "Certification Decisions", href: "/manage/decisions",   icon: BadgeCheck,    requiredPermission: "decisions:manage"      },
         { label: "Manage Certificates",   href: "/manage/certificates",  icon: Award,         requiredPermission: "certifications:read"   },
-        { label: "Certification Schemes", href: "/manage/schemes",       icon: Shield,        requiredPermission: undefined               },
-        { label: "Manage Complaints",     href: "/manage/complaints",    icon: MessageSquare, requiredPermission: "appeals:read"          },
+        { label: "Certification Schemes", href: "/manage/schemes",       icon: Shield,        requiredPermission: "schemes:read"           },
+        { label: "Manage Complaints",     href: "/manage/complaints",    icon: MessageSquare, requiredPermission: "appeals:manage"        },
         { label: "Appeals",               href: "/appeals",              icon: Scale,         requiredPermission: "appeals:read"          },
-        { label: "Support Queue",         href: "/support",              icon: MessageSquare, requiredPermission: undefined               },
+        { label: "Support Queue",         href: "/support",              icon: MessageSquare, requiredPermission: "tickets:read"           },
       ],
     },
     {
@@ -205,18 +205,18 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Compliance & Data",
       items: [
-        { label: "ISO 17024 Status",   href: "/compliance",       icon: ShieldCheck    },
-        { label: "Management Review",  href: "/manage/review",    icon: FileText       },
-        { label: "Audit Programme",    href: "/audit-programme",  icon: ClipboardCheck },
-        { label: "Audit Log",          href: "/audit",            icon: ClipboardList  },
-        { label: "Reports",            href: "/reports",          icon: BarChart3      },
-        { label: "Documents",          href: "/documents",        icon: FolderOpen     },
+        { label: "ISO 17024 Status",   href: "/compliance",       icon: ShieldCheck,    requiredPermission: "compliance:read" },
+        { label: "Management Review",  href: "/manage/review",    icon: FileText,       requiredPermission: "auditProgramme:create" },
+        { label: "Audit Programme",    href: "/audit-programme",  icon: ClipboardCheck, requiredPermission: "auditProgramme:read" },
+        { label: "Audit Log",          href: "/audit",            icon: ClipboardList,  requiredPermission: "audit:read" },
+        { label: "Reports",            href: "/reports",          icon: BarChart3,      requiredPermission: "reports:read" },
+        { label: "Documents",          href: "/documents",        icon: FolderOpen,     requiredPermission: "documents:read" },
       ],
     },
     {
       heading: "System",
       items: [
-        { label: "Settings", href: "/settings", icon: Settings },
+        { label: "Settings", href: "/settings", icon: Settings, requiredPermission: "settings:manage" },
       ],
     },
     PROFILE_SECTION,
@@ -226,14 +226,19 @@ const ROLE_NAV: Record<UserRole, NavSection[]> = {
     {
       heading: "Support",
       items: [
-        { label: "Support Queue", href: "/support", icon: MessageSquare },
+        { label: "Support Queue", href: "/support", icon: MessageSquare, requiredPermission: "tickets:read" },
       ],
     },
     {
       heading: "Users & Orgs",
       items: [
-        { label: "User Lookup",   href: "/platform/users", icon: Users     },
-        { label: "Organisations", href: "/organisations",  icon: Building2 },
+        // Both currently 404-via-redirect for SUPPORT_AGENT — neither
+        // /platform (permissions:manage) nor /organisations
+        // (organisations:read) has ever allowed this role. Wiring the real
+        // required permission hides them instead of showing a dead link,
+        // rather than leaving that pre-existing gap unaddressed.
+        { label: "User Lookup",   href: "/platform/users", icon: Users,     requiredPermission: "permissions:manage" },
+        { label: "Organisations", href: "/organisations",  icon: Building2, requiredPermission: "organisations:read" },
       ],
     },
     PROFILE_SECTION,

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { format, subMonths, startOfDay, endOfDay } from "date-fns";
 import ManagementReviewPage, { type ReportData } from "@/components/manage/ManagementReviewPage";
 
@@ -16,7 +16,7 @@ export default async function Page({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN) redirect("/dashboard");
+  if (!(await can(session, "auditProgramme:create"))) redirect("/dashboard");
 
   const params = await searchParams;
   const defaultFrom = format(subMonths(new Date(), 12), "yyyy-MM-dd");

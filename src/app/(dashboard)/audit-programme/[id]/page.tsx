@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import AuditProgrammeDetail from "@/components/audit/AuditProgrammeDetail";
 
 export const metadata: Metadata = { title: "Audit Detail" };
@@ -12,8 +13,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const allowed = [USER_ROLES.SUPER_ADMIN, USER_ROLES.AUDITOR];
-  if (!(allowed as string[]).includes(session.user.role)) redirect("/dashboard");
+  if (!(await can(session, "auditProgramme:read"))) redirect("/dashboard");
 
   const audit = await db.internalAudit.findUnique({
     where: { id },

@@ -2,15 +2,13 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import GradingForm from "@/components/exams/GradingForm";
 
 export const metadata: Metadata = { title: "Grade Exam Attempt" };
 
 // essay and fill_blank require human scoring; all other types are auto-scored.
 const MANUAL_TYPES = new Set(["essay", "fill_blank"]);
-
-const ALLOWED = [USER_ROLES.EXAMINER, USER_ROLES.SUPER_ADMIN];
 
 export default async function Page({
   params,
@@ -19,7 +17,7 @@ export default async function Page({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (!(ALLOWED as string[]).includes(session.user.role)) redirect("/dashboard");
+  if (!(await can(session, "exams:grade"))) redirect("/dashboard");
 
   const { attemptId } = await params;
 

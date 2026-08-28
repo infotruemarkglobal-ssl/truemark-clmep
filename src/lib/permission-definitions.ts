@@ -193,7 +193,9 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, Array<[string, string]>> = 
     ["appeals",       "read"],
     ["appeals",       "submit"],
     ["files",         "upload"],
+    ["documents",     "read"],
     ["documents",     "manage"],
+    ["reports",       "read"],
   ],
 
   CANDIDATE: [
@@ -205,6 +207,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, Array<[string, string]>> = 
     ["cpd",           "read"],
     ["cpd",           "manage"],
     ["files",         "upload"],
+    ["documents",     "read"],
   ],
 
   SUPPORT_AGENT: [

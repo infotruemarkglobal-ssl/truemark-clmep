@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import DocumentsPage from "@/components/documents/DocumentsPage";
 
 export const metadata: Metadata = { title: "Document Library" };
@@ -11,12 +12,7 @@ export default async function Page() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const ALLOWED = [
-    USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER,
-    USER_ROLES.AUDITOR, USER_ROLES.EXAMINER,
-    USER_ROLES.CANDIDATE, USER_ROLES.ORG_MANAGER, USER_ROLES.TRAINER,
-  ];
-  if (!(ALLOWED as string[]).includes(session.user.role)) redirect("/dashboard");
+  if (!(await can(session, "documents:read"))) redirect("/dashboard");
 
   const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
   const isAdmin = (ADMIN_ROLES as string[]).includes(session.user.role);
