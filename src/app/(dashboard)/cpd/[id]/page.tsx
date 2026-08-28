@@ -2,19 +2,22 @@ import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import CPDRecordReview from "@/components/cpd/CPDRecordReview";
 
 export const metadata: Metadata = { title: "Review CPD Record" };
 
-const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
+// CANDIDATE also holds cpd:manage (for their own CPD log) — ADMIN_ROLES is a
+// hard ceiling on top of the grant so a candidate can't view/act on someone
+// else's record, matching this page's original ADMIN_ROLES exclusivity.
+const ADMIN_ROLES = ["SUPER_ADMIN", "CERTIFICATION_OFFICER"];
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
   const { id } = await params;
-  const isAdmin = (ADMIN_ROLES as string[]).includes(session.user.role);
+  const isAdmin = await can(session, "cpd:manage", ADMIN_ROLES);
 
   const record = await db.cPDRecord.findUnique({
     where: { id },

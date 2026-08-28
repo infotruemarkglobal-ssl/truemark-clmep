@@ -3,9 +3,14 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 
-const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
+// CANDIDATE also holds cpd:manage (for logging their own CPD hours) — a bare
+// can(session, "cpd:manage") would let any candidate bypass the ownership
+// check below and see/edit/delete other candidates' records. ADMIN_ROLES is
+// a hard ceiling on top of the grant, restoring the original ADMIN_ROLES
+// exclusivity this route always had.
+const ADMIN_ROLES = ["SUPER_ADMIN", "CERTIFICATION_OFFICER"];
 
 const patchSchema = z.object({
   status: z.enum(["pending", "approved", "rejected"]),
@@ -21,7 +26,7 @@ export async function GET(
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const isAdmin = (ADMIN_ROLES as string[]).includes(session.user.role);
+  const isAdmin = await can(session, "cpd:manage", ADMIN_ROLES);
 
   const record = await db.cPDRecord.findUnique({
     where: { id },
@@ -43,7 +48,7 @@ export async function PATCH(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ADMIN_ROLES as string[]).includes(session.user.role)) {
+  if (!(await can(session, "cpd:manage", ADMIN_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -87,7 +92,7 @@ export async function DELETE(
   const record = await db.cPDRecord.findUnique({ where: { id } });
   if (!record) return NextResponse.json({ error: "CPD record not found" }, { status: 404 });
 
-  const isAdmin = (ADMIN_ROLES as string[]).includes(session.user.role);
+  const isAdmin = await can(session, "cpd:manage", ADMIN_ROLES);
   if (!isAdmin && record.userId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
