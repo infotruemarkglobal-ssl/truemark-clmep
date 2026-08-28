@@ -34,6 +34,10 @@ export const PERMISSIONS: PermissionDef[] = [
   { resource: "certifications", action: "revoke", label: "Revoke Certificates",        description: "Suspend or revoke an active certificate",              category: "Certification" },
   { resource: "decisions",      action: "read",   label: "View Certification Decisions", description: "View certification outcome decisions",               category: "Certification" },
   { resource: "decisions",      action: "manage", label: "Make Certification Decisions", description: "Record pass/fail decisions for certification",        category: "Certification" },
+  { resource: "schemes",        action: "read",   label: "View Certification Schemes", description: "View certification scheme definitions",                 category: "Certification" },
+  { resource: "schemes",        action: "manage", label: "Manage Certification Schemes", description: "Create and edit certification scheme definitions",    category: "Certification" },
+  { resource: "applications",   action: "read",   label: "View Scheme Applications",   description: "View candidate scheme-eligibility applications",        category: "Certification" },
+  { resource: "applications",   action: "manage", label: "Manage Scheme Applications", description: "Approve or reject scheme-eligibility applications",     category: "Certification" },
 
   // ── Enrolments ────────────────────────────────────────────────────────────
   { resource: "enrolments", action: "read",   label: "View Enrolments",         description: "View enrolment records across the platform",                 category: "Enrolments" },
@@ -64,6 +68,11 @@ export const PERMISSIONS: PermissionDef[] = [
   { resource: "compliance", action: "read", label: "View ISO 17024 Status",   description: "View the platform's ISO 17024 compliance dashboard",         category: "Compliance & Audit" },
   { resource: "audit",      action: "read", label: "View Audit Log",           description: "Read the immutable platform audit trail",                    category: "Compliance & Audit" },
   { resource: "reports",    action: "read", label: "View Reports",             description: "Access platform-wide analytics and reports",                 category: "Compliance & Audit" },
+  { resource: "auditProgramme", action: "read",   label: "View Audit Programme",   description: "View the internal ISO audit programme and management reviews", category: "Compliance & Audit" },
+  { resource: "auditProgramme", action: "create", label: "Schedule Internal Audits", description: "Schedule a new internal audit or conduct a management review", category: "Compliance & Audit" },
+  { resource: "auditProgramme", action: "update", label: "Update Internal Audits", description: "Update or close an internal audit record",                  category: "Compliance & Audit" },
+  { resource: "gdpr",       action: "read",   label: "View GDPR Requests",     description: "View data breach log and subject access requests",           category: "Compliance & Audit" },
+  { resource: "gdpr",       action: "manage", label: "Manage GDPR Requests",   description: "Log breaches and fulfil data subject access requests",       category: "Compliance & Audit" },
 
   // ── Users & Staff ─────────────────────────────────────────────────────────
   { resource: "users", action: "read",    label: "View Users",                description: "View user profiles and account information",                 category: "Users & Staff" },
@@ -121,6 +130,10 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, Array<[string, string]>> = 
     ["reports",       "read"],
     ["users",         "read"],
     ["files",         "upload"],
+    ["gdpr",          "read"],
+    ["gdpr",          "manage"],
+    ["applications",  "read"],
+    ["applications",  "manage"],
   ],
 
   EXAMINER: [
@@ -162,10 +175,13 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, Array<[string, string]>> = 
     ["documents",     "read"],
     ["documents",     "manage"],
     ["users",         "read"],
+    ["auditProgramme","read"],
+    ["auditProgramme","update"],
   ],
 
   ORG_MANAGER: [
     ["organisations", "read"],
+    ["organisations", "update"],
     ["organisations", "members"],
     ["enrolments",    "read"],
     ["enrolments",    "create"],
