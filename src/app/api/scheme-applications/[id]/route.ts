@@ -3,9 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
-import { USER_ROLES } from "@/lib/constants";
-
-const OFFICER_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
+import { can } from "@/lib/permissions";
 
 const patchSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("approve"), notes: z.string().max(1000).optional() }),
@@ -20,7 +18,7 @@ export async function PATCH(
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!(OFFICER_ROLES as string[]).includes(session.user.role)) {
+  if (!(await can(session, "applications:manage"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

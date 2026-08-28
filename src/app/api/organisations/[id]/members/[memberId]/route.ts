@@ -4,14 +4,14 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
+import { can } from "@/lib/permissions";
+import type { Session } from "next-auth";
 
-const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.ORG_MANAGER];
-
-async function checkAccess(userId: string, role: string, orgId: string) {
-  if (!(ALLOWED as string[]).includes(role)) return false;
-  if (role === USER_ROLES.ORG_MANAGER) {
+async function checkAccess(session: Session, orgId: string) {
+  if (!(await can(session, "organisations:members"))) return false;
+  if (session.user.role === USER_ROLES.ORG_MANAGER) {
     const m = await db.organisationMember.findUnique({
-      where: { userId_organisationId: { userId, organisationId: orgId } },
+      where: { userId_organisationId: { userId: session.user.id, organisationId: orgId } },
     });
     return !!m;
   }
@@ -26,7 +26,7 @@ export async function PATCH(
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id, memberId } = await params;
-  if (!(await checkAccess(session.user.id, session.user.role, id))) {
+  if (!(await checkAccess(session, id))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -109,7 +109,7 @@ export async function DELETE(
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id, memberId } = await params;
-  if (!(await checkAccess(session.user.id, session.user.role, id))) {
+  if (!(await checkAccess(session, id))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

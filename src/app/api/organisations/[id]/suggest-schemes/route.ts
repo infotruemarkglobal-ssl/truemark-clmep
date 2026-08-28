@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { rateLimit } from "@/lib/rate-limit";
-const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.ORG_MANAGER];
 
 // Vercel Pro required for maxDuration > 10.
 // Anthropic API calls for scheme suggestions can take 15–45s.
@@ -15,7 +15,7 @@ export const maxDuration = 60; // seconds — Anthropic API calls can take 15–
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ALLOWED as string[]).includes(session.user.role)) {
+  if (!(await can(session, "organisations:read"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

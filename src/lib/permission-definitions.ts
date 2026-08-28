@@ -193,6 +193,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, Array<[string, string]>> = 
     ["appeals",       "read"],
     ["appeals",       "submit"],
     ["files",         "upload"],
+    ["documents",     "manage"],
   ],
 
   CANDIDATE: [

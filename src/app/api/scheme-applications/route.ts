@@ -5,7 +5,10 @@ import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { inngest, EVENTS } from "@/inngest/client";
 import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 
+// Still used to scope the notify-officers query below (a legitimate data
+// lookup, not an access gate) — the GET gate itself now uses can().
 const OFFICER_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
 
 const submitSchema = z.object({
@@ -148,7 +151,7 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!(OFFICER_ROLES as string[]).includes(session.user.role)) {
+  if (!(await can(session, "applications:read"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

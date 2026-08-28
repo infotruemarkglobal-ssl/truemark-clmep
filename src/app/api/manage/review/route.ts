@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { auditLog } from "@/lib/audit";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== USER_ROLES.SUPER_ADMIN)
+  if (!(await can(session, "auditProgramme:create")))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   let body: { from?: string; to?: string; metrics?: Record<string, unknown> };

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { uploadFile } from "@/lib/storage";
 import path from "path";
 
@@ -20,8 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id: orgId } = await params;
 
-  const allowed = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.ORG_MANAGER] as string[];
-  if (!allowed.includes(session.user.role)) {
+  if (!(await can(session, "documents:manage"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

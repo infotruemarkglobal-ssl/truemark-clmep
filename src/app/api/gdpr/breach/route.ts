@@ -4,11 +4,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { addHours } from "date-fns";
 import { inngest, EVENTS } from "@/inngest/client";
 import { rateLimit } from "@/lib/rate-limit";
-
-const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
 
 // Art. 33 GDPR: supervisory authority must be notified within 72 hours of
 // becoming aware of a personal data breach (unless unlikely to result in risk).
@@ -30,7 +29,7 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ADMIN_ROLES as string[]).includes(session.user.role)) {
+  if (!(await can(session, "gdpr:manage"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -112,7 +111,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ADMIN_ROLES as string[]).includes(session.user.role)) {
+  if (!(await can(session, "gdpr:read"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

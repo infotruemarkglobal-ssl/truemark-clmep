@@ -3,10 +3,9 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { addHours } from "date-fns";
 
-const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
 const DPA_WINDOW_HOURS = 72;
 
 const schema = z.object({
@@ -24,7 +23,7 @@ export async function PATCH(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ADMIN_ROLES as string[]).includes(session.user.role)) {
+  if (!(await can(session, "gdpr:manage"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 
 // PATCH /api/audit-programme/[id]
 // SUPER_ADMIN: may update any field (title, scope, plannedDate, leadAuditorId, status, findings)
@@ -14,10 +15,15 @@ export async function PATCH(
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const isSuperAdmin = session.user.role === USER_ROLES.SUPER_ADMIN;
-  const isAuditor = session.user.role === USER_ROLES.AUDITOR;
-  if (!isSuperAdmin && !isAuditor)
+  if (!(await can(session, "auditProgramme:update")))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // isSuperAdmin is still checked by role directly (not permission) below,
+  // both to gate the lead-auditor ownership bypass and to decide which
+  // fields are writable — SUPER_ADMIN gets a strictly wider field set than
+  // a lead auditor, which is a role-specific business rule, not itself a
+  // separate permission.
+  const isSuperAdmin = session.user.role === USER_ROLES.SUPER_ADMIN;
 
   const { id } = await params;
   const existing = await db.internalAudit.findUnique({ where: { id }, select: { id: true, status: true, leadAuditorId: true } });
