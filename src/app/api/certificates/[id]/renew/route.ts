@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
 import { generateCertificateNumber, generateOpenBadgeJwt, generateQrCode } from "@/lib/certificates";
+import { can } from "@/lib/permissions";
 import { USER_ROLES, RENEWAL_WARNINGS_DAYS } from "@/lib/constants";
 import { addMonths, addDays, subMonths } from "date-fns";
 
@@ -154,7 +155,7 @@ export async function POST(
 
   const isOfficer = (OFFICER_ROLES as string[]).includes(session.user.role);
 
-  if (body.data.action === "issue" && !isOfficer) {
+  if (body.data.action === "issue" && !(await can(session, "certifications:issue"))) {
     return NextResponse.json({ error: "Forbidden — Certification Officer role required to issue renewals" }, { status: 403 });
   }
 

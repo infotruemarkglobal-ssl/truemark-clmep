@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
+import { can } from "@/lib/permissions";
 import { CACHE_TAGS } from "@/lib/cache";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -12,8 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.ORG_MANAGER];
-  if (!(ALLOWED as string[]).includes(session.user.role)) {
+  if (!(await can(session, "organisations:read"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -36,8 +36,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // Only the ORG_MANAGER of this specific org may edit it.
-  // SUPER_ADMIN and CERTIFICATION_OFFICER have read-only access to org profiles.
-  if (session.user.role !== USER_ROLES.ORG_MANAGER) {
+  // SUPER_ADMIN and CERTIFICATION_OFFICER have read-only access to org profiles —
+  // ["ORG_MANAGER"] is a hard ceiling here, not just today's default: SUPER_ADMIN
+  // auto-holds every permission, so without it SUPER_ADMIN would gain edit access
+  // the moment organisations:update exists, contradicting this deliberate exclusion.
+  if (!(await can(session, "organisations:update", ["ORG_MANAGER"]))) {
     return NextResponse.json({ error: "Forbidden — only the Organisation Manager can edit this profile" }, { status: 403 });
   }
 

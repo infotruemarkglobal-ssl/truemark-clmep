@@ -2,20 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { uploadFile, deleteFile } from "@/lib/storage";
 
-const ALLOWED_ROLES = [USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.SUPER_ADMIN] as string[];
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg"];
 
 // POST /api/users/me/signature — upload a signature image for use on certificates.
-// Only CERTIFICATION_OFFICER and SUPER_ADMIN may upload.
+// Gated by certifications:issue rather than files:upload (granted far more
+// broadly) — a signature is only meaningful for whoever issues certificates,
+// currently CERTIFICATION_OFFICER and SUPER_ADMIN, matching this exactly.
 // Accepts multipart/form-data with a single field named "signature".
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!ALLOWED_ROLES.includes(session.user.role)) {
+  if (!(await can(session, "certifications:issue"))) {
     return NextResponse.json({ error: "Forbidden — only Certification Officers and Admins may upload a signature" }, { status: 403 });
   }
 
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!ALLOWED_ROLES.includes(session.user.role)) {
+  if (!(await can(session, "certifications:issue"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

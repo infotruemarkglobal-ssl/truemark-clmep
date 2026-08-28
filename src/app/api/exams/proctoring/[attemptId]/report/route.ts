@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 
 export async function GET(
   _req: NextRequest,
@@ -10,8 +10,7 @@ export async function GET(
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER];
-  if (!(ALLOWED as string[]).includes(session.user.role))
+  if (!(await can(session, "exams:read")))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { attemptId } = await params;

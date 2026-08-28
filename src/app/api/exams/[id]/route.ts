@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { rateLimit } from "@/lib/rate-limit";
 
 // POST /api/exams/[id] — start an exam attempt
@@ -10,9 +10,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // MEDIUM-2 RBAC fix: only CANDIDATE role may start an exam attempt;
-  // staff roles (TRAINER, EXAMINER, PROCTOR, etc.) must not sit exams under their own account
-  if (session.user.role !== USER_ROLES.CANDIDATE) {
+  // MEDIUM-2 RBAC fix: only a role granted exams:take (CANDIDATE by default) may
+  // start an exam attempt; staff roles must not sit exams under their own account
+  if (!(await can(session, "exams:take"))) {
     return NextResponse.json({ error: "Forbidden — only candidates may start exam attempts" }, { status: 403 });
   }
 
