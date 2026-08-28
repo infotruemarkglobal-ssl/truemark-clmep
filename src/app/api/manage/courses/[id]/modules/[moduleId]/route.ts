@@ -4,8 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
-
-const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.TRAINER];
+import { can } from "@/lib/permissions";
 
 async function checkAccess(session: { user: { id: string; role: string } }, moduleId: string) {
   const mod = await db.courseModule.findUnique({ where: { id: moduleId }, include: { course: true } });
@@ -21,7 +20,7 @@ export async function PATCH(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ALLOWED as string[]).includes(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await can(session, "courses:update"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { moduleId } = await params;
   const mod = await checkAccess(session, moduleId);
@@ -54,7 +53,7 @@ export async function DELETE(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ALLOWED as string[]).includes(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await can(session, "courses:delete"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { moduleId } = await params;
   const mod = await checkAccess(session, moduleId);

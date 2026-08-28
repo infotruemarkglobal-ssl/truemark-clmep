@@ -3,7 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
-const ALLOWED = ["SUPER_ADMIN", "CERTIFICATION_OFFICER", "EXAMINER"];
+import { can } from "@/lib/permissions";
 
 // Vercel Pro required for maxDuration > 10.
 // Anthropic API calls for question generation can take 15–45s.
@@ -13,7 +13,7 @@ export const maxDuration = 60; // seconds — Anthropic API calls can take 15–
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!ALLOWED.includes(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await can(session, "exams:create"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(

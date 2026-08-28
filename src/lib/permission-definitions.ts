@@ -105,6 +105,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, Array<[string, string]>> = 
     ["courses",       "delete"],
     ["courses",       "publish"],
     ["scorm",         "read"],
+    ["scorm",         "manage"],
     ["exams",         "read"],
     ["exams",         "create"],
     ["exams",         "update"],

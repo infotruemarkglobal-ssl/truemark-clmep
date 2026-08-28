@@ -7,6 +7,7 @@ import { generateCertificateNumber, generateOpenBadgeJwt, generateQrCode } from 
 import { addMonths } from "date-fns";
 import { z } from "zod";
 import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { CACHE_TAGS } from "@/lib/cache";
 
 const schema = z.object({
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // ISO 17024 Cl.7.4 — only Certification Officers can make this decision
-  if (!([USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.SUPER_ADMIN] as string[]).includes(session.user.role)) {
+  if (!(await can(session, "decisions:manage"))) {
     return NextResponse.json({ error: "Forbidden — Certification Officer role required" }, { status: 403 });
   }
 

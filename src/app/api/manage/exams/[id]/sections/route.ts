@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
+import { can } from "@/lib/permissions";
 
 const schema = z.object({
   title: z.string().min(1).max(200).default("New Section"),
@@ -17,8 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const paper = await db.examPaper.findFirst({ where: { id } });
   if (!paper) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const allowed = ["SUPER_ADMIN", "CERTIFICATION_OFFICER", "EXAMINER"];
-  if (!allowed.includes(session.user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await can(session, "exams:create"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!["SUPER_ADMIN", "CERTIFICATION_OFFICER"].includes(session.user.role) && paper.creatorId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

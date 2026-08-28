@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
+import { can } from "@/lib/permissions";
 import { inngest, EVENTS } from "@/inngest/client";
-
-const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.EXAMINER];
 
 // Vercel Pro required for maxDuration > 10.
 // Grade submission involves multiple DB writes and Inngest event.
@@ -24,7 +22,7 @@ export async function GET(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ALLOWED as string[]).includes(session.user.role)) {
+  if (!(await can(session, "exams:grade"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -157,7 +155,7 @@ export async function POST(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ALLOWED as string[]).includes(session.user.role)) {
+  if (!(await can(session, "exams:grade"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -273,7 +271,7 @@ export async function PATCH(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ALLOWED as string[]).includes(session.user.role)) {
+  if (!(await can(session, "exams:grade"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

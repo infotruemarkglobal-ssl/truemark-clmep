@@ -3,8 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
-
-const ALLOWED = ["TRAINER", "SUPER_ADMIN"];
+import { can } from "@/lib/permissions";
 
 // Anthropic API calls for content generation can take 15–45s.
 export const maxDuration = 60;
@@ -15,7 +14,7 @@ export async function POST(
 ) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!ALLOWED.includes(session.user.role))
+  if (!(await can(session, "courses:update")))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   if (!process.env.ANTHROPIC_API_KEY) {

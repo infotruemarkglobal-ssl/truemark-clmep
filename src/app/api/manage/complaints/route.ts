@@ -58,7 +58,7 @@ const patchSchema = z.object({
 export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ADMIN_ROLES as string[]).includes(session.user.role)) {
+  if (!(await can(session, "appeals:manage"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

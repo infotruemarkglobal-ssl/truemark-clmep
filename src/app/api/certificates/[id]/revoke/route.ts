@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { can } from "@/lib/permissions";
 import { rateLimit } from "@/lib/rate-limit";
 
 const schema = z.object({
@@ -20,8 +20,7 @@ export async function PATCH(
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const ALLOWED = [USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.SUPER_ADMIN];
-  if (!(ALLOWED as string[]).includes(session.user.role)) {
+  if (!(await can(session, "certifications:revoke"))) {
     return NextResponse.json({ error: "Forbidden — Certification Officer role required" }, { status: 403 });
   }
 

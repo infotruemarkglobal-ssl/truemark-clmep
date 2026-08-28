@@ -3,11 +3,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
+import { can } from "@/lib/permissions";
 import { inngest, EVENTS } from "@/inngest/client";
 import { XMLParser } from "fast-xml-parser";
 import { uploadFile } from "@/lib/storage";
-
-const ALLOWED = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.TRAINER];
 
 /**
  * Sanitize the launchUrl extracted from imsmanifest.xml.
@@ -139,7 +138,7 @@ export const maxDuration = 60; // seconds
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ALLOWED as string[]).includes(session.user.role)) {
+  if (!(await can(session, "scorm:manage"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -311,7 +310,7 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(ALLOWED as string[]).includes(session.user.role)) {
+  if (!(await can(session, "scorm:read"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

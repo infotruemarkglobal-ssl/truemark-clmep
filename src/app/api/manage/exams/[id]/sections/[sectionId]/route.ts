@@ -3,15 +3,16 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { auditLog } from "@/lib/audit";
+import { can } from "@/lib/permissions";
+import type { Session } from "next-auth";
 
 type Ctx = { params: Promise<{ id: string; sectionId: string }> };
 
-async function authorise(paperId: string, userId: string, role: string) {
+async function authorise(paperId: string, session: Session, permission: "exams:update" | "exams:delete") {
   const paper = await db.examPaper.findFirst({ where: { id: paperId } });
   if (!paper) return null;
-  const allowed = ["SUPER_ADMIN", "CERTIFICATION_OFFICER", "EXAMINER"];
-  if (!allowed.includes(role)) return null;
-  if (!["SUPER_ADMIN", "CERTIFICATION_OFFICER"].includes(role) && paper.creatorId !== userId) return null;
+  if (!(await can(session, permission))) return null;
+  if (!["SUPER_ADMIN", "CERTIFICATION_OFFICER"].includes(session.user.role) && paper.creatorId !== session.user.id) return null;
   return paper;
 }
 
@@ -20,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id, sectionId } = await params;
-  if (!await authorise(id, session.user.id, session.user.role)) {
+  if (!await authorise(id, session, "exams:update")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -57,7 +58,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id, sectionId } = await params;
-  if (!await authorise(id, session.user.id, session.user.role)) {
+  if (!await authorise(id, session, "exams:delete")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
