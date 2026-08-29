@@ -120,8 +120,8 @@ Always return valid JSON only.`;
 
   try {
     const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
+      model: "claude-sonnet-5",
+      max_tokens: 16000,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompts[contentType] }],
     });

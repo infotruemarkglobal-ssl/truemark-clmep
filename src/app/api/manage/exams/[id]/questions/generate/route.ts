@@ -93,9 +93,14 @@ Rules:
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   try {
+    // Haiku 4.5's real output ceiling is 64000 tokens (verified against the
+    // Models API). 4096 was a fixed guess that truncated mid-question well
+    // before reaching `count` questions — each question runs ~250-350 tokens
+    // with full option sets and explanations, so this scales the budget with
+    // what was actually asked for instead of hoping a flat cap is enough.
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 4096,
+      max_tokens: Math.min(64000, Math.max(4096, count * 600 + 1000)),
       messages: [{ role: "user", content: prompt }],
     });
 

@@ -95,7 +95,10 @@ function AIGenerateModal({
   onGenerated: (questions: Question[]) => void;
   onClose: () => void;
 }) {
-  const [form, setForm] = useState({ topic: "", count: "5", type: "mcq_single", difficulty: "medium", domain: "" });
+  // Pre-fill from the section title so the admin edits a starting point
+  // instead of typing from scratch — still required and fully editable,
+  // since different sections of the same paper often need different topics.
+  const [form, setForm] = useState({ topic: sectionTitle, count: "5", type: "mcq_single", difficulty: "medium", domain: "" });
   const [generating, setGenerating] = useState(false);
 
   async function generate() {
