@@ -61,6 +61,84 @@ export async function serializePermissions(userId: string): Promise<string[]> {
 export const getCachedUserPermissions = cache(getUserPermissions);
 
 /**
+ * Resolves the set of organisations a permission is scoped to for this user,
+ * or `null` if it's held unrestricted (platform-wide).
+ *
+ * A permission counts as unrestricted if it's granted via a system role
+ * (other than ORG_MANAGER — see below) matching `User.role`, or via a
+ * `UserCustomRole` row with `organisationId: null`. Otherwise, it's the
+ * deduped union of org ids from (a) org-scoped `UserCustomRole` rows
+ * granting this permission, and (b) the legacy ORG_MANAGER path — their
+ * single `OrganisationMember.organisationId`.
+ *
+ * ORG_MANAGER is a deliberate special case, not an oversight: its system
+ * role grants several permissions (reports:read, users:read, ...) as plain
+ * RolePermission rows, which carry no scope concept at all — every built-in
+ * role's grants are structurally "platform-wide" at that layer. ORG_MANAGER
+ * has never actually meant "see everything platform-wide" though; every
+ * route that used it for scoping treated it as inherently own-org-only, a
+ * business rule that has always lived in each route's own code, not in the
+ * permission table. So a system-role grant only counts as unrestricted here
+ * when the role isn't ORG_MANAGER — for ORG_MANAGER, holding a permission via
+ * the system role means "scoped to their org", exactly like today, not
+ * "platform-wide" merely because the RolePermission row itself carries no
+ * scope. (A future built-in role with the same structural restriction would
+ * need the same explicit carve-out — this isn't inferable from the schema.)
+ *
+ * Drop-in replacement for the `orgUserIds: string[] | null` pattern several
+ * routes already hand-rolled by checking `role === "ORG_MANAGER"` directly:
+ * `null` behaves identically to today's unfiltered scope, a populated array
+ * replaces the manual `OrganisationMember` lookup — and, unlike the role
+ * check it replaces, this also covers a custom role holder scoped to an org.
+ */
+export async function getPermissionOrgScope(
+  session: Session | null,
+  permission: string,
+): Promise<string[] | null> {
+  if (!session?.user) return [];
+  const { id: userId, role } = session.user;
+
+  const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (!user) return [];
+
+  const [resource, action] = permission.split(":");
+  const permWhere = { permission: { resource, action } };
+
+  const [platformWideGrants, scopedGrants, systemRolePerm] = await Promise.all([
+    db.userCustomRole.findMany({
+      where: { userId, organisationId: null },
+      select: { role: { select: { rolePermissions: { where: permWhere, select: { permissionId: true } } } } },
+    }),
+    db.userCustomRole.findMany({
+      where: { userId, organisationId: { not: null } },
+      select: { organisationId: true, role: { select: { rolePermissions: { where: permWhere, select: { permissionId: true } } } } },
+    }),
+    db.customRole.findFirst({
+      where: { name: user.role, isSystem: true },
+      select: { rolePermissions: { where: permWhere, select: { permissionId: true } } },
+    }),
+  ]);
+
+  const systemRoleGrants = (systemRolePerm?.rolePermissions.length ?? 0) > 0;
+  const platformWide =
+    (systemRoleGrants && role !== "ORG_MANAGER") ||
+    platformWideGrants.some((g) => g.role.rolePermissions.length > 0);
+  if (platformWide) return null;
+
+  const orgIds = new Set<string>();
+  for (const grant of scopedGrants) {
+    if (grant.organisationId && grant.role.rolePermissions.length > 0) orgIds.add(grant.organisationId);
+  }
+
+  if (role === "ORG_MANAGER" && systemRoleGrants) {
+    const membership = await db.organisationMember.findFirst({ where: { userId }, select: { organisationId: true } });
+    if (membership) orgIds.add(membership.organisationId);
+  }
+
+  return Array.from(orgIds);
+}
+
+/**
  * Unified access check for API routes — the single function all route handlers should call.
  *
  * The live permission matrix is always the deciding factor. `allowedRoles`, when given,

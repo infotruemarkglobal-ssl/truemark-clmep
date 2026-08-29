@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
 import bcrypt from "bcryptjs";
-import { can } from "@/lib/permissions";
+import { can, getPermissionOrgScope } from "@/lib/permissions";
 
 const ADMIN_ROLES = [USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER, USER_ROLES.ORG_MANAGER];
 
@@ -36,16 +36,15 @@ export async function GET(req: NextRequest) {
   const { search, role, status, page } = qp.data;
   const pageSize = 20;
 
-  // HIGH-2 RBAC fix: ORG_MANAGER may only see members of their own organisation
+  // HIGH-2 RBAC fix, generalised: scope to org membership whenever users:read
+  // is only held via an org (ORG_MANAGER's own org, or an org-scoped custom
+  // role) — not just for the literal ORG_MANAGER role.
+  const orgIds = await getPermissionOrgScope(session, "users:read");
   let orgScopeFilter: { id: { in: string[] } } | Record<string, never> = {};
-  if (session.user.role === USER_ROLES.ORG_MANAGER) {
-    const membership = await db.organisationMember.findFirst({
-      where: { userId: session.user.id },
-      select: { organisationId: true },
-    });
-    if (!membership) return NextResponse.json({ users: [], total: 0, page, pageSize });
+  if (orgIds !== null) {
+    if (orgIds.length === 0) return NextResponse.json({ users: [], total: 0, page, pageSize });
     const members = await db.organisationMember.findMany({
-      where: { organisationId: membership.organisationId },
+      where: { organisationId: { in: orgIds } },
       select: { userId: true },
     });
     orgScopeFilter = { id: { in: members.map((m) => m.userId) } };
@@ -73,10 +72,11 @@ export async function GET(req: NextRequest) {
         id: true, firstName: true, lastName: true, email: true,
         role: true, status: true, mfaEnabled: true,
         lastLoginAt: true, createdAt: true,
-        // Art. 5(1)(c) data minimisation: phone is returned only to SUPER_ADMIN /
-        // CERTIFICATION_OFFICER who need full contact details. ORG_MANAGER does
-        // not require phone numbers to manage course enrolments.
-        ...(session.user.role !== USER_ROLES.ORG_MANAGER ? { phone: true } : {}),
+        // Art. 5(1)(c) data minimisation: phone is returned only to admins with
+        // platform-wide users:read. An org-scoped grant (ORG_MANAGER's own org,
+        // or an org-scoped custom role) does not need phone numbers to manage
+        // course enrolments.
+        ...(orgIds === null ? { phone: true } : {}),
       },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,

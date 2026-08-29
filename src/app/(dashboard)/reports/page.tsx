@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
-import { can } from "@/lib/permissions";
+import { can, getPermissionOrgScope } from "@/lib/permissions";
 import ReportsPage from "@/components/reports/ReportsPage";
 
 export const metadata: Metadata = { title: "Reports & Analytics" };
@@ -20,22 +19,17 @@ export default async function Page() {
   const ninetyDaysAgo = new Date(now);
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-  // HIGH-4 RBAC fix: ORG_MANAGER only sees data for their own organisation's members
+  // HIGH-4 RBAC fix, generalised: scope to org membership whenever
+  // reports:read is only held via an org (ORG_MANAGER's own org, or an
+  // org-scoped custom role) — not just for the literal ORG_MANAGER role.
+  const orgIds = await getPermissionOrgScope(session, "reports:read");
   let orgUserIds: string[] | null = null;
-  if (session.user.role === USER_ROLES.ORG_MANAGER) {
-    const membership = await db.organisationMember.findFirst({
-      where: { userId: session.user.id },
-      select: { organisationId: true },
+  if (orgIds !== null) {
+    const members = await db.organisationMember.findMany({
+      where: { organisationId: { in: orgIds } },
+      select: { userId: true },
     });
-    if (membership) {
-      const members = await db.organisationMember.findMany({
-        where: { organisationId: membership.organisationId },
-        select: { userId: true },
-      });
-      orgUserIds = members.map((m) => m.userId);
-    } else {
-      orgUserIds = [];
-    }
+    orgUserIds = members.map((m) => m.userId);
   }
 
   const userScope = orgUserIds !== null ? { id: { in: orgUserIds } } : {};

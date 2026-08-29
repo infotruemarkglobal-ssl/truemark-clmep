@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
 import { auditLog } from "@/lib/audit";
+import { getPermissionOrgScope } from "@/lib/permissions";
 import { inngest, EVENTS } from "@/inngest/client";
 
 const AGENT_ROLES: string[] = [USER_ROLES.SUPPORT_AGENT, USER_ROLES.SUPER_ADMIN];
@@ -30,6 +31,16 @@ export async function GET(req: NextRequest) {
 
   let where: Prisma.SupportTicketWhereInput = {};
 
+  // ORG_MANAGER's org-scoped ticket visibility here has never been gated by
+  // a formal "tickets:read" grant (this route has no can() check at all —
+  // every authenticated user sees *something*, just scoped differently) —
+  // it's pure role-identity, same as it always was. getPermissionOrgScope
+  // generalises that to also cover a custom role explicitly granted
+  // tickets:read and org-scoped, without changing what literal ORG_MANAGER
+  // sees.
+  const ticketOrgIds = await getPermissionOrgScope(session, "tickets:read");
+  const orgScoped = role === USER_ROLES.ORG_MANAGER || (ticketOrgIds !== null && ticketOrgIds.length > 0);
+
   if (AGENT_ROLES.includes(role)) {
     if (mine) where = { assignedToId: userId };
     else {
@@ -37,12 +48,16 @@ export async function GET(req: NextRequest) {
       if (priority) where.priority = priority;
       if (category) where.category = category;
     }
-  } else if (role === USER_ROLES.ORG_MANAGER) {
-    const membership = await db.organisationMember.findFirst({
-      where: { userId }, select: { organisationId: true },
-    });
-    if (!membership) return NextResponse.json({ tickets: [] });
-    where = { organisationId: membership.organisationId };
+  } else if (orgScoped) {
+    let orgIds = ticketOrgIds ?? [];
+    if (role === USER_ROLES.ORG_MANAGER) {
+      const membership = await db.organisationMember.findFirst({
+        where: { userId }, select: { organisationId: true },
+      });
+      if (membership) orgIds = [...new Set([...orgIds, membership.organisationId])];
+    }
+    if (orgIds.length === 0) return NextResponse.json({ tickets: [] });
+    where = { organisationId: { in: orgIds } };
   } else {
     // CANDIDATE — own tickets only
     where = { userId };
@@ -87,13 +102,17 @@ export async function POST(req: NextRequest) {
 
   const { subject, category, priority, message, organisationId: reqOrgId } = body.data;
 
-  // ORG_MANAGER: derive orgId from their membership
+  // ORG_MANAGER, or a custom role explicitly scoped to one org: stamp their
+  // own org onto the ticket rather than trusting a client-supplied one.
   let organisationId: string | undefined;
+  const creatorOrgIds = await getPermissionOrgScope(session, "tickets:read");
   if (role === USER_ROLES.ORG_MANAGER) {
     const membership = await db.organisationMember.findFirst({
       where: { userId }, select: { organisationId: true },
     });
     organisationId = membership?.organisationId ?? undefined;
+  } else if (creatorOrgIds !== null && creatorOrgIds.length === 1) {
+    organisationId = creatorOrgIds[0];
   } else if (reqOrgId) {
     organisationId = reqOrgId;
   }

@@ -10,9 +10,15 @@ const ROLE_PRIORITY: Record<string, number> = {
   PROCTOR: 5, AUDITOR: 4, ORG_MANAGER: 3, SUPPORT_AGENT: 2, CANDIDATE: 1,
 };
 
+// Only platform-wide (organisationId: null) rows count toward the user's
+// base role / allowedRoles ceilings — an org-scoped grant must only ever
+// widen what a user can see/do within that org, never elevate them
+// platform-wide. Without this, an org-scoped TRAINER-flavored custom role
+// would silently let its holder pass allowedRoles: ["TRAINER", ...] checks
+// everywhere, not just for the org it was scoped to.
 async function highestBaseRole(userId: string): Promise<string> {
   const roles = await db.userCustomRole.findMany({
-    where: { userId },
+    where: { userId, organisationId: null },
     select: { role: { select: { baseRole: true } } },
   });
   if (roles.length === 0) return "CANDIDATE";
@@ -36,7 +42,10 @@ export async function GET(
 
   const assignments = await db.userCustomRole.findMany({
     where: { userId },
-    include: { role: { select: { id: true, name: true, isSystem: true } } },
+    include: {
+      role: { select: { id: true, name: true, isSystem: true } },
+      organisation: { select: { id: true, name: true } },
+    },
   });
 
   return NextResponse.json(assignments);
@@ -53,9 +62,10 @@ export async function POST(
 
   const { id: userId } = await params;
 
-  const schema = z.object({ roleId: z.string() });
+  const schema = z.object({ roleId: z.string(), organisationId: z.string().nullable().optional() });
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  const organisationId = parsed.data.organisationId ?? null;
 
   const user = await db.user.findUnique({ where: { id: userId } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -63,15 +73,24 @@ export async function POST(
   const role = await db.customRole.findUnique({ where: { id: parsed.data.roleId } });
   if (!role) return NextResponse.json({ error: "Role not found" }, { status: 404 });
 
-  // Capture before state for the before/after audit snapshot.
-  const existingAssignment = await db.userCustomRole.findUnique({
-    where: { userId_roleId: { userId, roleId: parsed.data.roleId } },
-  });
+  if (organisationId) {
+    const org = await db.organisation.findUnique({ where: { id: organisationId }, select: { id: true } });
+    if (!org) return NextResponse.json({ error: "Organisation not found" }, { status: 404 });
+  }
 
-  const assignment = await db.userCustomRole.upsert({
-    where: { userId_roleId: { userId, roleId: parsed.data.roleId } },
-    create: { userId, roleId: parsed.data.roleId, assignedBy: session.user.id },
-    update: {},
+  // Capture before state for the before/after audit snapshot. No natural key
+  // to upsert on anymore (organisationId is nullable, and Postgres treats
+  // each NULL as distinct in a unique index), so this existence check is the
+  // actual duplicate guard for the platform-wide (organisationId: null) case.
+  const existingAssignment = await db.userCustomRole.findFirst({
+    where: { userId, roleId: parsed.data.roleId, organisationId },
+  });
+  if (existingAssignment) {
+    return NextResponse.json({ error: "This role is already assigned for that scope" }, { status: 409 });
+  }
+
+  const assignment = await db.userCustomRole.create({
+    data: { userId, roleId: parsed.data.roleId, organisationId, assignedBy: session.user.id },
   });
 
   // Recalculate the user's built-in role as the highest baseRole among all
@@ -91,7 +110,8 @@ export async function POST(
       roleId: parsed.data.roleId,
       roleName: role.name,
       targetEmail: user.email,
-      before: { hasRole: existingAssignment !== null },
+      organisationId,
+      before: { hasRole: false },
       after: { hasRole: true },
       severity: "HIGH",
     },
@@ -111,9 +131,10 @@ export async function DELETE(
 
   const { id: userId } = await params;
 
-  const schema = z.object({ roleId: z.string() });
+  const schema = z.object({ roleId: z.string(), organisationId: z.string().nullable().optional() });
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  const organisationId = parsed.data.organisationId ?? null;
 
   // Fetch role name before removing so it appears in the audit snapshot.
   const roleToRemove = await db.customRole.findUnique({
@@ -121,8 +142,11 @@ export async function DELETE(
     select: { name: true },
   });
 
+  // Matches on all three fields — a role can now have multiple rows per
+  // user (one platform-wide, several org-scoped), so roleId alone is no
+  // longer enough to identify which assignment to remove.
   await db.userCustomRole.deleteMany({
-    where: { userId, roleId: parsed.data.roleId },
+    where: { userId, roleId: parsed.data.roleId, organisationId },
   });
 
   // Recalculate user.role from remaining custom roles; if none remain, reset to CANDIDATE.

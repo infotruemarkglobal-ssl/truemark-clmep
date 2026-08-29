@@ -209,6 +209,7 @@ model Organisation {
   cpdRecords          CPDRecord[]
   courseSeats         CourseSeat[]
   supportTickets      SupportTicket[]
+  customRoleGrants    UserCustomRole[]
 
   @@map("organisations")
 }
@@ -1152,15 +1153,23 @@ model RolePermission {
 }
 
 model UserCustomRole {
-  userId     String
-  roleId     String
-  assignedAt DateTime @default(now())
-  assignedBy String?
+  id             String   @id @default(cuid())
+  userId         String
+  roleId         String
+  organisationId String? // null = platform-wide (today's behavior); set = grant applies only within this org
+  assignedAt     DateTime @default(now())
+  assignedBy     String?
 
-  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role CustomRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         CustomRole    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: Cascade)
 
-  @@id([userId, roleId])
+  // Stops duplicate org-scoped grants at the DB layer. Does NOT stop duplicate
+  // platform-wide (organisationId: null) rows — Postgres treats each NULL as
+  // distinct — so the API layer does its own existence check before create.
+  @@unique([userId, roleId, organisationId])
+  @@index([userId])
+  @@index([organisationId])
   @@map("user_custom_roles")
 }
 

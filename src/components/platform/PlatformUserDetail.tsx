@@ -27,7 +27,9 @@ import { cn } from "@/lib/utils";
 type CustomRoleAssignment = {
   id: string;
   roleId: string;
+  organisationId: string | null;
   role: { id: string; name: string; isSystem: boolean };
+  organisation: { id: string; name: string } | null;
 };
 
 type AvailableRole = {
@@ -36,6 +38,8 @@ type AvailableRole = {
   baseRole: string;
   isSystem: boolean;
 };
+
+type OrgOption = { id: string; name: string };
 
 type OrgMembership = {
   id: string;
@@ -175,20 +179,27 @@ export default function PlatformUserDetail({
 
   const [customRoles, setCustomRoles] = useState<CustomRoleAssignment[]>([]);
   const [availableRoles, setAvailableRoles] = useState<AvailableRole[]>([]);
+  const [orgOptions, setOrgOptions] = useState<OrgOption[]>([]);
   const [rolesLoading, setRolesLoading] = useState(true);
   const [selectedRoleId, setSelectedRoleId] = useState("");
+  const [selectedOrgId, setSelectedOrgId] = useState(""); // "" = platform-wide
   const [assigningRole, setAssigningRole] = useState(false);
-  const [removingRoleId, setRemovingRoleId] = useState<string | null>(null);
+  const [removingRoleKey, setRemovingRoleKey] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadRoles() {
       setRolesLoading(true);
-      const [assignedRes, availableRes] = await Promise.all([
+      const [assignedRes, availableRes, orgsRes] = await Promise.all([
         fetch(`/api/platform/users/${initialUser.id}/roles`),
         fetch("/api/platform/roles"),
+        fetch("/api/organisations"),
       ]);
       if (assignedRes.ok) setCustomRoles(await assignedRes.json() as CustomRoleAssignment[]);
       if (availableRes.ok) setAvailableRoles(await availableRes.json() as AvailableRole[]);
+      if (orgsRes.ok) {
+        const orgs = await orgsRes.json() as Array<{ id: string; name: string }>;
+        setOrgOptions(orgs.map((o) => ({ id: o.id, name: o.name })));
+      }
       setRolesLoading(false);
     }
     loadRoles().catch(() => setRolesLoading(false));
@@ -196,23 +207,32 @@ export default function PlatformUserDetail({
 
   async function assignRole() {
     if (!selectedRoleId) return;
+    const organisationId = selectedOrgId || null;
     setAssigningRole(true);
     try {
       const res = await fetch(`/api/platform/users/${user.id}/roles`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roleId: selectedRoleId }),
+        body: JSON.stringify({ roleId: selectedRoleId, organisationId }),
       });
       const data = await res.json() as { error?: string; id?: string; roleId?: string };
       if (!res.ok) { toast.error(data.error ?? "Failed to assign role"); return; }
       const found = availableRoles.find((r) => r.id === selectedRoleId);
-      if (found && !customRoles.find((cr) => cr.roleId === selectedRoleId)) {
+      const org = orgOptions.find((o) => o.id === organisationId) ?? null;
+      if (found) {
         setCustomRoles((prev) => [
           ...prev,
-          { id: data.id ?? selectedRoleId, roleId: selectedRoleId, role: { id: found.id, name: found.name, isSystem: found.isSystem } },
+          {
+            id: data.id ?? selectedRoleId,
+            roleId: selectedRoleId,
+            organisationId,
+            role: { id: found.id, name: found.name, isSystem: found.isSystem },
+            organisation: org,
+          },
         ]);
       }
       setSelectedRoleId("");
+      setSelectedOrgId("");
       toast.success("Role assigned");
       router.refresh();
     } finally {
@@ -220,21 +240,22 @@ export default function PlatformUserDetail({
     }
   }
 
-  async function removeRole(roleId: string) {
-    setRemovingRoleId(roleId);
+  async function removeRole(roleId: string, organisationId: string | null) {
+    const key = `${roleId}:${organisationId ?? ""}`;
+    setRemovingRoleKey(key);
     try {
       const res = await fetch(`/api/platform/users/${user.id}/roles`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roleId }),
+        body: JSON.stringify({ roleId, organisationId }),
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) { toast.error(data.error ?? "Failed to remove role"); return; }
-      setCustomRoles((prev) => prev.filter((cr) => cr.roleId !== roleId));
+      setCustomRoles((prev) => prev.filter((cr) => !(cr.roleId === roleId && cr.organisationId === organisationId)));
       toast.success("Role removed");
       router.refresh();
     } finally {
-      setRemovingRoleId(null);
+      setRemovingRoleKey(null);
     }
   }
 
@@ -507,7 +528,7 @@ export default function PlatformUserDetail({
             ) : (
               <div className="divide-y divide-slate-100 mb-4">
                 {customRoles.map((cr) => (
-                  <div key={cr.roleId} className="flex items-center justify-between py-2.5">
+                  <div key={cr.id} className="flex items-center justify-between py-2.5">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-slate-800">{cr.role.name}</span>
                       {cr.role.isSystem && (
@@ -515,16 +536,19 @@ export default function PlatformUserDetail({
                           System
                         </span>
                       )}
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                        {cr.organisation?.name ?? "Platform-wide"}
+                      </span>
                     </div>
                     {!isSelf && (
                       <button
                         type="button"
-                        onClick={() => removeRole(cr.roleId)}
-                        disabled={removingRoleId === cr.roleId}
+                        onClick={() => removeRole(cr.roleId, cr.organisationId)}
+                        disabled={removingRoleKey === `${cr.roleId}:${cr.organisationId ?? ""}`}
                         className="text-slate-400 hover:text-red-600 transition disabled:opacity-40"
                         aria-label={`Remove ${cr.role.name}`}
                       >
-                        {removingRoleId === cr.roleId
+                        {removingRoleKey === `${cr.roleId}:${cr.organisationId ?? ""}`
                           ? <Loader2 className="w-4 h-4 animate-spin" />
                           : <Trash2 className="w-4 h-4" />}
                       </button>
@@ -535,20 +559,31 @@ export default function PlatformUserDetail({
             )}
 
             {!isSelf && (
-              <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
                 <select
                   value={selectedRoleId}
                   onChange={(e) => setSelectedRoleId(e.target.value)}
-                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="flex-1 min-w-[160px] rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 >
                   <option value="">Select a role to assign…</option>
                   {availableRoles
-                    .filter((r) => !customRoles.find((cr) => cr.roleId === r.id))
+                    .filter((r) => !customRoles.find((cr) => cr.roleId === r.id && cr.organisationId === (selectedOrgId || null)))
                     .map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name} ({r.baseRole.replace(/_/g, " ")})
                       </option>
                     ))}
+                </select>
+                <select
+                  value={selectedOrgId}
+                  onChange={(e) => setSelectedOrgId(e.target.value)}
+                  className="w-40 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  title="Scope this grant to one organisation, or leave platform-wide"
+                >
+                  <option value="">Platform-wide</option>
+                  {orgOptions.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
                 </select>
                 <Button
                   size="sm"

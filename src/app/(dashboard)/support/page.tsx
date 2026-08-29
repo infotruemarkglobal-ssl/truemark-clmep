@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
+import { getPermissionOrgScope } from "@/lib/permissions";
 import TicketListPage from "@/components/support/TicketListPage";
 
 export const metadata: Metadata = { title: "Support Tickets" };
@@ -19,16 +20,25 @@ export default async function Page() {
 
   let where: Prisma.SupportTicketWhereInput = {};
 
+  // Same pattern as GET /api/support/tickets — ORG_MANAGER's org-scoped view
+  // here is pure role-identity, not gated by a formal tickets:read grant;
+  // getPermissionOrgScope generalises it to also cover a custom role
+  // explicitly scoped to one org, without changing what ORG_MANAGER sees.
+  const ticketOrgIds = await getPermissionOrgScope(session, "tickets:read");
+  const orgScoped = role === USER_ROLES.ORG_MANAGER || (ticketOrgIds !== null && ticketOrgIds.length > 0);
+
   if (isAgent) {
     // agents see all tickets
-  } else if (role === USER_ROLES.ORG_MANAGER) {
-    const membership = await db.organisationMember.findFirst({
-      where: { userId },
-      select: { organisationId: true },
-    });
-    where = membership
-      ? { organisationId: membership.organisationId }
-      : { userId };
+  } else if (orgScoped) {
+    let orgIds = ticketOrgIds ?? [];
+    if (role === USER_ROLES.ORG_MANAGER) {
+      const membership = await db.organisationMember.findFirst({
+        where: { userId },
+        select: { organisationId: true },
+      });
+      if (membership) orgIds = [...new Set([...orgIds, membership.organisationId])];
+    }
+    where = orgIds.length > 0 ? { organisationId: { in: orgIds } } : { userId };
   } else {
     where = { userId };
   }
