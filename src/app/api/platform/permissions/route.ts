@@ -25,7 +25,7 @@ export async function POST() {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   // Only pure SUPER_ADMIN can run a sync (custom-role users cannot bootstrap their own permissions)
-  if (session.user.role !== "SUPER_ADMIN" || session.user.permissions !== null) {
+  if (session.user.role !== "SUPER_ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

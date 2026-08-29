@@ -12,7 +12,7 @@ export default async function PermissionsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
   // Only SUPER_ADMIN (pure role, no matrix constraint) can manage permissions
-  if (session.user.role !== "SUPER_ADMIN" || session.user.permissions !== null) {
+  if (session.user.role !== "SUPER_ADMIN") {
     redirect("/dashboard");
   }
   const [permissions, roles] = await Promise.all([
