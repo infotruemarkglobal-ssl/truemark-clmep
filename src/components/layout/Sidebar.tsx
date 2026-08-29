@@ -101,7 +101,10 @@ const NAV_SECTIONS: NavSection[] = [
     heading: "Organisation",
     items: [
       { label: "Organisations",     href: "/organisations",         icon: Building2, requiredPermission: "organisations:read" },
-      { label: "Members & Courses", href: "/organisations/members", icon: Users,     requiredPermission: "organisations:members" },
+      // organisations:members is also held by SUPER_ADMIN/CO, but the page
+      // itself is ORG_MANAGER-exclusive by design — admins use
+      // /organisations/{id} instead. Ceiling matches that hard gate.
+      { label: "Members & Courses", href: "/organisations/members", icon: Users,     requiredPermission: "organisations:members", allowedRoles: ["ORG_MANAGER"] },
       // Staff is reachable two ways: SUPER_ADMIN manages staff platform-wide
       // (staff:manage); an ORG_MANAGER only views their own org's roster
       // (organisations:members) — see src/app/(dashboard)/staff/page.tsx.
@@ -116,7 +119,10 @@ const NAV_SECTIONS: NavSection[] = [
       // depending on the viewer, same as Appeals below.
       { label: "Support", href: "/support", icon: MessageSquare },
       { label: "Appeals",  href: "/appeals", icon: Scale },
-      { label: "My Complaints",    href: "/complaints",        icon: MessageSquareWarning, requiredPermission: "appeals:submit" },
+      // /complaints itself redirects SUPER_ADMIN/CERTIFICATION_OFFICER to
+      // /manage/complaints (admins manage complaints, they don't file them) —
+      // ceiling matches that redirect so the link doesn't dead-end for them.
+      { label: "My Complaints",    href: "/complaints",        icon: MessageSquareWarning, requiredPermission: "appeals:submit", allowedRoles: ["EXAMINER", "TRAINER", "PROCTOR", "AUDITOR", "ORG_MANAGER", "CANDIDATE", "SUPPORT_AGENT"] },
       { label: "Manage Complaints", href: "/manage/complaints", icon: MessageSquare,        requiredPermission: "appeals:manage" },
     ],
   },
@@ -130,14 +136,13 @@ const NAV_SECTIONS: NavSection[] = [
     heading: "Platform Admin",
     items: [
       // src/app/(dashboard)/platform/layout.tsx gates the entire /platform/*
-      // subtree on permissions:manage alone — none of these 6 pages have a
+      // subtree on permissions:manage alone — none of these 5 pages have a
       // page-level check of their own (verified directly). Gating each item
       // here on its own more-specific-sounding permission (organisations:read,
       // users:read, etc.) would show a link that still hits the layout's
       // redirect for anyone who lacks permissions:manage specifically —
       // matching the item to the *real* boundary avoids that dead link.
       { label: "Platform Overview", href: "/platform",               icon: Crown,      requiredPermission: "permissions:manage" },
-      { label: "Organisations",     href: "/platform/organisations", icon: Building2,  requiredPermission: "permissions:manage" },
       { label: "All Users",         href: "/platform/users",         icon: Users,      requiredPermission: "permissions:manage" },
       { label: "Payments",          href: "/platform/payments",      icon: CreditCard, requiredPermission: "permissions:manage" },
       { label: "Registrations",     href: "/platform/registrations", icon: BookOpen,   requiredPermission: "permissions:manage" },

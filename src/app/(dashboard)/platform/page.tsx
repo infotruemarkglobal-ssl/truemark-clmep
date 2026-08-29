@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { Building2, Users, CreditCard, BookOpen, TrendingUp, ShieldCheck } from "lucide-react";
 
@@ -175,9 +176,9 @@ export default async function PlatformOverviewPage() {
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h2 className="font-semibold text-slate-800">Recent Organisations</h2>
-            <a href="/platform/organisations" className="text-xs text-primary hover:underline">
+            <Link href="/organisations" className="text-xs text-primary hover:underline">
               View all
-            </a>
+            </Link>
           </div>
           <div className="divide-y divide-slate-100">
             {recentOrgs.length === 0 && (

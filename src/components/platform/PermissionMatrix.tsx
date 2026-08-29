@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { Plus, Trash2, Loader2, ShieldCheck, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -368,7 +368,7 @@ export default function PermissionMatrix({
           </thead>
           <tbody>
             {Array.from(categories.entries()).map(([category, perms]) => (
-              <>
+              <Fragment key={category}>
                 {/* Category header row */}
                 <tr key={`cat-${category}`} className="bg-slate-50/70">
                   <td
@@ -421,7 +421,7 @@ export default function PermissionMatrix({
                     })}
                   </tr>
                 ))}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>

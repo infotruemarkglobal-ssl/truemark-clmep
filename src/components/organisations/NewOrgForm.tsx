@@ -196,7 +196,7 @@ export default function NewOrgForm() {
   return (
     <div className="max-w-2xl space-y-6">
       <Link
-        href="/platform/organisations"
+        href="/organisations"
         className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition"
       >
         <ChevronLeft className="w-4 h-4" /> Back to organisations

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -103,9 +104,14 @@ export default function OrganisationsPage({ organisations, isSuperAdmin }: { org
           <p className="text-slate-500 text-sm mt-1">{organisations.length} registered organisations</p>
         </div>
         {isSuperAdmin && (
-          <Button onClick={() => setShowModal(true)} className="gap-2">
-            <Plus className="w-4 h-4" /> Add Organisation
-          </Button>
+          <div className="flex items-center gap-3">
+            <Link href="/organisations/new" className="text-xs text-primary hover:underline">
+              Full registration form
+            </Link>
+            <Button onClick={() => setShowModal(true)} className="gap-2">
+              <Plus className="w-4 h-4" /> Add Organisation
+            </Button>
+          </div>
         )}
       </div>
 
