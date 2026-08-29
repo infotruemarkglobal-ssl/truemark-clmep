@@ -5,5 +5,5 @@
     "moduleResolution": "node",
     "outDir": "dist-seed"
   },
-  "include": ["prisma/seed.ts"]
+  "include": ["prisma/seed.ts", "prisma/sync-permissions.ts"]
 }

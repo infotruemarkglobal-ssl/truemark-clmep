@@ -97,6 +97,21 @@ jobs:
           TEST_DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
         run: npx prisma migrate deploy
 
+      # Schema migrations only cover tables/columns — the permission *catalogue*
+      # (Permission + RolePermission rows, driven by src/lib/permission-definitions.ts)
+      # is a separate, additive sync with no migration-file mechanism of its own.
+      # Without this step, any test exercising a can()-gated route added or changed
+      # here fails on this branch until someone runs the sync by hand — exactly what
+      # happened when the gdpr:read/gdpr:manage permissions were added but never
+      # synced to this database. Safe to run every time: only adds missing grants,
+      # never removes one (an admin's live revocation in the Permission Matrix UI
+      # is never touched).
+      - name: Sync permission catalogue to the CI test database
+        if: ${{ env.HAS_TEST_SECRETS == 'true' }}
+        env:
+          TEST_DIRECT_URL: ${{ secrets.TEST_DIRECT_URL }}
+        run: npx ts-node --project tsconfig.seed.json prisma/sync-permissions.ts
+
       - name: Run tests
         if: ${{ env.HAS_TEST_SECRETS == 'true' }}
         env:
