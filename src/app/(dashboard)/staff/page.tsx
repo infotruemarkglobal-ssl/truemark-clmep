@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
 import { can } from "@/lib/permissions";
 import StaffManagement from "@/components/staff/StaffManagement";
 
@@ -20,10 +19,14 @@ export default async function StaffPage() {
   const canViewOrgMembers = await can(session, "organisations:members");
   if (!canManageStaff && !canViewOrgMembers) redirect("/dashboard");
 
-  const isOrgManager = session.user.role === USER_ROLES.ORG_MANAGER;
+  // Gated on the capability, not the role string — a custom role granted only
+  // organisations:members (on any base role) must stay scoped to its own org,
+  // the same way a true ORG_MANAGER is. staff:manage is what unlocks the
+  // platform-wide roster below, regardless of which role holds it.
+  const isScopedToOwnOrg = !canManageStaff;
 
-  if (isOrgManager) {
-    // ORG_MANAGER: only see their org's members — no change to this path
+  if (isScopedToOwnOrg) {
+    // Scoped to the viewer's own org — no change to this path
     const membership = await db.organisationMember.findFirst({
       where: { userId: session.user.id },
       select: { organisationId: true },
