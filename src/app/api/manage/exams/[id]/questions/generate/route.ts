@@ -104,7 +104,11 @@ Rules:
       messages: [{ role: "user", content: prompt }],
     });
 
-    const raw = (message.content[0] as { type: string; text: string }).text.trim();
+    // Don't assume content[0] is the text block — a model may prepend a
+    // thinking block, which has no .text property.
+    const textBlock = message.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") throw new Error("AI response contained no text content");
+    const raw = textBlock.text.trim();
     // Strip any accidental markdown fences
     const jsonStr = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     const generated = JSON.parse(jsonStr) as Array<{

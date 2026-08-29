@@ -814,12 +814,34 @@ function AIContentModal({
   });
   const [objectives, setObjectives] = useState<string[]>([""]);
   const [generating, setGenerating] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [preview, setPreview] = useState<{ content: Record<string, unknown>; contentType: string } | null>(null);
 
   function addObjective() { setObjectives((o) => [...o, ""]); }
   function removeObjective(i: number) { setObjectives((o) => o.filter((_, idx) => idx !== i)); }
   function updateObjective(i: number, v: string) {
     setObjectives((prev) => prev.map((x, idx) => (idx === i ? v : x)));
+  }
+
+  async function suggestBrief() {
+    if (!form.moduleTitle.trim()) { toast.error("Enter a title first so AI has something to work from"); return; }
+    setSuggesting(true);
+    try {
+      const res = await fetch(`/api/manage/courses/${courseId}/suggest-lesson-brief`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ moduleTitle: form.moduleTitle }),
+      });
+      const data = await res.json() as { targetAudience: string; learningObjectives: string[]; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Suggestion failed");
+      setForm((f) => ({ ...f, targetAudience: data.targetAudience }));
+      setObjectives(data.learningObjectives);
+      toast.success("Suggested — review and edit before generating");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setSuggesting(false);
+    }
   }
 
   async function generate() {
@@ -875,7 +897,17 @@ function AIContentModal({
           {!preview ? (
             <div className="space-y-4">
               <div>
-                <Label className="text-xs">Module / Lesson Title *</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Module / Lesson Title *</Label>
+                  <button
+                    type="button"
+                    onClick={suggestBrief}
+                    disabled={suggesting}
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium disabled:opacity-50"
+                  >
+                    <Sparkles className="w-3 h-3" /> {suggesting ? "Suggesting…" : "Suggest audience & objectives"}
+                  </button>
+                </div>
                 <Input
                   className="mt-1 text-sm"
                   value={form.moduleTitle}

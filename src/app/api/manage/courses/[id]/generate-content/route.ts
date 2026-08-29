@@ -126,7 +126,12 @@ Always return valid JSON only.`;
       messages: [{ role: "user", content: userPrompts[contentType] }],
     });
 
-    const raw = (message.content[0] as { type: string; text: string }).text.trim();
+    // Sonnet 5 runs with adaptive thinking on by default when `thinking` isn't
+    // set, so content[0] can be a thinking block rather than the text block —
+    // find the text block by type instead of assuming its position.
+    const textBlock = message.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") throw new Error("AI response contained no text content");
+    const raw = textBlock.text.trim();
     const jsonStr = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     const generated = JSON.parse(jsonStr) as Record<string, unknown>;
 
