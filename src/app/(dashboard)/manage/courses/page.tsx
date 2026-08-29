@@ -12,7 +12,12 @@ export default async function Page() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  if (!(await can(session, "courses:read"))) redirect("/dashboard");
+  // courses:read is granted broadly (CANDIDATE, ORG_MANAGER, EXAMINER all hold
+  // it too, for browsing the public catalog) — this is the admin management
+  // panel, and its sibling API (src/app/api/manage/courses/route.ts) has always
+  // ceiling-restricted this to SUPER_ADMIN/CO/TRAINER. A bare check here would
+  // let any courses:read holder reach this page.
+  if (!(await can(session, "courses:read", ["SUPER_ADMIN", "CERTIFICATION_OFFICER", "TRAINER"]))) redirect("/dashboard");
 
   const isSuperAdmin = session.user.role === USER_ROLES.SUPER_ADMIN;
 

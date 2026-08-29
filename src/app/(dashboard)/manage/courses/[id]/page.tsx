@@ -17,7 +17,9 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  if (!(await can(session, "courses:read"))) redirect("/dashboard");
+  // Same reasoning as manage/courses/page.tsx — ceiling matches the sibling
+  // API's original ALLOWED list, not the broadly-shared courses:read grant.
+  if (!(await can(session, "courses:read", ["SUPER_ADMIN", "CERTIFICATION_OFFICER", "TRAINER"]))) redirect("/dashboard");
 
   // Use findFirst (not findUnique) to avoid Prisma uniqueness-only constraint
   // Fetch modules+lessons separately from nested SCORM to avoid client version issues

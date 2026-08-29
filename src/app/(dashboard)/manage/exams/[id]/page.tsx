@@ -17,7 +17,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  if (!(await can(session, "exams:read"))) redirect("/dashboard");
+  // Same reasoning as manage/exams/page.tsx.
+  if (!(await can(session, "exams:read", ["SUPER_ADMIN", "CERTIFICATION_OFFICER", "EXAMINER"]))) redirect("/dashboard");
 
   const paper = await db.examPaper.findFirst({
     where: { id },

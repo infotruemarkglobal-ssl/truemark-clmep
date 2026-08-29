@@ -12,7 +12,10 @@ export default async function Page() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  if (!(await can(session, "exams:read"))) redirect("/dashboard");
+  // exams:read is granted broadly (PROCTOR holds it too, for live monitoring)
+  // — ceiling matches the sibling API's original ALLOWED list (manage/exams
+  // is the paper-authoring/editing panel, a different concern from proctoring).
+  if (!(await can(session, "exams:read", ["SUPER_ADMIN", "CERTIFICATION_OFFICER", "EXAMINER"]))) redirect("/dashboard");
 
   const isSuperAdmin = ([USER_ROLES.SUPER_ADMIN, USER_ROLES.CERTIFICATION_OFFICER] as string[]).includes(session.user.role);
 

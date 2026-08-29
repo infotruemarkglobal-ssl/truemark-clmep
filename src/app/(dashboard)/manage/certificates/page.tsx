@@ -15,7 +15,12 @@ export default async function Page({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (!(await can(session, "certifications:read"))) redirect("/dashboard");
+  // certifications:read is granted broadly (CANDIDATE holds it too, for
+  // viewing their own certs) — this page has no ownership scoping at all
+  // (queries every certificate system-wide), so a bare check here would let
+  // any certifications:read holder see every candidate's name, email, and
+  // certificate record. Ceiling matches this page's original ALLOWED list.
+  if (!(await can(session, "certifications:read", ["SUPER_ADMIN", "CERTIFICATION_OFFICER", "AUDITOR"]))) redirect("/dashboard");
 
   const { status, cursor } = await searchParams;
   const PAGE_SIZE = 25;
