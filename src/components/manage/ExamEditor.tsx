@@ -124,54 +124,56 @@ function AIGenerateModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
-        <div className="flex items-center gap-2 mb-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[85vh] flex flex-col">
+        <div className="flex items-center gap-2 px-6 py-5 border-b border-slate-100 shrink-0">
           <Sparkles className="w-5 h-5 text-primary" />
           <h2 className="font-semibold text-slate-900">AI Question Generator</h2>
           <button onClick={onClose} className="ml-auto text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
         </div>
-        <p className="text-xs text-slate-500 mb-4">Section: <strong>{sectionTitle}</strong></p>
+        <div className="px-6 py-5 overflow-y-auto space-y-4">
+          <p className="text-sm text-slate-500">Section: <strong>{sectionTitle}</strong></p>
 
-        <div className="space-y-3">
           <div>
-            <Label className="text-xs">Topic / Subject *</Label>
-            <Input value={form.topic} onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))} placeholder="e.g. Risk Assessment Principles" className="mt-1 text-sm" />
+            <Label className="text-sm">Topic / Subject *</Label>
+            <Input value={form.topic} onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))} placeholder="e.g. Risk Assessment Principles" className="mt-1.5" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs">Question Type</Label>
-              <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} className="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white">
+              <Label className="text-sm">Question Type</Label>
+              <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} className="mt-1.5 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
                 {QUESTION_TYPES.map((qt) => <option key={qt.value} value={qt.value}>{qt.label}</option>)}
               </select>
             </div>
             <div>
-              <Label className="text-xs">Number of Questions</Label>
-              <select value={form.count} onChange={(e) => setForm((f) => ({ ...f, count: e.target.value }))} className="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white">
+              <Label className="text-sm">Number of Questions</Label>
+              <select value={form.count} onChange={(e) => setForm((f) => ({ ...f, count: e.target.value }))} className="mt-1.5 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
                 {["3", "5", "10", "15", "20"].map((n) => <option key={n} value={n}>{n} questions</option>)}
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs">Difficulty</Label>
-              <select value={form.difficulty} onChange={(e) => setForm((f) => ({ ...f, difficulty: e.target.value }))} className="mt-1 w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white">
+              <Label className="text-sm">Difficulty</Label>
+              <select value={form.difficulty} onChange={(e) => setForm((f) => ({ ...f, difficulty: e.target.value }))} className="mt-1.5 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
                 {DIFFICULTIES.map((d) => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
               </select>
             </div>
             <div>
-              <Label className="text-xs">Domain (optional)</Label>
-              <Input value={form.domain} onChange={(e) => setForm((f) => ({ ...f, domain: e.target.value }))} placeholder="e.g. ISO 45001" className="mt-1 h-8 text-xs" />
+              <Label className="text-sm">Domain (optional)</Label>
+              <Input value={form.domain} onChange={(e) => setForm((f) => ({ ...f, domain: e.target.value }))} placeholder="e.g. ISO 45001" className="mt-1.5" />
             </div>
           </div>
         </div>
 
-        <div className="mt-5 flex gap-2">
-          <Button variant="outline" size="sm" onClick={onClose} className="flex-1">Cancel</Button>
-          <Button size="sm" onClick={generate} disabled={generating} className="flex-1 gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" /> {generating ? "Generating…" : "Generate"}
-          </Button>
+        <div className="px-6 py-4 border-t border-slate-100 shrink-0 space-y-3">
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button size="sm" onClick={generate} disabled={generating} className="flex-1 gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> {generating ? "Generating…" : "Generate"}
+            </Button>
+          </div>
+          <p className="text-[10px] text-slate-400 text-center">Powered by Claude AI · Review all generated questions before use</p>
         </div>
-        <p className="text-[10px] text-slate-400 text-center mt-3">Powered by Claude AI · Review all generated questions before use</p>
       </div>
     </div>
   );

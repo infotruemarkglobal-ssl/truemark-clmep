@@ -180,7 +180,7 @@ export default function OrganisationsPage({ organisations, isSuperAdmin }: { org
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl my-4">
+          <div className="bg-white rounded-2xl p-6 max-w-xl w-full shadow-2xl my-4 max-h-[85vh] overflow-y-auto">
             <h3 className="font-bold text-slate-900 text-lg mb-5">Add Organisation</h3>
 
             {/* Org details */}

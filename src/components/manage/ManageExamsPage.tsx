@@ -207,7 +207,7 @@ export default function ManageExamsPage({
       {/* Create Exam Paper Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[85vh] overflow-y-auto">
             <h3 className="font-bold text-slate-900 text-lg mb-5">New Exam Paper</h3>
             <div className="space-y-3">
               <div><Label>Title *</Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></div>
