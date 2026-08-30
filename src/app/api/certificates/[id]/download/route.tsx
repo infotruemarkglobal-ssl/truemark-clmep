@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { format } from "date-fns";
 import { can } from "@/lib/permissions";
+import { signCertificatePdf } from "@/lib/pdf-signing";
 import crypto from "crypto";
 
 async function fetchToBase64(src: string | null | undefined): Promise<string | null> {
@@ -423,7 +424,8 @@ export async function GET(
     </Document>
   );
 
-  const buffer = await renderToBuffer(doc);
+  const rendered = await renderToBuffer(doc);
+  const buffer = await signCertificatePdf(rendered);
 
   return new Response(new Uint8Array(buffer), {
     status: 200,

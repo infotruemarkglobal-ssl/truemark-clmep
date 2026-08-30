@@ -79,11 +79,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // M (multi-paper attempt count): count attempts at the scheme level, not just
   // the specific exam paper. Scoped to the current enrolment period so that
   // re-enrolment resets the counter (enroledAt is updated on re-enrolment).
+  // Practice-paper attempts are always excluded — they must never eat into a
+  // candidate's real attempt budget — and a practice paper's own attempts are
+  // never limited at all (see the isPractice short-circuit below).
   const attemptCount = examPaper.scheme
     ? await db.examAttempt.count({
         where: {
           userId: session.user.id,
-          examPaper: { schemeId: examPaper.scheme.id },
+          examPaper: { schemeId: examPaper.scheme.id, isPractice: false },
           status: { in: ["COMPLETED", "VOIDED"] },
           ...(enrolmentEnroledAt ? { createdAt: { gte: enrolmentEnroledAt } } : {}),
         },
@@ -92,7 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         where: { userId: session.user.id, examPaperId, status: { in: ["COMPLETED", "VOIDED"] } },
       });
   const maxAttempts = examPaper.scheme?.maxAttempts ?? 3;
-  if (attemptCount >= maxAttempts) {
+  if (!examPaper.isPractice && attemptCount >= maxAttempts) {
     return NextResponse.json({ error: "Maximum attempts reached" }, { status: 400 });
   }
 
@@ -172,8 +175,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }));
   }
 
-  // Only create a proctoring session when the paper requires it.
-  if (examPaper.requiresProctoring) {
+  // Only create a proctoring session when the paper requires it — practice
+  // attempts are never proctored, regardless of the paper's own
+  // requiresProctoring flag (belt-and-braces on top of the admin-side
+  // default already forced to false for practice papers at creation time).
+  if (examPaper.requiresProctoring && !examPaper.isPractice) {
     await db.proctoringSession.create({
       data: { attemptId: attempt.id, status: "active" },
     });
@@ -194,5 +200,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     totalMarks: examPaper.totalMarks,
     passMark: examPaper.passMark,
     allowReview: examPaper.allowReview,
+    isPractice: examPaper.isPractice,
   });
 }

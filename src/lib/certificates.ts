@@ -154,3 +154,31 @@ export async function generateQrCode(certificateNumber: string): Promise<string>
   const url = `${appUrl}/verify/${certificateNumber}`;
   return QRCode.toDataURL(url, { margin: 1, width: 200, color: { dark: "#064e3b", light: "#ffffff" } });
 }
+
+// ─── LinkedIn "Add to Profile" deep link ──────────────────────────────────────
+// https://www.linkedin.com/help/linkedin/answer/a528030 — every field is
+// optional, but pick either organizationId or organizationName, never both.
+// Truemark has no LinkedIn organisation page (no registered org id), so this
+// uses organizationName — the documented fallback for issuers without one.
+export function buildLinkedInAddToProfileUrl(opts: {
+  schemeName: string;
+  certificateNumber: string;
+  issuedAt: Date;
+  expiresAt: Date | null;
+}): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const params = new URLSearchParams({
+    startTask: "CERTIFICATION_NAME",
+    name: opts.schemeName,
+    organizationName: "Truemark Global",
+    issueYear: String(opts.issuedAt.getFullYear()),
+    issueMonth: String(opts.issuedAt.getMonth() + 1),
+    certUrl: `${appUrl}/verify/${opts.certificateNumber}`,
+    certId: opts.certificateNumber,
+  });
+  if (opts.expiresAt) {
+    params.set("expirationYear", String(opts.expiresAt.getFullYear()));
+    params.set("expirationMonth", String(opts.expiresAt.getMonth() + 1));
+  }
+  return `https://www.linkedin.com/profile/add?${params.toString()}`;
+}

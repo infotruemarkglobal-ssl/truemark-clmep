@@ -49,6 +49,7 @@ export default async function Page() {
     totalMarks: p.totalMarks,
     isActive: p.isActive,
     requiresProctoring: p.requiresProctoring,
+    isPractice: p.isPractice,
     version: p.version,
     createdAt: p.createdAt.toISOString(),
     creator: p.creator,

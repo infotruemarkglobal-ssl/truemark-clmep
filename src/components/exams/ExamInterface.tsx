@@ -32,6 +32,7 @@ type ExamState = {
   startedAt: string;
   requiresProctoring: boolean;
   tabSwitchLimit: number;
+  isPractice: boolean;
 };
 
 type Answer = {
@@ -61,7 +62,7 @@ export default function ExamInterface({
   const router = useRouter();
   const {
     attemptId, examPaperId, questions, timeLimitMins, startedAt,
-    requiresProctoring, tabSwitchLimit,
+    requiresProctoring, tabSwitchLimit, isPractice,
   } = examState;
 
   const totalSeconds = timeLimitMins * 60;
@@ -607,6 +608,15 @@ export default function ExamInterface({
           <Shield className="w-5 h-5 text-primary shrink-0" />
           <span className="font-semibold text-sm truncate max-w-xs">{examTitle}</span>
         </div>
+
+        {/* Practice-mode indicator — unlimited attempts, never proctored, never
+            counts toward certification. Always visible so a candidate can never
+            mistake a practice run for the real, scored exam. */}
+        {isPractice && (
+          <div className="flex items-center gap-1.5 text-xs font-medium text-amber-400 bg-amber-900/40 border border-amber-700/50 rounded-full px-3 py-1">
+            Practice mode — not scored
+          </div>
+        )}
 
         <div className="flex-1" />
 

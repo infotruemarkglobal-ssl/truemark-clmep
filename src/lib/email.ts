@@ -448,6 +448,88 @@ export async function sendCertificateExpiryWarningEmail({
   });
 }
 
+// ─── Email: CPD shortfall reminder ────────────────────────────────────────────
+export async function sendCpdShortfallReminderEmail({
+  to,
+  firstName,
+  certificateNumber,
+  schemeName,
+  expiresAt,
+  daysRemaining,
+  hoursLogged,
+  hoursRequired,
+  cpdUrl,
+  userId,
+}: {
+  to: string;
+  firstName: string;
+  certificateNumber: string;
+  schemeName: string;
+  expiresAt: Date;
+  daysRemaining: number;
+  hoursLogged: number;
+  hoursRequired: number;
+  cpdUrl: string;
+  userId: string;
+}) {
+  const unsubLink = unsubscribeUrl(userId, "MARKETING");
+  const shortfall = Math.max(0, hoursRequired - hoursLogged);
+  const urgency = daysRemaining <= 30 ? "urgent" : daysRemaining <= 90 ? "warning" : "notice";
+  const badgeColor = urgency === "urgent" ? "#dc2626" : urgency === "warning" ? "#d97706" : "#1a4731";
+  const badgeBg = urgency === "urgent" ? "#fef2f2" : urgency === "warning" ? "#fffbeb" : "#f0fdf4";
+  const badgeBorder = urgency === "urgent" ? "#fca5a5" : urgency === "warning" ? "#fcd34d" : "#86efac";
+
+  const html = wrap(`
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a;">CPD Hours Shortfall ${urgency === "urgent" ? "Alert" : "Notice"}</h2>
+    <p style="margin:0 0 20px;color:#64748b;font-size:14px;">Hi ${firstName}, your logged CPD hours are currently short of what's required to renew your certification.</p>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin-bottom:16px;">
+      <p style="margin:0 0 4px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;">Certification</p>
+      <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${schemeName}</p>
+      <p style="margin:4px 0 0;font-size:12px;color:#64748b;">Certificate No: ${certificateNumber}</p>
+    </div>
+
+    <div style="background:${badgeBg};border:1px solid ${badgeBorder};border-radius:8px;padding:20px;margin-bottom:28px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:32px;font-weight:800;color:${badgeColor};">${hoursLogged} / ${hoursRequired}</p>
+      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:${badgeColor};">CPD hours logged — ${shortfall} hour${shortfall === 1 ? "" : "s"} short</p>
+      <p style="margin:0;font-size:13px;color:#64748b;">Certificate expires in ${daysRemaining} days, on ${expiresAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
+    </div>
+
+    <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.6;">
+      Log any completed professional development activity now to close the gap before your renewal
+      window closes — renewal cannot be issued until the required hours are met.
+    </p>
+
+    <a href="${cpdUrl}" style="display:inline-block;background:${badgeColor};color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
+      Log CPD activity →
+    </a>
+  `, unsubLink);
+
+  const urgencyLabel = daysRemaining <= 30 ? "URGENT: " : "";
+  await transporter.sendMail({
+    from: `"${APP_NAME}" <${FROM}>`,
+    to,
+    subject: `${urgencyLabel}${shortfall} CPD hour${shortfall === 1 ? "" : "s"} short for your ${schemeName} renewal`,
+    html,
+    text: [
+      `Hi ${firstName},`,
+      ``,
+      `Your ${schemeName} certificate (${certificateNumber}) needs ${hoursRequired} CPD hours to renew — you currently have ${hoursLogged} logged, a shortfall of ${shortfall}.`,
+      `Certificate expires: ${expiresAt.toLocaleDateString()} (${daysRemaining} days)`,
+      ``,
+      `Log CPD activity: ${cpdUrl}`,
+      ``,
+      `To stop receiving these reminders: ${unsubLink}`,
+      ``,
+      POSTAL_ADDRESS,
+    ].join("\n"),
+    headers: {
+      "List-Unsubscribe": `<${unsubLink}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+  });
+}
+
 // ─── Email: GDPR Art. 33 breach DPA reminder (internal / transactional) ──────
 //
 // Sent to SUPER_ADMIN and DPO 48 hours after breach discovery if the breach

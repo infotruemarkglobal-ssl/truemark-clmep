@@ -22,6 +22,7 @@ type ExamPaperInfo = {
   totalQuestions: number;
   requiresProctoring: boolean;
   tabSwitchLimit: number;
+  isPractice: boolean;
 };
 
 type CourseInfo = {
@@ -79,7 +80,10 @@ export default function ExamLanding({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const attemptsLeft = examPaper.maxAttempts - previousAttempts;
+  // Practice papers are never attempt-limited (mirrors the API's own
+  // !examPaper.isPractice guard) — Infinity keeps every attemptsLeft-based
+  // gate below correctly open without duplicating the isPractice check everywhere.
+  const attemptsLeft = examPaper.isPractice ? Infinity : examPaper.maxAttempts - previousAttempts;
   const canAttempt = isEligible && attemptsLeft > 0;
   const rules = examPaper.requiresProctoring ? PROCTORED_RULES : UNPROCTORED_RULES;
 
@@ -170,9 +174,14 @@ export default function ExamLanding({
             <Shield className="w-7 h-7 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            {examPaper.scheme && (
-              <Badge className="mb-2 bg-primary/10 text-primary border-0">{examPaper.scheme.code}</Badge>
-            )}
+            <div className="flex items-center gap-2 mb-2">
+              {examPaper.scheme && (
+                <Badge className="bg-primary/10 text-primary border-0">{examPaper.scheme.code}</Badge>
+              )}
+              {examPaper.isPractice && (
+                <Badge className="bg-amber-100 text-amber-800 border-0">Practice — not scored</Badge>
+              )}
+            </div>
             <h1 className="text-xl font-bold text-slate-900">{examPaper.title}</h1>
             {examPaper.scheme && (
               <p className="text-slate-500 text-sm mt-0.5">Leads to {examPaper.scheme.name}</p>
@@ -186,7 +195,7 @@ export default function ExamLanding({
             { label: "Duration", value: `${examPaper.timeLimitMins} mins`, icon: Clock },
             { label: "Questions", value: examPaper.totalQuestions, icon: ClipboardList },
             { label: "Pass Mark", value: `${examPaper.passMark}%`, icon: Award },
-            { label: "Attempts Left", value: Math.max(0, attemptsLeft), icon: CheckCircle2 },
+            { label: "Attempts Left", value: examPaper.isPractice ? "Unlimited" : Math.max(0, attemptsLeft), icon: CheckCircle2 },
           ].map(({ label, value, icon: Icon }) => (
             <div key={label} className="text-center p-3 bg-slate-50 rounded-xl">
               <Icon className="w-5 h-5 mx-auto mb-1 text-slate-400" aria-hidden="true" />
@@ -220,9 +229,11 @@ export default function ExamLanding({
           <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             You have made {previousAttempts} previous attempt{previousAttempts !== 1 ? "s" : ""} on this exam.
-            {attemptsLeft > 0
-              ? ` You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? "s" : ""} remaining.`
-              : " You have no attempts remaining."}
+            {examPaper.isPractice
+              ? " This is a practice paper — attempts are unlimited."
+              : attemptsLeft > 0
+                ? ` You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? "s" : ""} remaining.`
+                : " You have no attempts remaining."}
           </div>
         )}
 

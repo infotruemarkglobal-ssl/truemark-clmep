@@ -66,6 +66,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
           startedAt: (inProgressAttempt.startedAt ?? new Date()).toISOString(),
           requiresProctoring: examPaper.requiresProctoring,
           tabSwitchLimit: examPaper.tabSwitchLimit,
+          isPractice: examPaper.isPractice,
         }}
         examTitle={examPaper.title}
         passMark={passMark}
@@ -113,6 +114,7 @@ export default async function ExamPage({ params }: { params: Promise<{ id: strin
         totalQuestions,
         requiresProctoring: examPaper.requiresProctoring,
         tabSwitchLimit: examPaper.tabSwitchLimit,
+        isPractice: examPaper.isPractice,
       }}
       previousAttempts={previousAttempts}
       isEligible={isEligible}

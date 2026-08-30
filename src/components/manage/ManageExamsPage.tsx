@@ -21,6 +21,7 @@ type Paper = {
   totalMarks: number;
   isActive: boolean;
   requiresProctoring: boolean;
+  isPractice: boolean;
   version: number;
   createdAt: string;
   creator: { firstName: string; lastName: string };
@@ -55,6 +56,7 @@ export default function ManageExamsPage({
     allowReview: true,
     requiresProctoring: true,
     tabSwitchLimit: "3",
+    isPractice: false,
   });
 
   const filtered = papers.filter(
@@ -167,6 +169,9 @@ export default function ManageExamsPage({
                     {paper.scheme && (
                       <Badge className="bg-primary/10 text-primary border-0 text-[10px]">{paper.scheme.code}</Badge>
                     )}
+                    {paper.isPractice && (
+                      <Badge className="bg-amber-100 text-amber-700 border-0 text-[10px]">Practice</Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500 flex-wrap">
                     <span>{paper.durationMins} mins</span>
@@ -211,6 +216,20 @@ export default function ManageExamsPage({
             <h3 className="font-bold text-slate-900 text-lg mb-5">New Exam Paper</h3>
             <div className="space-y-3">
               <div><Label>Title *</Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></div>
+
+              <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <input
+                  type="checkbox"
+                  checked={form.isPractice}
+                  onChange={(e) => setForm((f) => ({ ...f, isPractice: e.target.checked, requiresProctoring: e.target.checked ? false : f.requiresProctoring }))}
+                  className="rounded mt-0.5"
+                />
+                <span>
+                  <strong>Practice paper</strong>
+                  <span className="text-slate-500 font-normal"> — unlimited attempts, never proctored, never counts toward the real attempt limit or leads to a certification decision. A low-stakes way for candidates to try the real question format first.</span>
+                </span>
+              </label>
+
               <div>
                 <Label>Description</Label>
                 <textarea className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none" rows={2} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
@@ -242,38 +261,40 @@ export default function ManageExamsPage({
                 </label>
               </div>
 
-              {/* Proctoring */}
-              <div className="border-t border-slate-100 pt-3">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Proctoring</p>
-                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer mb-3">
-                  <input
-                    type="checkbox"
-                    checked={form.requiresProctoring}
-                    onChange={(e) => setForm((f) => ({ ...f, requiresProctoring: e.target.checked }))}
-                    className="rounded"
-                  />
-                  <span>
-                    <strong>Require proctoring</strong>
-                    <span className="text-slate-500 font-normal"> — camera monitoring + tab-switch limits enforced</span>
-                  </span>
-                </label>
-                {form.requiresProctoring && (
-                  <div className="max-w-xs">
-                    <Label>Tab switch limit (auto-terminate after)</Label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Input
-                        type="number"
-                        min="1"
-                        max="10"
-                        value={form.tabSwitchLimit}
-                        onChange={(e) => setForm((f) => ({ ...f, tabSwitchLimit: e.target.value }))}
-                        className="w-20"
-                      />
-                      <span className="text-sm text-slate-500">violations</span>
+              {/* Proctoring — not applicable to practice papers, which are never proctored */}
+              {!form.isPractice && (
+                <div className="border-t border-slate-100 pt-3">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Proctoring</p>
+                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer mb-3">
+                    <input
+                      type="checkbox"
+                      checked={form.requiresProctoring}
+                      onChange={(e) => setForm((f) => ({ ...f, requiresProctoring: e.target.checked }))}
+                      className="rounded"
+                    />
+                    <span>
+                      <strong>Require proctoring</strong>
+                      <span className="text-slate-500 font-normal"> — camera monitoring + tab-switch limits enforced</span>
+                    </span>
+                  </label>
+                  {form.requiresProctoring && (
+                    <div className="max-w-xs">
+                      <Label>Tab switch limit (auto-terminate after)</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Input
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={form.tabSwitchLimit}
+                          onChange={(e) => setForm((f) => ({ ...f, tabSwitchLimit: e.target.value }))}
+                          className="w-20"
+                        />
+                        <span className="text-sm text-slate-500">violations</span>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex gap-3 mt-5">
               <Button variant="outline" className="flex-1" onClick={() => setShowModal(false)}>Cancel</Button>

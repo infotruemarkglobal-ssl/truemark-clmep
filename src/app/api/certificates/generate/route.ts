@@ -53,6 +53,13 @@ export async function POST(req: NextRequest) {
   });
   if (!attempt) return NextResponse.json({ error: "Attempt not found or not completed" }, { status: 404 });
 
+  // Practice attempts are explicitly excluded from certification eligibility —
+  // they exist purely so a candidate can try the real question format at no
+  // stakes, and must never be able to reach a real certificate.
+  if (attempt.examPaper.isPractice) {
+    return NextResponse.json({ error: "Practice exam attempts are not eligible for certification." }, { status: 422 });
+  }
+
   // ── ISO 17024 Cl.7.4 — duty separation: actual DB check ───────────────────
   // A Certification Officer must not have been the Trainer or Examiner for this
   // candidate. Only SUPER_ADMIN bypasses this rule (fully audit-logged).

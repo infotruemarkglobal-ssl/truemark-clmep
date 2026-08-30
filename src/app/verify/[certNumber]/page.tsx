@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import { cache } from "react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
+import { buildLinkedInAddToProfileUrl } from "@/lib/certificates";
 import CertificateVerification from "@/components/certificates/CertificateVerification";
+
+const TIMELINE_ACTIONS = ["CERTIFICATE_ISSUED", "CERTIFICATE_RENEWED", "CERTIFICATE_REVOKED"] as const;
 
 const getCertificate = cache(async (certNumber: string) =>
   db.certificate.findUnique({
@@ -73,16 +77,53 @@ export default async function VerifyCertificatePage({
     );
   }
 
+  // The status shown to visitors is finer-grained than the raw DB `status`
+  // column: EXPIRED isn't a stored state (a scheme's certificates stay
+  // "ACTIVE" in the DB past their expiresAt — expiry is a computed, not
+  // stored, fact), so without this check an expired certificate would
+  // incorrectly read as valid.
+  const isExpired = certificate.expiresAt !== null && certificate.expiresAt < new Date();
+  const result: "active" | "expired" | "revoked" =
+    certificate.status === "REVOKED" ? "revoked" : isExpired ? "expired" : "active";
+
+  // Timeline: entityId is stable across renewals (renewal updates the same
+  // Certificate row in place, including its certificateNumber), so this
+  // naturally covers the certificate's whole lifetime, not just its current
+  // number's history.
+  const events = await db.auditLog.findMany({
+    where: { entityType: "Certificate", entityId: certificate.id, action: { in: [...TIMELINE_ACTIONS] } },
+    orderBy: { timestamp: "asc" },
+    select: { action: true, timestamp: true, metadata: true },
+  });
+
+  const timeline = events.map((e) => {
+    let reason: string | null = null;
+    if (e.action === "CERTIFICATE_REVOKED" && e.metadata) {
+      try {
+        reason = (JSON.parse(e.metadata) as { reason?: string }).reason ?? null;
+      } catch {
+        reason = null;
+      }
+    }
+    return {
+      action: e.action as (typeof TIMELINE_ACTIONS)[number],
+      timestamp: e.timestamp.toISOString(),
+      reason,
+    };
+  });
+
   return (
     <>
       <CertificateVerification
-        result={certificate.status === "ACTIVE" ? "valid" : "invalid"}
+        result={result}
         certNumber={certNumber}
         certificate={{
           certificateNumber: certificate.certificateNumber,
           status: certificate.status,
           issuedAt: certificate.issuedAt.toISOString(),
           expiresAt: certificate.expiresAt?.toISOString() ?? null,
+          revokedAt: certificate.revokedAt?.toISOString() ?? null,
+          revocationReason: certificate.revocationReason,
           holderName: `${certificate.user.firstName} ${certificate.user.lastName}`,
           scheme: {
             name: certificate.scheme.name,
@@ -94,22 +135,31 @@ export default async function VerifyCertificatePage({
           openBadgeJson: certificate.openBadgeJson
             ? JSON.parse(certificate.openBadgeJson) as Record<string, unknown>
             : null,
+          timeline,
+          linkedInUrl: result === "active"
+            ? buildLinkedInAddToProfileUrl({
+                schemeName: certificate.scheme.name,
+                certificateNumber: certificate.certificateNumber,
+                issuedAt: certificate.issuedAt,
+                expiresAt: certificate.expiresAt,
+              })
+            : null,
         }}
       />
       <div className="text-center pb-6 flex items-center justify-center gap-4 flex-wrap">
-        <a
+        <Link
           href="/registry"
           className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
         >
           View Full Certificate Register →
-        </a>
+        </Link>
         <span className="text-slate-200 text-xs">|</span>
-        <a
+        <Link
           href="/about"
           className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
         >
           About TrueMark Global →
-        </a>
+        </Link>
       </div>
     </>
   );

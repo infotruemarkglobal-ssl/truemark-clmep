@@ -460,6 +460,10 @@ model ExamPaper {
   tabSwitchLimit     Int      @default(3)
   version            Int      @default(1)
   isActive           Boolean  @default(true)
+  // Practice papers: unlimited attempts, never proctored, never eligible for
+  // certification decisions — a low-stakes way to try the real question
+  // format before the real proctored exam.
+  isPractice         Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

@@ -74,6 +74,7 @@ const schema = z.object({
   randomiseQuestions: z.boolean().default(true),
   randomiseOptions: z.boolean().default(true),
   allowReview: z.boolean().default(true),
+  isPractice: z.boolean().default(false),
 });
 
 export async function POST(req: NextRequest) {
@@ -98,6 +99,11 @@ export async function POST(req: NextRequest) {
       randomiseQuestions: body.data.randomiseQuestions,
       randomiseOptions: body.data.randomiseOptions,
       allowReview: body.data.allowReview,
+      isPractice: body.data.isPractice,
+      // Practice papers are never proctored, regardless of what the form
+      // might otherwise send — practice is explicitly the low-stakes,
+      // unmonitored mode.
+      requiresProctoring: body.data.isPractice ? false : undefined,
       creatorId: session.user.id,
       isActive: false, // Start inactive until questions are added
     },

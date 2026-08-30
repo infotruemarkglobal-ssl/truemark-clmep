@@ -28,6 +28,7 @@ type ExamState = {
   startedAt: string;
   requiresProctoring: boolean;
   tabSwitchLimit: number;
+  isPractice: boolean;
 };
 
 export default function ExamClientWrapper({

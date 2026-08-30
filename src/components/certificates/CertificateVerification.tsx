@@ -5,17 +5,26 @@ import { format, isPast } from "date-fns";
 import {
   CheckCircle2, XCircle, AlertTriangle, Shield, Award,
   Calendar, Clock, ExternalLink, Copy, ChevronDown, ChevronUp,
+  FileCheck, RefreshCw, Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+type TimelineEvent = {
+  action: "CERTIFICATE_ISSUED" | "CERTIFICATE_RENEWED" | "CERTIFICATE_REVOKED";
+  timestamp: string;
+  reason: string | null;
+};
+
 type CertData = {
   certificateNumber: string;
   status: string;
   issuedAt: string;
   expiresAt: string | null;
+  revokedAt: string | null;
+  revocationReason: string | null;
   holderName: string;
   scheme: {
     name: string;
@@ -25,22 +34,31 @@ type CertData = {
   };
   qrCodeUrl: string | null;
   openBadgeJson: Record<string, unknown> | null;
+  timeline: TimelineEvent[];
+  linkedInUrl: string | null;
 };
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string; icon: React.ElementType; description: string }> = {
-  valid: {
+  active: {
     label: "Valid Certificate",
     color: "text-emerald-700",
     bg: "bg-emerald-50 border-emerald-200",
     icon: CheckCircle2,
     description: "This certificate is authentic and currently valid.",
   },
-  invalid: {
-    label: "Certificate Invalid",
+  expired: {
+    label: "Certificate Expired",
+    color: "text-amber-700",
+    bg: "bg-amber-50 border-amber-200",
+    icon: Clock,
+    description: "This certificate was authentic but has passed its expiry date and is no longer current.",
+  },
+  revoked: {
+    label: "Certificate Revoked",
     color: "text-red-700",
     bg: "bg-red-50 border-red-200",
     icon: XCircle,
-    description: "This certificate exists but is not currently valid (expired, suspended, or revoked).",
+    description: "This certificate has been revoked and is no longer valid. See the revocation reason below.",
   },
   not_found: {
     label: "Certificate Not Found",
@@ -51,12 +69,18 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string; ico
   },
 };
 
+const TIMELINE_LABELS: Record<TimelineEvent["action"], { label: string; icon: React.ElementType; color: string }> = {
+  CERTIFICATE_ISSUED: { label: "Certificate issued", icon: FileCheck, color: "text-emerald-600 bg-emerald-50" },
+  CERTIFICATE_RENEWED: { label: "Certificate renewed", icon: RefreshCw, color: "text-primary bg-primary/10" },
+  CERTIFICATE_REVOKED: { label: "Certificate revoked", icon: Ban, color: "text-red-600 bg-red-50" },
+};
+
 export default function CertificateVerification({
   result,
   certNumber,
   certificate,
 }: {
-  result: "valid" | "invalid" | "not_found";
+  result: "active" | "expired" | "revoked" | "not_found";
   certNumber: string;
   certificate: CertData | null;
 }) {
@@ -99,6 +123,18 @@ export default function CertificateVerification({
           <p className="text-xs text-slate-400 mt-3">
             Verified at {format(new Date(), "d MMMM yyyy, HH:mm")} UTC
           </p>
+
+          {result === "revoked" && certificate?.revocationReason && (
+            <div className="mt-4 bg-white/70 border border-red-200 rounded-xl px-4 py-3 text-left">
+              <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">Revocation Reason</p>
+              <p className="text-sm text-slate-700">{certificate.revocationReason}</p>
+              {certificate.revokedAt && (
+                <p className="text-xs text-slate-400 mt-1.5">
+                  Revoked on {format(new Date(certificate.revokedAt), "d MMMM yyyy")}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Certificate details */}
@@ -162,6 +198,22 @@ export default function CertificateVerification({
                     <p className="text-sm text-slate-600">{certificate.scheme.description}</p>
                   </div>
                 )}
+
+                {certificate.linkedInUrl && (
+                  <div className="pt-4 border-t border-slate-100">
+                    <a
+                      href={certificate.linkedInUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-sm font-medium text-white bg-[#0A66C2] hover:bg-[#004182] transition-colors rounded-lg px-4 py-2"
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
+                        <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.38-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12ZM7.12 20.45H3.56V9h3.56v11.45Z" />
+                      </svg>
+                      Add to your LinkedIn profile
+                    </a>
+                  </div>
+                )}
               </div>
 
               {/* QR code */}
@@ -188,6 +240,33 @@ export default function CertificateVerification({
                 </div>
               )}
             </div>
+
+            {/* Status history */}
+            {certificate.timeline.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <p className="font-medium text-slate-900 text-sm mb-4">Status History</p>
+                <ol className="space-y-4">
+                  {certificate.timeline.map((event, i) => {
+                    const meta = TIMELINE_LABELS[event.action];
+                    const EventIcon = meta.icon;
+                    return (
+                      <li key={i} className="flex gap-3">
+                        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0", meta.color)}>
+                          <EventIcon className="w-4 h-4" />
+                        </div>
+                        <div className="pt-1">
+                          <p className="text-sm font-medium text-slate-800">{meta.label}</p>
+                          <p className="text-xs text-slate-400">{format(new Date(event.timestamp), "d MMMM yyyy, HH:mm")} UTC</p>
+                          {event.reason && (
+                            <p className="text-sm text-slate-600 mt-1">{event.reason}</p>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            )}
 
             {/* Open Badge JSON */}
             {certificate.openBadgeJson && (
