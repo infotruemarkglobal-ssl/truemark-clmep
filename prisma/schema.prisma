@@ -47,6 +47,10 @@ model User {
   lockedUntil        DateTime?
   lastLoginAt        DateTime?
   mustChangePassword Boolean   @default(false)
+  // Preferred UI language, e.g. "en", "fr". Read by src/i18n/request.ts for
+  // authenticated requests, ahead of the anonymous-visitor locale cookie.
+  // Null means "no preference set" — falls through to the cookie/default.
+  locale             String?   @db.VarChar(10)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -67,7 +71,13 @@ model User {
   appeals                 Appeal[]
   complaints              Complaint[]
   coiDeclarations         COIDeclaration[]
+  coiDeclarationsAsSubject COIDeclaration[] @relation("COISubject")
+  statusIncidentsPosted    StatusIncident[]
+  surveillanceReviewsAsSubject  SurveillanceReview[] @relation("SurveillanceSubject")
+  surveillanceReviewsAsReviewer SurveillanceReview[] @relation("SurveillanceReviewer")
   coursesCreated          Course[]                @relation("CourseCreator")
+  apiKeysCreated          ApiKey[]
+  ssoLoginTickets         SsoLoginTicket[]
   examsCreated            ExamPaper[]             @relation("ExamCreator")
   certificationDecisions  CertificationDecision[] @relation("CertificationOfficer")
   examGrades              ExamGrade[]             @relation("Examiner")
@@ -210,8 +220,79 @@ model Organisation {
   courseSeats         CourseSeat[]
   supportTickets      SupportTicket[]
   customRoleGrants    UserCustomRole[]
+  apiKeys             ApiKey[]
+  ssoConfig           OrganisationSsoConfig?
 
   @@map("organisations")
+}
+
+// Enterprise SSO — OIDC only (no SAML in this pass; see roadmap notes). Each
+// org brings its own IdP (Okta, Azure AD, Google Workspace, …); emailDomain
+// is how a candidate's email at login time resolves to the right IdP.
+// clientSecret must be recoverable in plaintext to send during the real
+// token exchange with the IdP, hence AES-256-GCM (src/lib/crypto.ts)
+// rather than a one-way hash.
+model OrganisationSsoConfig {
+  id                     String   @id @default(cuid())
+  organisationId         String   @unique
+  emailDomain            String   @unique
+  issuerUrl              String
+  clientId               String
+  encryptedClientSecret  String
+  enabled                Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@map("organisation_sso_configs")
+}
+
+// Single-use, short-lived bridge between a completed OIDC callback (real
+// identity already verified against the org's IdP) and NextAuth's own
+// session-issuing machinery (the "org-sso" Credentials provider in
+// src/lib/auth.ts). Never reused, expires in ~60s — the whole reason this
+// exists rather than a static shared secret is so a captured/logged ticket
+// can't be replayed to sign in as that user later.
+model SsoLoginTicket {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sso_login_tickets")
+}
+
+// Programmatic access for an org to pull its own data (members, certificate
+// status) into its own HR/LMS system. Keys are high-entropy random tokens,
+// not human-chosen secrets, so a fast deterministic SHA-256 lookup hash is
+// the correct and standard choice here — unlike User.passwordHash (bcrypt),
+// there is no brute-forcing concern to slow down for a 256-bit random value,
+// and bcrypt's non-deterministic salt would make a direct-lookup query
+// impossible without also storing a separate identifier.
+model ApiKey {
+  id             String    @id @default(cuid())
+  organisationId String
+  name           String
+  hashedKey      String    @unique
+  // First 8 chars of the raw key, shown in the UI so an admin can tell keys
+  // apart without ever re-displaying the full secret after creation.
+  keyPrefix      String
+  scopes         String // JSON array, e.g. ["members:read","certificates:read"]
+  createdById    String
+  lastUsedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  revokedAt      DateTime?
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id])
+
+  @@index([organisationId])
+  @@map("api_keys")
 }
 
 model OrganisationPortal {
@@ -295,6 +376,19 @@ model CertificationScheme {
   renewalRequiresExam     Boolean  @default(false)
   renewalRequiresCPD      Boolean  @default(true)
   renewalExamWindowMonths Int      @default(6)
+
+  // Risk-based surveillance between renewal cycles (ISO 17024 Cl.9.4) — not
+  // every scheme needs it; a scheme opts in explicitly.
+  surveillanceRequired       Boolean @default(false)
+  surveillanceIntervalMonths Int?
+
+  // Formal version control (ISO 17024 Cl.7.3) — same approval gate as
+  // ExamPaper.approvalStatus. Schemes have no separate `version` counter
+  // (unlike ExamPaper/ExamQuestion) since a scheme's own settings are the
+  // thing being approved, not a numbered content revision.
+  approvalStatus String    @default("DRAFT") // DRAFT | APPROVED
+  approvedBy     String?
+  approvedAt     DateTime?
 
   courses      Course[]
   examPapers   ExamPaper[]
@@ -459,6 +553,12 @@ model ExamPaper {
   requiresProctoring Boolean  @default(true)
   tabSwitchLimit     Int      @default(3)
   version            Int      @default(1)
+  // Formal version control (ISO 17024 Cl.7.3) — a paper cannot be activated
+  // for real exam use until an explicit approval, distinct from just being
+  // saved. Any content-changing edit resets this to DRAFT and bumps version.
+  approvalStatus     String   @default("DRAFT") // DRAFT | APPROVED
+  approvedBy         String?
+  approvedAt         DateTime?
   isActive           Boolean  @default(true)
   // Practice papers: unlimited attempts, never proctored, never eligible for
   // certification decisions — a low-stakes way to try the real question
@@ -699,6 +799,7 @@ model Certificate {
   organisation Organisation?         @relation(fields: [organisationId], references: [id])
   renewals     CertificateRenewal[]
   termsAcks    CertificateTermsAck[]
+  surveillanceReviews SurveillanceReview[]
 
   @@index([userId])
   @@index([schemeId])
@@ -721,6 +822,32 @@ model CertificateRenewal {
 
   @@index([certificateId])
   @@map("certificate_renewals")
+}
+
+// Risk-based surveillance of an individual certificate holder between
+// renewal cycles (ISO 17024 Cl.9.4) — distinct from InternalAudit, which
+// audits the certification body's own processes, not individual holders.
+model SurveillanceReview {
+  id            String    @id @default(cuid())
+  certificateId String
+  userId        String
+  riskLevel     String    @default("LOW") // LOW | MEDIUM | HIGH
+  reason        String?
+  status        String    @default("SCHEDULED") // SCHEDULED | IN_PROGRESS | COMPLETED | ESCALATED
+  scheduledFor  DateTime
+  completedAt   DateTime?
+  reviewerId    String?
+  findings      String?
+  createdAt     DateTime  @default(now())
+
+  certificate Certificate @relation(fields: [certificateId], references: [id])
+  user        User        @relation("SurveillanceSubject", fields: [userId], references: [id])
+  reviewer    User?       @relation("SurveillanceReviewer", fields: [reviewerId], references: [id])
+
+  @@index([certificateId])
+  @@index([status])
+  @@index([scheduledFor])
+  @@map("surveillance_reviews")
 }
 
 // ─── CPD MODULE ───────────────────────────────────────────────────────────────
@@ -778,6 +905,18 @@ model Purchase {
   stripeSessionId    String?   @unique
   paystackReference  String?   @unique
   paystackAccessCode String?
+  // Captured from the charge.success webhook's `authorization` object on the
+  // first payment. Required to charge later instalments programmatically via
+  // POST /transaction/charge_authorization — Paystack has no BNPL product of
+  // its own, so this is what "instalments" actually rests on. Null whenever
+  // the card's authorization isn't reusable (rare, e.g. some bank/3DS cases).
+  paystackAuthorizationCode String?
+  // Raw authorization object (card_type, last4, bank, reusable, …) — kept as
+  // JSON since it's read-only display/audit context, not queried on.
+  paystackAuthorizationJson String?
+  // True when `amount` below is only the FIRST of several instalments, not
+  // the full course price — see InstalmentPlan for the total and schedule.
+  isInstalment       Boolean   @default(false)
   amount             Float
   vatAmount          Float     @default(0)
   currency           String    @default("NGN")
@@ -790,14 +929,59 @@ model Purchase {
   refundedAt         DateTime?
   createdAt          DateTime  @default(now())
 
-  organisation Organisation? @relation(fields: [organisationId], references: [id])
-  enrolments   Enrolment[]
-  courseSeats  CourseSeat[]
+  organisation   Organisation?   @relation(fields: [organisationId], references: [id])
+  enrolments     Enrolment[]
+  courseSeats    CourseSeat[]
+  instalmentPlan InstalmentPlan?
 
   @@index([userId])
   @@index([courseId])
   @@index([status])
   @@map("purchases")
+}
+
+// Created once the first instalment (the Purchase itself) clears. Tracks the
+// real total price against the schedule of remaining charges — the Purchase
+// row's own `amount` only ever reflects that first instalment.
+model InstalmentPlan {
+  id                  String   @id @default(cuid())
+  purchaseId          String   @unique
+  totalAmount         Float
+  numberOfInstalments Int
+  // ACTIVE (charges remain), COMPLETED (all paid), DEFAULTED (a charge
+  // exhausted its retries), NEEDS_MANUAL_PAYMENT (card authorization came
+  // back non-reusable — Paystack cannot be asked to charge it again).
+  status              String   @default("ACTIVE")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  purchase Purchase           @relation(fields: [purchaseId], references: [id])
+  charges  InstalmentCharge[]
+
+  @@map("instalment_plans")
+}
+
+model InstalmentCharge {
+  id             String    @id @default(cuid())
+  planId         String
+  // 1-based; #1 mirrors the Purchase itself (marked PAID immediately, same
+  // paidAt/reference) purely so plan progress reads as "2 of 4 paid" rather
+  // than needing callers to special-case the first row.
+  instalmentNumber Int
+  amount         Float
+  dueDate        DateTime
+  status         String    @default("SCHEDULED") // SCHEDULED, PAID, RETRYING, FAILED
+  attempts       Int       @default(0)
+  paystackReference String? @unique
+  paidAt         DateTime?
+  lastError      String?
+  createdAt      DateTime  @default(now())
+
+  plan InstalmentPlan @relation(fields: [planId], references: [id])
+
+  @@unique([planId, instalmentNumber])
+  @@index([status, dueDate])
+  @@map("instalment_charges")
 }
 
 // ─── APPEALS & COMPLAINTS ─────────────────────────────────────────────────────
@@ -857,15 +1041,22 @@ model COIDeclaration {
   declarationText String
   hasConflict     Boolean  @default(false)
   conflictDetails String?
+  // The specific candidate this conflict concerns — null means a blanket
+  // declaration (e.g. "I have no conflicts" or "I have an undisclosed-scope
+  // conflict") rather than a conflict tied to one particular case.
+  subjectUserId   String?
+  riskLevel       String   @default("LOW") // LOW | MEDIUM | HIGH
   status          String   @default("ACTIVE") // ACTIVE | UNDER_REVIEW | RESOLVED
   declaredAt      DateTime @default(now())
   expiresAt       DateTime
 
-  user User @relation(fields: [userId], references: [id])
+  user    User  @relation(fields: [userId], references: [id])
+  subject User? @relation("COISubject", fields: [subjectUserId], references: [id])
 
   // Composite index: COI check at cert issuance queries WHERE userId=? AND hasConflict=true AND expiresAt > now()
   @@index([userId, expiresAt])
   @@index([status])
+  @@index([subjectUserId])
   @@map("coi_declarations")
 }
 
@@ -1057,9 +1248,15 @@ model AuditLog {
   ipAddress   String?
   userAgent   String?
   timestamp   DateTime @default(now())
-  // ISO 27001 A.8.15 tamper evidence — SHA-256(id|action|entityType|entityId|metadata|timestamp)
+  // ISO 27001 A.8.15 tamper evidence — SHA-256(id|action|entityType|entityId|metadata|userId|ipAddress|userAgent)
   // Allows offline verification that no row has been silently modified.
   contentHash String? @map("content_hash")
+  // Hash chain — SHA-256(contentHash of the row that was, at write time, the
+  // most recent AuditLog row). A single global chain (not per-entity): the
+  // requirement is detecting wholesale row DELETION, which per-row
+  // contentHash alone cannot catch (it only detects in-place edits). The
+  // first row in the table has previousHash = null.
+  previousHash String? @map("previous_hash")
 
   user User? @relation(fields: [userId], references: [id])
 
@@ -1068,6 +1265,50 @@ model AuditLog {
   @@index([timestamp])
   @@index([entityType, entityId]) // lookup audit trail for a specific entity
   @@map("audit_logs")
+}
+
+// Periodic external notarisation of the AuditLog hash chain (ISO 27001
+// A.8.15 + the tamper-evidence requirement this closes the last gap on) —
+// a real RFC 3161 timestamp token from a public Certificate-Authority TSA,
+// attesting "this exact digest existed at this exact time," independently
+// re-verifiable by anyone re-parsing the token bytes without trusting this
+// application's own database.
+model AuditAnchor {
+  id             String   @id @default(cuid())
+  // The chain-tip AuditLog.contentHash at the moment this anchor was created.
+  digestHash     String
+  chainTipLogId  String
+  tsaUrl         String
+  // Base64-encoded raw RFC 3161 TimeStampResp bytes exactly as the TSA sent
+  // them (status + token) — stored whole so re-verification can hand them
+  // straight back to parseTimestampResponse() rather than re-deriving any
+  // ASN.1 structure ourselves.
+  tsaResponse    String
+  tsaGenTime     DateTime
+  tsaSerial      String
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("audit_anchors")
+}
+
+// ─── PUBLIC STATUS PAGE ─────────────────────────────────────────────────────
+
+model StatusIncident {
+  id         String    @id @default(cuid())
+  title      String
+  message    String
+  severity   String    @default("minor") // minor | major | critical
+  status     String    @default("investigating") // investigating | identified | monitoring | resolved
+  startedAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  createdBy  String
+
+  creator User @relation(fields: [createdBy], references: [id])
+
+  @@index([status])
+  @@index([startedAt])
+  @@map("status_incidents")
 }
 
 // ─── SCORM ENGINE ─────────────────────────────────────────────────────────────
@@ -1358,7 +1599,10 @@ model InternalAudit {
   title         String
   scope         String
   auditType     String    @default("INTERNAL")
-  // INTERNAL | EXTERNAL | SURVEILLANCE
+  // INTERNAL | EXTERNAL | SURVEILLANCE — despite the name, this table is
+  // for audits of the certification body's OWN processes (ISO 17024 Cl.9),
+  // with no subject/candidate field. It cannot represent surveillance of an
+  // individual certificate holder — see the SurveillanceReview model for that.
   status        String    @default("PLANNED")
   // PLANNED | IN_PROGRESS | COMPLETED | CANCELLED
   plannedDate   DateTime
