@@ -9,6 +9,10 @@ import { orphanedAttemptCleanup } from "@/inngest/functions/orphanedAttempts";
 import { breachDpaReminder } from "@/inngest/functions/breachReminder";
 import { dbKeepalive } from "@/inngest/functions/dbKeepalive";
 import { applicationAutoApprove } from "@/inngest/functions/applicationAutoApprove";
+import { instalmentCharges } from "@/inngest/functions/instalmentCharges";
+import { surveillanceScheduling } from "@/inngest/functions/surveillanceScheduling";
+import { auditAnchor } from "@/inngest/functions/auditAnchor";
+import { securityReviewCadence } from "@/inngest/functions/securityReviewCadence";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -26,5 +30,9 @@ export const { GET, POST, PUT } = serve({
     breachDpaReminder,
     dbKeepalive,
     applicationAutoApprove,
+    instalmentCharges,
+    surveillanceScheduling,
+    auditAnchor,
+    securityReviewCadence,
   ],
 });

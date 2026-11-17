@@ -5,5 +5,20 @@
     "moduleResolution": "node",
     "outDir": "dist-seed"
   },
-  "include": ["prisma/seed.ts", "prisma/sync-permissions.ts"]
+  "include": [
+    "prisma/seed.ts",
+    "prisma/sync-permissions.ts",
+    "prisma/backfill-audit-hashes.ts",
+    "scripts/policy-doc-lib.ts",
+    "scripts/generate-security-policy-docs.ts",
+    "scripts/security-review-2026-09.ts",
+    "scripts/load-test/lib.ts",
+    "scripts/load-test/seed-candidates.ts",
+    "scripts/load-test/run-heartbeat.ts",
+    "scripts/load-test/run-incident-burst.ts",
+    "scripts/load-test/run-exam-day-surge.ts",
+    "scripts/load-test/cleanup.ts",
+    "scripts/load-test/generate-report.ts",
+    "scripts/backup-drill.ts"
+  ]
 }

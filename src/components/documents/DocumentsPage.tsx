@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type DocumentVersion = {
   id: string;
@@ -71,6 +72,8 @@ export default function DocumentsPage({
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showModal, setShowModal] = useState(false);
+  const closeModal = () => setShowModal(false);
+  const modalTrapRef = useFocusTrap<HTMLDivElement>(showModal, closeModal);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -126,6 +129,21 @@ export default function DocumentsPage({
     } finally {
       setUploading(false);
       setUploadProgress(0);
+    }
+  }
+
+  async function approveDocument(doc: Document) {
+    try {
+      const res = await fetch(`/api/documents/${doc.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve" }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      toast.success("Version approved");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
     }
   }
 
@@ -255,6 +273,15 @@ export default function DocumentsPage({
                   <div
                     className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 transition cursor-pointer"
                     onClick={() => setExpandedDoc(isExpanded ? null : doc.id)}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setExpandedDoc(isExpanded ? null : doc.id);
+                      }
+                    }}
                   >
                     {/* Type icon */}
                     <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0", typeConf.color)}>
@@ -285,6 +312,16 @@ export default function DocumentsPage({
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 shrink-0">
+                      {isAdmin && doc.latestVersion && doc.latestVersion.status === "DRAFT" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-emerald-700 border-emerald-200 hover:bg-emerald-50 gap-1.5"
+                          onClick={(e) => { e.stopPropagation(); approveDocument(doc); }}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Approve
+                        </Button>
+                      )}
                       {doc.latestVersion?.fileUrl && (
                         <a
                           href={doc.latestVersion.fileUrl}
@@ -357,16 +394,26 @@ export default function DocumentsPage({
       {/* Add Document Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[85vh] overflow-y-auto">
+          <div
+            ref={modalTrapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-document-modal-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl shadow-2xl max-w-xl w-full max-h-[85vh] overflow-y-auto outline-none"
+          >
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900">Add Document</h3>
-              <button type="button" onClick={() => setShowModal(false)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition">✕</button>
+              <h3 id="add-document-modal-title" className="font-bold text-slate-900">Add Document</h3>
+              <button type="button" onClick={closeModal} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition">✕</button>
             </div>
 
             <div className="p-5 space-y-4">
               {/* Title */}
               <div>
                 <Label>Document Title *</Label>
+                {/* eslint-disable-next-line jsx-a11y/no-autofocus -- moves
+                    focus into a just-opened modal's first field, the ARIA
+                    APG-recommended dialog pattern, not a page-load steal. */}
                 <Input autoFocus className="mt-1" placeholder="e.g. Certification Policy v3" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
               </div>
 

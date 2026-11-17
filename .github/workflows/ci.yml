@@ -50,6 +50,24 @@ jobs:
 
       - run: npm ci
 
+      # ISO 27001 A.5.24/A.8.8 — continuous dependency-vulnerability visibility,
+      # complementing the quarterly manual review + Dependabot's weekly update
+      # PRs. NOT currently a hard gate (continue-on-error): a real baseline
+      # scan of this repo found 67 existing advisories (24 high, 4 critical),
+      # the most consequential being real next-auth/Auth.js CVEs — but every
+      # one of them (including next-auth's) needs `npm audit fix --force`,
+      # which would downgrade prisma to a major version behind what this app
+      # runs. That's a breaking, app-wide change no CI step should force
+      # through unattended — it needs a deliberate, reviewed upgrade the team
+      # opts into, not a side effect of a security-scan job. See the Security
+      # Testing & Vulnerability Management Policy (Document Library) for the
+      # documented baseline and remediation plan. Flip continue-on-error off
+      # once that baseline is clear, so this becomes a real gate on NEW
+      # regressions rather than permanently-red noise on the existing one.
+      - name: Dependency vulnerability audit
+        continue-on-error: true
+        run: npm run audit
+
       - name: Generate Prisma Client
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"

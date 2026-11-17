@@ -54,3 +54,8 @@ next-env.d.ts
 private-uploads/
 zap-report*.html
 zap.yaml
+
+# Load-test scratch data — seeded candidate sessions/cookies (scripts/load-test/)
+# and backup-drill dump files. Real secrets (session tokens), never committed.
+/scripts/load-test/.data/
+/scripts/.data/
