@@ -10,9 +10,9 @@ import {
   AlertTriangle, Camera, MonitorOff, Eye, Activity,
   ChevronDown, Building2,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import ChainIntegrityPanel from "@/components/audit/ChainIntegrityPanel";
 
 type LogEntry = {
   id: string;
@@ -337,6 +337,8 @@ export default function AuditLogPage({
           <p className="text-slate-500 text-sm">{total.toLocaleString()} entries · tamper-evident record</p>
         </div>
       </div>
+
+      <ChainIntegrityPanel />
 
       {/* Filters */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-3 items-center">

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { auditLog } from "@/lib/audit";
+import { auditLog, prepareAuditEntry } from "@/lib/audit";
 import { can } from "@/lib/permissions";
 
 // ── POST /api/gdpr/dsr/[id]/fulfil — fulfil a data subject request ───────────
@@ -146,6 +146,18 @@ export async function POST(
     // anonEmail is computed before the transaction since the array form does
     // not support referencing results from earlier operations in the same batch.
     const anonEmail = `deleted-${dsr.userId}@anonymised.invalid`;
+    const auditEntry = await prepareAuditEntry({
+      userId: session.user.id,
+      action: "DSR_FULFILLED_ERASURE",
+      entityType: "DataSubjectRequest",
+      entityId: id,
+      metadata: {
+        subjectId: dsr.userId,
+        anonEmail,
+        retainedEntities: ["Certificate", "ExamAttempt", "AuditLog", "CPDRecord", "Enrolment"],
+        reason: "Art. 17(3)(b) GDPR — statutory retention obligation",
+      },
+    });
     await db.$transaction([
       // 1. Anonymise the User row — replace PII with placeholder tokens.
       //    The user row is kept (cannot hard-delete) because Certificate,
@@ -200,18 +212,7 @@ export async function POST(
         },
       }),
       db.auditLog.create({
-        data: {
-          userId: session.user.id,
-          action: "DSR_FULFILLED_ERASURE",
-          entityType: "DataSubjectRequest",
-          entityId: id,
-          metadata: JSON.stringify({
-            subjectId: dsr.userId,
-            anonEmail,
-            retainedEntities: ["Certificate", "ExamAttempt", "AuditLog", "CPDRecord", "Enrolment"],
-            reason: "Art. 17(3)(b) GDPR — statutory retention obligation",
-          }),
-        },
+        data: auditEntry,
       }),
     ]);
 
