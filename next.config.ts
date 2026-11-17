@@ -1,5 +1,12 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import createNextIntlPlugin from "next-intl/plugin";
+
+// No locale-prefixed routing (no /en/..., /fr/... path segments) — the
+// locale is resolved per-request from a cookie (see src/i18n/request.ts).
+// Only src/app/verify/[certNumber] actually consumes translations today;
+// keeping routing untouched means the other ~85 pages need zero changes.
+const withNextIntl = createNextIntlPlugin();
 
 // ─── Non-CSP security headers ──────────────────────────────────────────────────
 //
@@ -172,7 +179,7 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
+export default withSentryConfig(withNextIntl(nextConfig), {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,

@@ -1,16 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { format, isPast } from "date-fns";
+import { useState, useEffect } from "react";
+import { useTranslations, useLocale } from "next-intl";
+import { format, isPast, type Locale as DateFnsLocale } from "date-fns";
+import { enUS, fr } from "date-fns/locale";
 import {
   CheckCircle2, XCircle, AlertTriangle, Shield, Award,
-  Calendar, Clock, ExternalLink, Copy, ChevronDown, ChevronUp,
+  Clock, Copy, ChevronDown, ChevronUp,
   FileCheck, RefreshCw, Ban,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import LanguageSwitcher from "@/components/certificates/LanguageSwitcher";
+
+const DATE_FNS_LOCALES: Record<string, DateFnsLocale> = { en: enUS, fr };
 
 type TimelineEvent = {
   action: "CERTIFICATE_ISSUED" | "CERTIFICATE_RENEWED" | "CERTIFICATE_REVOKED";
@@ -38,41 +42,17 @@ type CertData = {
   linkedInUrl: string | null;
 };
 
-const STATUS_MAP: Record<string, { label: string; color: string; bg: string; icon: React.ElementType; description: string }> = {
-  active: {
-    label: "Valid Certificate",
-    color: "text-emerald-700",
-    bg: "bg-emerald-50 border-emerald-200",
-    icon: CheckCircle2,
-    description: "This certificate is authentic and currently valid.",
-  },
-  expired: {
-    label: "Certificate Expired",
-    color: "text-amber-700",
-    bg: "bg-amber-50 border-amber-200",
-    icon: Clock,
-    description: "This certificate was authentic but has passed its expiry date and is no longer current.",
-  },
-  revoked: {
-    label: "Certificate Revoked",
-    color: "text-red-700",
-    bg: "bg-red-50 border-red-200",
-    icon: XCircle,
-    description: "This certificate has been revoked and is no longer valid. See the revocation reason below.",
-  },
-  not_found: {
-    label: "Certificate Not Found",
-    color: "text-slate-700",
-    bg: "bg-slate-50 border-slate-200",
-    icon: AlertTriangle,
-    description: "No certificate with this number was found in our registry.",
-  },
+const STATUS_STYLE: Record<string, { color: string; bg: string; icon: React.ElementType }> = {
+  active: { color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", icon: CheckCircle2 },
+  expired: { color: "text-amber-700", bg: "bg-amber-50 border-amber-200", icon: Clock },
+  revoked: { color: "text-red-700", bg: "bg-red-50 border-red-200", icon: XCircle },
+  not_found: { color: "text-slate-700", bg: "bg-slate-50 border-slate-200", icon: AlertTriangle },
 };
 
-const TIMELINE_LABELS: Record<TimelineEvent["action"], { label: string; icon: React.ElementType; color: string }> = {
-  CERTIFICATE_ISSUED: { label: "Certificate issued", icon: FileCheck, color: "text-emerald-600 bg-emerald-50" },
-  CERTIFICATE_RENEWED: { label: "Certificate renewed", icon: RefreshCw, color: "text-primary bg-primary/10" },
-  CERTIFICATE_REVOKED: { label: "Certificate revoked", icon: Ban, color: "text-red-600 bg-red-50" },
+const TIMELINE_STYLE: Record<TimelineEvent["action"], { icon: React.ElementType; color: string }> = {
+  CERTIFICATE_ISSUED: { icon: FileCheck, color: "text-emerald-600 bg-emerald-50" },
+  CERTIFICATE_RENEWED: { icon: RefreshCw, color: "text-primary bg-primary/10" },
+  CERTIFICATE_REVOKED: { icon: Ban, color: "text-red-600 bg-red-50" },
 };
 
 export default function CertificateVerification({
@@ -85,8 +65,20 @@ export default function CertificateVerification({
   certificate: CertData | null;
 }) {
   const [showBadgeJson, setShowBadgeJson] = useState(false);
-  const status = STATUS_MAP[result];
-  const StatusIcon = status.icon;
+  const t = useTranslations("Verify");
+  const locale = useLocale();
+  const dateFnsLocale = DATE_FNS_LOCALES[locale] ?? enUS;
+  const style = STATUS_STYLE[result];
+  const StatusIcon = style.icon;
+
+  // The root layout (shared by every other page in the app) stays hardcoded
+  // lang="en" — this is the only page with translated content, so it
+  // corrects its own document language instead of making that layout
+  // locale-aware for everyone.
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    return () => { document.documentElement.lang = "en"; };
+  }, [locale]);
 
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard"));
@@ -95,42 +87,45 @@ export default function CertificateVerification({
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Trust bar */}
-      <div className="bg-slate-900 text-white py-3 px-4 text-center text-sm">
-        <div className="max-w-2xl mx-auto flex items-center justify-center gap-2">
-          <Shield className="w-4 h-4 text-primary shrink-0" />
-          <span>Official Truemark Global Certificate Registry · All certificates are digitally verified</span>
+      <div className="bg-slate-900 text-white py-3 px-4 text-sm">
+        <div className="max-w-2xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center justify-center gap-2 flex-1 min-w-0">
+            <Shield className="w-4 h-4 text-primary shrink-0" />
+            <span className="truncate">{t("trustBar")}</span>
+          </div>
+          <LanguageSwitcher />
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-10 space-y-6">
         {/* Verification status banner */}
-        <div className={cn("rounded-2xl border p-6 text-center", status.bg)}>
-          <StatusIcon className={cn("w-16 h-16 mx-auto mb-3", status.color)} />
-          <h1 className={cn("text-2xl font-bold", status.color)}>{status.label}</h1>
-          <p className="text-slate-600 text-sm mt-2 max-w-sm mx-auto">{status.description}</p>
+        <div className={cn("rounded-2xl border p-6 text-center", style.bg)}>
+          <StatusIcon className={cn("w-16 h-16 mx-auto mb-3", style.color)} />
+          <h1 className={cn("text-2xl font-bold", style.color)}>{t(`status.${result}.label`)}</h1>
+          <p className="text-slate-600 text-sm mt-2 max-w-sm mx-auto">{t(`status.${result}.description`)}</p>
 
           <div className="mt-4 bg-white/60 rounded-xl px-4 py-2 inline-flex items-center gap-2 font-mono text-sm text-slate-700">
             {certNumber}
             <button
               onClick={() => copyToClipboard(certNumber)}
               className="text-slate-400 hover:text-slate-700 transition"
-              title="Copy certificate number"
+              title={t("copyCertNumber")}
             >
               <Copy className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <p className="text-xs text-slate-400 mt-3">
-            Verified at {format(new Date(), "d MMMM yyyy, HH:mm")} UTC
+            {t("verifiedAt", { time: format(new Date(), "d MMMM yyyy, HH:mm", { locale: dateFnsLocale }) })}
           </p>
 
           {result === "revoked" && certificate?.revocationReason && (
             <div className="mt-4 bg-white/70 border border-red-200 rounded-xl px-4 py-3 text-left">
-              <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">Revocation Reason</p>
+              <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">{t("revocationReasonLabel")}</p>
               <p className="text-sm text-slate-700">{certificate.revocationReason}</p>
               {certificate.revokedAt && (
                 <p className="text-xs text-slate-400 mt-1.5">
-                  Revoked on {format(new Date(certificate.revokedAt), "d MMMM yyyy")}
+                  {t("revokedOn", { date: format(new Date(certificate.revokedAt), "d MMMM yyyy", { locale: dateFnsLocale }) })}
                 </p>
               )}
             </div>
@@ -146,16 +141,16 @@ export default function CertificateVerification({
                 <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Award className="w-8 h-8 text-primary" />
                 </div>
-                <p className="text-slate-400 text-xs uppercase tracking-widest mb-2">Certificate of Competence</p>
+                <p className="text-slate-400 text-xs uppercase tracking-widest mb-2">{t("certificateOfCompetence")}</p>
                 <h2 className="text-white text-xl font-bold">{certificate.scheme.name}</h2>
                 <p className="text-slate-300 text-sm mt-1">{certificate.scheme.code}</p>
                 <div className="mt-4 pt-4 border-t border-slate-700">
-                  <p className="text-slate-400 text-xs">Awarded to</p>
+                  <p className="text-slate-400 text-xs">{t("awardedTo")}</p>
                   <p className="text-white text-2xl font-bold mt-1">{certificate.holderName}</p>
                 </div>
                 <div className="mt-4 inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/30">
                   <CheckCircle2 className="w-3 h-3" />
-                  Truemark Global · ISO/IEC 17024 Accredited
+                  {t("accreditedBadge")}
                 </div>
               </div>
 
@@ -163,21 +158,21 @@ export default function CertificateVerification({
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   {[
-                    { label: "Certificate Number", value: certificate.certificateNumber, mono: true },
+                    { label: t("details.certificateNumber"), value: certificate.certificateNumber, mono: true },
                     {
-                      label: "Status",
+                      label: t("details.status"),
                       value: certificate.status,
                       badge: true,
                       badgeColor: certificate.status === "ACTIVE" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600",
                     },
-                    { label: "Issued", value: format(new Date(certificate.issuedAt), "d MMMM yyyy") },
+                    { label: t("details.issued"), value: format(new Date(certificate.issuedAt), "d MMMM yyyy", { locale: dateFnsLocale }) },
                     ...(certificate.expiresAt ? [{
-                      label: "Expires",
-                      value: format(new Date(certificate.expiresAt), "d MMMM yyyy"),
+                      label: t("details.expires"),
+                      value: format(new Date(certificate.expiresAt), "d MMMM yyyy", { locale: dateFnsLocale }),
                       highlight: isPast(new Date(certificate.expiresAt)) ? "text-red-500" : "",
                     }] : []),
-                    { label: "Validity Period", value: `${certificate.scheme.validityMonths} months` },
-                    { label: "Certification Body", value: "Truemark Global" },
+                    { label: t("details.validityPeriod"), value: t("details.validityMonths", { months: certificate.scheme.validityMonths }) },
+                    { label: t("details.certificationBody"), value: t("details.certificationBodyName") },
                   ].map(({ label, value, mono, badge, badgeColor, highlight }) => (
                     <div key={label} className="space-y-1">
                       <p className="text-xs text-slate-400">{label}</p>
@@ -194,7 +189,7 @@ export default function CertificateVerification({
 
                 {certificate.scheme.description && (
                   <div className="pt-4 border-t border-slate-100">
-                    <p className="text-xs text-slate-400 mb-1">About this certification</p>
+                    <p className="text-xs text-slate-400 mb-1">{t("aboutCertification")}</p>
                     <p className="text-sm text-slate-600">{certificate.scheme.description}</p>
                   </div>
                 )}
@@ -210,7 +205,7 @@ export default function CertificateVerification({
                       <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
                         <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.38-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12ZM7.12 20.45H3.56V9h3.56v11.45Z" />
                       </svg>
-                      Add to your LinkedIn profile
+                      {t("addToLinkedIn")}
                     </a>
                   </div>
                 )}
@@ -228,13 +223,13 @@ export default function CertificateVerification({
                     />
                   </div>
                   <div className="text-sm text-slate-600">
-                    <p className="font-medium text-slate-800 mb-1">QR Verification</p>
-                    <p>Scan this QR code to verify this certificate online. The QR code links directly to this verification page.</p>
+                    <p className="font-medium text-slate-800 mb-1">{t("qrVerification")}</p>
+                    <p>{t("qrDescription")}</p>
                     <button
                       onClick={() => copyToClipboard(typeof window !== "undefined" ? window.location.href : "")}
                       className="flex items-center gap-1.5 text-primary text-xs mt-2 hover:underline"
                     >
-                      <Copy className="w-3 h-3" /> Copy verification URL
+                      <Copy className="w-3 h-3" /> {t("copyVerificationUrl")}
                     </button>
                   </div>
                 </div>
@@ -244,10 +239,10 @@ export default function CertificateVerification({
             {/* Status history */}
             {certificate.timeline.length > 0 && (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <p className="font-medium text-slate-900 text-sm mb-4">Status History</p>
+                <p className="font-medium text-slate-900 text-sm mb-4">{t("statusHistory")}</p>
                 <ol className="space-y-4">
                   {certificate.timeline.map((event, i) => {
-                    const meta = TIMELINE_LABELS[event.action];
+                    const meta = TIMELINE_STYLE[event.action];
                     const EventIcon = meta.icon;
                     return (
                       <li key={i} className="flex gap-3">
@@ -255,8 +250,8 @@ export default function CertificateVerification({
                           <EventIcon className="w-4 h-4" />
                         </div>
                         <div className="pt-1">
-                          <p className="text-sm font-medium text-slate-800">{meta.label}</p>
-                          <p className="text-xs text-slate-400">{format(new Date(event.timestamp), "d MMMM yyyy, HH:mm")} UTC</p>
+                          <p className="text-sm font-medium text-slate-800">{t(`timeline.${event.action}`)}</p>
+                          <p className="text-xs text-slate-400">{format(new Date(event.timestamp), "d MMMM yyyy, HH:mm", { locale: dateFnsLocale })} UTC</p>
                           {event.reason && (
                             <p className="text-sm text-slate-600 mt-1">{event.reason}</p>
                           )}
@@ -277,8 +272,8 @@ export default function CertificateVerification({
                 >
                   <div className="flex items-center gap-2">
                     <Award className="w-5 h-5 text-primary" />
-                    <span className="font-medium text-slate-900 text-sm">Open Badge 3.0 Credential</span>
-                    <Badge className="bg-primary/10 text-primary border-0 text-xs">Verifiable Credential</Badge>
+                    <span className="font-medium text-slate-900 text-sm">{t("openBadgeCredential")}</span>
+                    <Badge className="bg-primary/10 text-primary border-0 text-xs">{t("verifiableCredential")}</Badge>
                   </div>
                   {showBadgeJson
                     ? <ChevronUp className="w-4 h-4 text-slate-400" />
@@ -294,17 +289,13 @@ export default function CertificateVerification({
                       <button
                         onClick={() => copyToClipboard(JSON.stringify(certificate.openBadgeJson, null, 2))}
                         className="absolute top-2 right-2 p-1.5 bg-white border border-slate-200 rounded-lg text-slate-500 hover:text-slate-700 transition"
-                        title="Copy JSON"
+                        title={t("copyJson")}
                       >
                         <Copy className="w-3.5 h-3.5" />
                       </button>
                     </div>
                     <div className="p-4 border-t border-slate-100">
-                      <p className="text-xs text-slate-500">
-                        This Open Badge 3.0 verifiable credential is signed by Truemark Global and can be
-                        verified by any Open Badges-compatible platform or employer. The badge is compliant
-                        with the IMS Global Open Badges 3.0 specification.
-                      </p>
+                      <p className="text-xs text-slate-500">{t("openBadgeDescription")}</p>
                     </div>
                   </div>
                 )}
@@ -317,10 +308,10 @@ export default function CertificateVerification({
         <div className="text-center pt-4">
           <div className="inline-flex items-center gap-2 text-slate-400 text-xs">
             <Shield className="w-4 h-4 text-primary" />
-            <span>Truemark Global Certification Registry · ISO/IEC 17024:2012 Accredited</span>
+            <span>{t("footerTagline")}</span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            For enquiries: <a href="mailto:certificates@truemarkglobal.com" className="text-primary hover:underline">certificates@truemarkglobal.com</a>
+            {t("enquiriesPrefix")} <a href="mailto:certificates@truemarkglobal.com" className="text-primary hover:underline">certificates@truemarkglobal.com</a>
           </p>
         </div>
       </div>

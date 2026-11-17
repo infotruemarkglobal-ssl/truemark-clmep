@@ -3,6 +3,8 @@ import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
+import { getTranslations, getLocale, getMessages } from "next-intl/server";
+import { NextIntlClientProvider } from "next-intl";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { buildLinkedInAddToProfileUrl } from "@/lib/certificates";
@@ -53,13 +55,12 @@ export default async function VerifyCertificatePage({
   const ip = hdrs.get("x-real-ip") ?? hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const rl = await rateLimit(ip, "cert-verify", { limit: 30, windowMs: 60_000 });
   if (!rl.success) {
+    const t = await getTranslations("Verify");
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
-          <h1 className="text-xl font-bold text-slate-900 mb-2">Too many requests</h1>
-          <p className="text-slate-500 text-sm">
-            Please wait a moment before verifying another certificate.
-          </p>
+          <h1 className="text-xl font-bold text-slate-900 mb-2">{t("tooManyRequestsTitle")}</h1>
+          <p className="text-slate-500 text-sm">{t("tooManyRequestsBody")}</p>
         </div>
       </div>
     );
@@ -67,13 +68,23 @@ export default async function VerifyCertificatePage({
 
   const certificate = await getCertificate(certNumber);
 
+  // Confined to this one page rather than the root layout: the request
+  // config does an auth() check (and a DB read for a signed-in user's
+  // locale preference) on every call, and this is the only page in the app
+  // that actually renders translated content — no reason to pay that cost
+  // on the other ~85 pages' every render.
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   if (!certificate) {
     return (
-      <CertificateVerification
-        result="not_found"
-        certNumber={certNumber}
-        certificate={null}
-      />
+      <NextIntlClientProvider locale={locale} messages={messages}>
+        <CertificateVerification
+          result="not_found"
+          certNumber={certNumber}
+          certificate={null}
+        />
+      </NextIntlClientProvider>
     );
   }
 
@@ -112,53 +123,57 @@ export default async function VerifyCertificatePage({
     };
   });
 
+  const t = await getTranslations("Verify");
+
   return (
     <>
-      <CertificateVerification
-        result={result}
-        certNumber={certNumber}
-        certificate={{
-          certificateNumber: certificate.certificateNumber,
-          status: certificate.status,
-          issuedAt: certificate.issuedAt.toISOString(),
-          expiresAt: certificate.expiresAt?.toISOString() ?? null,
-          revokedAt: certificate.revokedAt?.toISOString() ?? null,
-          revocationReason: certificate.revocationReason,
-          holderName: `${certificate.user.firstName} ${certificate.user.lastName}`,
-          scheme: {
-            name: certificate.scheme.name,
-            code: certificate.scheme.code,
-            description: certificate.scheme.description ?? null,
-            validityMonths: certificate.scheme.validityMonths,
-          },
-          qrCodeUrl: certificate.qrCodeUrl,
-          openBadgeJson: certificate.openBadgeJson
-            ? JSON.parse(certificate.openBadgeJson) as Record<string, unknown>
-            : null,
-          timeline,
-          linkedInUrl: result === "active"
-            ? buildLinkedInAddToProfileUrl({
-                schemeName: certificate.scheme.name,
-                certificateNumber: certificate.certificateNumber,
-                issuedAt: certificate.issuedAt,
-                expiresAt: certificate.expiresAt,
-              })
-            : null,
-        }}
-      />
+      <NextIntlClientProvider locale={locale} messages={messages}>
+        <CertificateVerification
+          result={result}
+          certNumber={certNumber}
+          certificate={{
+            certificateNumber: certificate.certificateNumber,
+            status: certificate.status,
+            issuedAt: certificate.issuedAt.toISOString(),
+            expiresAt: certificate.expiresAt?.toISOString() ?? null,
+            revokedAt: certificate.revokedAt?.toISOString() ?? null,
+            revocationReason: certificate.revocationReason,
+            holderName: `${certificate.user.firstName} ${certificate.user.lastName}`,
+            scheme: {
+              name: certificate.scheme.name,
+              code: certificate.scheme.code,
+              description: certificate.scheme.description ?? null,
+              validityMonths: certificate.scheme.validityMonths,
+            },
+            qrCodeUrl: certificate.qrCodeUrl,
+            openBadgeJson: certificate.openBadgeJson
+              ? JSON.parse(certificate.openBadgeJson) as Record<string, unknown>
+              : null,
+            timeline,
+            linkedInUrl: result === "active"
+              ? buildLinkedInAddToProfileUrl({
+                  schemeName: certificate.scheme.name,
+                  certificateNumber: certificate.certificateNumber,
+                  issuedAt: certificate.issuedAt,
+                  expiresAt: certificate.expiresAt,
+                })
+              : null,
+          }}
+        />
+      </NextIntlClientProvider>
       <div className="text-center pb-6 flex items-center justify-center gap-4 flex-wrap">
         <Link
           href="/registry"
           className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
         >
-          View Full Certificate Register →
+          {t("viewRegistry")}
         </Link>
         <span className="text-slate-200 text-xs">|</span>
         <Link
           href="/about"
           className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-blue-600 transition-colors"
         >
-          About TrueMark Global →
+          {t("aboutLink")}
         </Link>
       </div>
     </>

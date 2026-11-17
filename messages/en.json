@@ -1,0 +1,62 @@
+{
+  "Verify": {
+    "trustBar": "Official Truemark Global Certificate Registry · All certificates are digitally verified",
+    "tooManyRequestsTitle": "Too many requests",
+    "tooManyRequestsBody": "Please wait a moment before verifying another certificate.",
+    "status": {
+      "active": {
+        "label": "Valid Certificate",
+        "description": "This certificate is authentic and currently valid."
+      },
+      "expired": {
+        "label": "Certificate Expired",
+        "description": "This certificate was authentic but has passed its expiry date and is no longer current."
+      },
+      "revoked": {
+        "label": "Certificate Revoked",
+        "description": "This certificate has been revoked and is no longer valid. See the revocation reason below."
+      },
+      "not_found": {
+        "label": "Certificate Not Found",
+        "description": "No certificate with this number was found in our registry."
+      }
+    },
+    "copyCertNumber": "Copy certificate number",
+    "verifiedAt": "Verified at {time} UTC",
+    "revocationReasonLabel": "Revocation Reason",
+    "revokedOn": "Revoked on {date}",
+    "certificateOfCompetence": "Certificate of Competence",
+    "awardedTo": "Awarded to",
+    "accreditedBadge": "Truemark Global · ISO/IEC 17024 Accredited",
+    "details": {
+      "certificateNumber": "Certificate Number",
+      "status": "Status",
+      "issued": "Issued",
+      "expires": "Expires",
+      "validityPeriod": "Validity Period",
+      "validityMonths": "{months} months",
+      "certificationBody": "Certification Body",
+      "certificationBodyName": "Truemark Global"
+    },
+    "aboutCertification": "About this certification",
+    "addToLinkedIn": "Add to your LinkedIn profile",
+    "qrVerification": "QR Verification",
+    "qrDescription": "Scan this QR code to verify this certificate online. The QR code links directly to this verification page.",
+    "copyVerificationUrl": "Copy verification URL",
+    "statusHistory": "Status History",
+    "timeline": {
+      "CERTIFICATE_ISSUED": "Certificate issued",
+      "CERTIFICATE_RENEWED": "Certificate renewed",
+      "CERTIFICATE_REVOKED": "Certificate revoked"
+    },
+    "openBadgeCredential": "Open Badge 3.0 Credential",
+    "verifiableCredential": "Verifiable Credential",
+    "copyJson": "Copy JSON",
+    "openBadgeDescription": "This Open Badge 3.0 verifiable credential is signed by Truemark Global and can be verified by any Open Badges-compatible platform or employer. The badge is compliant with the IMS Global Open Badges 3.0 specification.",
+    "footerTagline": "Truemark Global Certification Registry · ISO/IEC 17024:2012 Accredited",
+    "enquiriesPrefix": "For enquiries:",
+    "viewRegistry": "View Full Certificate Register →",
+    "aboutLink": "About TrueMark Global →",
+    "language": "Language"
+  }
+}
