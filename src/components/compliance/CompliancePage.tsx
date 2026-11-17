@@ -60,8 +60,8 @@ const ISO_CLAUSES: Array<{
       s !== "green"
         ? {
             text: "Conflict of interest declarations are below recommended levels. All examiners and certification officers should have active declarations on file.",
-            href: "/staff",
-            linkText: "Manage staff declarations",
+            href: "/compliance/coi",
+            linkText: "Manage COI declarations",
           }
         : null,
   },

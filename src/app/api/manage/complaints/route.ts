@@ -104,6 +104,27 @@ export async function PATCH(req: NextRequest) {
 
   const isFinal = ["RESOLVED", "CLOSED"].includes(body.data.status);
 
+  // Impartiality-risk process (ISO 17024 Cl.4.3) — same check as the appeals
+  // assignment route and certificate-issuance route. An anonymous complaint
+  // (no userId) has no specific subject to match, so only a blanket
+  // declaration can block it.
+  if (body.data.assignedTo && body.data.assignedTo !== complaint.assignedTo) {
+    const coiConflict = await db.cOIDeclaration.findFirst({
+      where: {
+        userId: body.data.assignedTo,
+        hasConflict: true,
+        expiresAt: { gt: new Date() },
+        OR: complaint.userId ? [{ subjectUserId: complaint.userId }, { subjectUserId: null }] : [{ subjectUserId: null }],
+      },
+    });
+    if (coiConflict) {
+      return NextResponse.json(
+        { error: "Forbidden — ISO 17024 Cl.4.3: this staff member has an active conflict-of-interest declaration relevant to this complaint." },
+        { status: 409 },
+      );
+    }
+  }
+
   const updated = await db.complaint.update({
     where: { id },
     data: {
