@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type Auditor = { id: string; firstName: string; lastName: string };
 
@@ -60,6 +61,7 @@ function ScheduleModal({
   const [auditType, setAuditType] = useState("INTERNAL");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const trapRef = useFocusTrap<HTMLDivElement>(true, onClose);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,10 +84,17 @@ function ScheduleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} role="presentation" />
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="schedule-audit-modal-title"
+        tabIndex={-1}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 outline-none"
+      >
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-slate-900">Schedule New Audit</h3>
+          <h3 id="schedule-audit-modal-title" className="font-bold text-slate-900">Schedule New Audit</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100">
             <X className="w-4 h-4" />
           </button>
@@ -93,10 +102,11 @@ function ScheduleModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
+            <label htmlFor="audit-create-title" className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
               Title
             </label>
             <input
+              id="audit-create-title"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               required
               value={title}
@@ -106,10 +116,11 @@ function ScheduleModal({
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
+            <label htmlFor="audit-create-scope" className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
               Scope
             </label>
             <textarea
+              id="audit-create-scope"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
               rows={3}
               required
@@ -121,10 +132,11 @@ function ScheduleModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
+              <label htmlFor="audit-create-planned-date" className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
                 Planned Date
               </label>
               <input
+                id="audit-create-planned-date"
                 type="date"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 required
@@ -134,10 +146,11 @@ function ScheduleModal({
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
+              <label htmlFor="audit-create-type" className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
                 Audit Type
               </label>
               <select
+                id="audit-create-type"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 value={auditType}
                 onChange={(e) => setAuditType(e.target.value)}
@@ -150,10 +163,11 @@ function ScheduleModal({
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
+            <label htmlFor="audit-create-lead-auditor" className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1">
               Lead Auditor
             </label>
             <select
+              id="audit-create-lead-auditor"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               required
               value={leadAuditorId}

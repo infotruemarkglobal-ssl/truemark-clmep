@@ -22,6 +22,25 @@ export default async function Page() {
     },
   });
 
+  // Automated primary-source verification: a declared prior-cert number is
+  // free text a candidate typed — it could be a real Truemark certificate,
+  // one from another body Truemark has no record of, or simply wrong. Look
+  // every declared number up against the real Certificate table (one batch
+  // query, not N) instead of leaving it as an inert string a reviewer must
+  // trust blind.
+  const declaredNumbers = [
+    ...new Set(
+      applications.flatMap((a) => (a.priorCertNumbers ? (JSON.parse(a.priorCertNumbers) as string[]) : [])),
+    ),
+  ];
+  const verifiedCerts = declaredNumbers.length
+    ? await db.certificate.findMany({
+        where: { certificateNumber: { in: declaredNumbers }, status: "ACTIVE", deletedAt: null },
+        select: { certificateNumber: true, scheme: { select: { name: true } } },
+      })
+    : [];
+  const verifiedMap = new Map(verifiedCerts.map((c) => [c.certificateNumber, c.scheme.name]));
+
   const serialised = applications.map((a) => ({
     id: a.id,
     status: a.status,
@@ -38,7 +57,11 @@ export default async function Page() {
       declaredExperience: a.declaredExperience,
       declaredQualification: a.declaredQualification,
       priorCertNumbers: a.priorCertNumbers
-        ? (JSON.parse(a.priorCertNumbers) as string[])
+        ? (JSON.parse(a.priorCertNumbers) as string[]).map((number) => ({
+            number,
+            verified: verifiedMap.has(number),
+            verifiedSchemeName: verifiedMap.get(number) ?? null,
+          }))
         : null,
       legalDeclarationAt: a.legalDeclarationAt?.toISOString() ?? null,
     },

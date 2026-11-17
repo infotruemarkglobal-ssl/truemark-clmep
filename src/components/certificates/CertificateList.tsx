@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type Certificate = {
   id: string;
@@ -58,6 +59,7 @@ function TermsModal({
 }) {
   const [agreed, setAgreed] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const trapRef = useFocusTrap<HTMLDivElement>(true, onClose);
 
   function handleAccept() {
     if (!agreed || isPending) return;
@@ -77,13 +79,20 @@ function TermsModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} role="presentation" />
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="terms-modal-title"
+        tabIndex={-1}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col outline-none"
+      >
         {/* Header */}
         <div className="flex items-start justify-between p-6 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary shrink-0" />
-            <h2 className="font-bold text-slate-900">Certificate Terms of Use</h2>
+            <h2 id="terms-modal-title" className="font-bold text-slate-900">Certificate Terms of Use</h2>
           </div>
           <button
             onClick={onClose}

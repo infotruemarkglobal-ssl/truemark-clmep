@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type Lesson = {
   id: string;
@@ -630,6 +631,9 @@ function AddModuleModal({ onAdd, onClose }: { onAdd: (title: string) => void; on
       <div className="space-y-3">
         <div>
           <Label>Module Title *</Label>
+          {/* eslint-disable-next-line jsx-a11y/no-autofocus -- moves focus
+              into a just-opened modal's first field (ARIA APG dialog
+              pattern), not a page-load steal. */}
           <Input autoFocus className="mt-1" placeholder="e.g. Introduction to ISO 37001" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onAdd(title)} />
         </div>
         <div className="flex gap-2 pt-1">
@@ -648,6 +652,9 @@ function EditModuleModal({ module, onSave, onClose }: { module: Module; onSave: 
       <div className="space-y-3">
         <div>
           <Label>Module Title *</Label>
+          {/* eslint-disable-next-line jsx-a11y/no-autofocus -- moves focus
+              into a just-opened modal's first field (ARIA APG dialog
+              pattern), not a page-load steal. */}
           <Input autoFocus className="mt-1" value={title} onChange={(e) => setTitle(e.target.value)} />
         </div>
         <div className="flex gap-2 pt-1">
@@ -1109,6 +1116,9 @@ function LessonModal({
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <Label>Lesson Title *</Label>
+            {/* eslint-disable-next-line jsx-a11y/no-autofocus -- moves focus
+                into a just-opened modal's first field (ARIA APG dialog
+                pattern), not a page-load steal. */}
             <Input autoFocus className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
           </div>
           <div>
@@ -1280,11 +1290,19 @@ function LessonModal({
 }
 
 function Modal({ title, children, onClose, wide }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+  const trapRef = useFocusTrap<HTMLDivElement>(true, onClose);
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className={cn("bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto w-full", wide ? "max-w-xl" : "max-w-md")}>
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="course-editor-modal-title"
+        tabIndex={-1}
+        className={cn("bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto w-full outline-none", wide ? "max-w-xl" : "max-w-md")}
+      >
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
-          <h3 className="font-bold text-slate-900">{title}</h3>
+          <h3 id="course-editor-modal-title" className="font-bold text-slate-900">{title}</h3>
           <button type="button" onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition">
             ✕
           </button>

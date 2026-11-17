@@ -4,13 +4,19 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
-import { Search, Filter, BookOpen, Clock, Award, Users, ChevronRight, CheckCircle2, Play } from "lucide-react";
+import { Search, Filter, BookOpen, Clock, Award, Users, ChevronRight, CheckCircle2, Play, CreditCard } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogDescription,
+  DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+
+const INSTALMENT_OPTIONS = [1, 2, 3, 4] as const;
 
 type Course = {
   id: string;
@@ -47,6 +53,8 @@ export default function CourseCatalog({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "enrolled" | "available" | "completed">("all");
   const [loading, setLoading] = useState<string | null>(null);
+  const [checkoutCourse, setCheckoutCourse] = useState<Course | null>(null);
+  const [numberOfInstalments, setNumberOfInstalments] = useState<(typeof INSTALMENT_OPTIONS)[number]>(1);
 
   const filtered = useMemo(() => {
     return courses.filter((c) => {
@@ -64,13 +72,13 @@ export default function CourseCatalog({
     });
   }, [courses, enrolmentMap, search, filter]);
 
-  async function handleEnrol(courseId: string) {
+  async function handleEnrol(courseId: string, instalments: number = 1) {
     setLoading(courseId);
     try {
       const res = await fetch("/api/payments/paystack/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseId }),
+        body: JSON.stringify({ courseId, numberOfInstalments: instalments }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to enrol");
@@ -86,6 +94,22 @@ export default function CourseCatalog({
     } finally {
       setLoading(null);
     }
+  }
+
+  function openCheckout(course: Course) {
+    if (course.price === 0) {
+      handleEnrol(course.id);
+      return;
+    }
+    setNumberOfInstalments(1);
+    setCheckoutCourse(course);
+  }
+
+  function confirmCheckout() {
+    if (!checkoutCourse) return;
+    const course = checkoutCourse;
+    setCheckoutCourse(null);
+    handleEnrol(course.id, numberOfInstalments);
   }
 
   return (
@@ -253,7 +277,7 @@ export default function CourseCatalog({
                     ) : (
                       <Button
                         size="sm"
-                        onClick={() => handleEnrol(course.id)}
+                        onClick={() => openCheckout(course)}
                         disabled={loading === course.id}
                         className="gap-1"
                         title={course.price === 0 ? "Enrol in this course for free — no payment required" : `Pay ${course.currency} ${course.price.toLocaleString()} to enrol in this course`}
@@ -269,6 +293,66 @@ export default function CourseCatalog({
           })}
         </div>
       )}
+
+      {/* Payment options — pay in full or split into instalments */}
+      <Dialog open={!!checkoutCourse} onOpenChange={(o) => !o && setCheckoutCourse(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>How would you like to pay?</DialogTitle>
+            <DialogDescription>
+              {checkoutCourse?.title}
+            </DialogDescription>
+          </DialogHeader>
+
+          {checkoutCourse && (
+            <div className="space-y-2">
+              {INSTALMENT_OPTIONS.map((n) => {
+                const perInstalment = Math.round((checkoutCourse.price / n) * 100) / 100;
+                return (
+                  <label
+                    key={n}
+                    className={cn(
+                      "flex items-center justify-between gap-3 rounded-xl border p-3 cursor-pointer transition",
+                      numberOfInstalments === n ? "border-primary bg-primary/5" : "border-slate-200 hover:border-slate-300"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        name="numberOfInstalments"
+                        checked={numberOfInstalments === n}
+                        onChange={() => setNumberOfInstalments(n)}
+                        className="accent-primary"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">
+                          {n === 1 ? "Pay in full" : `Pay in ${n} instalments`}
+                        </p>
+                        {n > 1 && (
+                          <p className="text-xs text-slate-500">
+                            {checkoutCourse.currency} {perInstalment.toLocaleString()} today, then {n - 1} more every 30 days
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-900 shrink-0">
+                      {checkoutCourse.currency} {(n === 1 ? checkoutCourse.price : perInstalment).toLocaleString()}
+                      {n > 1 && <span className="text-xs font-normal text-slate-400">/mo</span>}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCheckoutCourse(null)}>Cancel</Button>
+            <Button onClick={confirmCheckout} className="gap-1.5">
+              <CreditCard className="w-3.5 h-3.5" /> Continue to payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

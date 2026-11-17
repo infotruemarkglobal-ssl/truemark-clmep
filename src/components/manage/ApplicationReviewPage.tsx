@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type Application = {
   id: string;
@@ -21,7 +22,7 @@ type Application = {
   declarations: {
     declaredExperience: number | null;
     declaredQualification: string | null;
-    priorCertNumbers: string[] | null;
+    priorCertNumbers: { number: string; verified: boolean; verifiedSchemeName: string | null }[] | null;
     legalDeclarationAt: string | null;
   };
   documents: {
@@ -43,11 +44,19 @@ function RejectModal({
   isPending: boolean;
 }) {
   const [reason, setReason] = useState("");
+  const trapRef = useFocusTrap<HTMLDivElement>(true, onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-        <h3 className="font-bold text-slate-900">Reject Application</h3>
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} role="presentation" />
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reject-application-modal-title"
+        tabIndex={-1}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 outline-none"
+      >
+        <h3 id="reject-application-modal-title" className="font-bold text-slate-900">Reject Application</h3>
         <p className="text-sm text-slate-600">
           Provide a clear reason for rejection. The candidate will receive this message and may
           reapply once the issue is resolved.
@@ -184,10 +193,25 @@ function ApplicationCard({ app, onDecision }: { app: Application; onDecision: (i
                   </p>
                 )}
                 {app.declarations.priorCertNumbers?.length ? (
-                  <p>
-                    <span className="text-slate-500">Prior certs:</span>{" "}
-                    {app.declarations.priorCertNumbers.join(", ")}
-                  </p>
+                  <div>
+                    <span className="text-slate-500">Prior certs:</span>
+                    <div className="mt-1 space-y-1">
+                      {app.declarations.priorCertNumbers.map((cert) => (
+                        <div key={cert.number} className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono text-xs">{cert.number}</span>
+                          {cert.verified ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] gap-1">
+                              <CheckCircle2 className="w-2.5 h-2.5" /> Verified — {cert.verifiedSchemeName}
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-slate-100 text-slate-500 border-0 text-[10px]" title="No matching active Truemark certificate — may be from another certifying body, or incorrect">
+                              No matching Truemark record
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 ) : null}
                 {app.declarations.legalDeclarationAt && (
                   <p className="text-xs text-slate-400">

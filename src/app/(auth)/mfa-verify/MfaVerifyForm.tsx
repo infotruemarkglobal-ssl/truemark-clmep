@@ -36,6 +36,11 @@ export default function MfaVerifyForm({ next }: { next: string }) {
             autoComplete="one-time-code"
             placeholder="000000"
             className="mt-1 text-center text-2xl tracking-[0.5em] font-mono"
+            // This is the only control on a dedicated, single-purpose
+            // verification page (a full navigation, not an in-page focus
+            // steal); a screen reader still announces the heading before
+            // the focused control.
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- see above
             autoFocus
           />
           {state?.error && (

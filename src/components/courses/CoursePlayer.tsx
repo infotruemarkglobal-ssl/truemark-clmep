@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import ApplicationModal, { type Requirements } from "@/components/courses/ApplicationModal";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type Lesson = { id: string; title: string; contentType: string; contentUrl: string | null; contentData: string | null; durationMins: number | null; isPreview: boolean; scormPackageId?: string | null };
 type Module = { id: string; title: string; order: number; lessons: Lesson[] };
@@ -190,6 +191,8 @@ export default function CoursePlayer({
     action: string;
   } | null>(null);
   const [applicationPending, setApplicationPending] = useState(false);
+  const eligibilityTrapRef = useFocusTrap<HTMLDivElement>(!!eligibilityBlock, () => setEligibilityBlock(null));
+  const applicationPendingTrapRef = useFocusTrap<HTMLDivElement>(applicationPending, () => setApplicationPending(false));
   const [appModal, setAppModal] = useState<{
     schemeId: string;
     schemeName: string;
@@ -354,14 +357,21 @@ export default function CoursePlayer({
     {/* Eligibility blocking modal */}
     {eligibilityBlock && (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setEligibilityBlock(null)} />
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setEligibilityBlock(null)} role="presentation" />
+        <div
+          ref={eligibilityTrapRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="eligibility-block-modal-title"
+          tabIndex={-1}
+          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 outline-none"
+        >
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
               <AlertTriangle className="w-5 h-5 text-red-600" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">Not Eligible</h3>
+              <h3 id="eligibility-block-modal-title" className="font-bold text-slate-900">Not Eligible</h3>
               <p className="text-sm text-slate-600 mt-1">{eligibilityBlock.action}</p>
             </div>
           </div>
@@ -382,14 +392,21 @@ export default function CoursePlayer({
     {/* Application pending modal */}
     {applicationPending && (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setApplicationPending(false)} />
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setApplicationPending(false)} role="presentation" />
+        <div
+          ref={applicationPendingTrapRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="application-pending-modal-title"
+          tabIndex={-1}
+          className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 outline-none"
+        >
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
               <CheckCircle2 className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900">Application Under Review</h3>
+              <h3 id="application-pending-modal-title" className="font-bold text-slate-900">Application Under Review</h3>
               <p className="text-sm text-slate-600 mt-1">
                 Your application is currently pending review by a Certification Officer.
                 You will be notified once a decision has been made.
@@ -596,6 +613,12 @@ export default function CoursePlayer({
                   </div>
                 ) : (
                   <div className="bg-black aspect-video w-full">
+                    {/* eslint-disable-next-line jsx-a11y/media-has-caption --
+                        WCAG 1.2.2 needs a real <track> pointing at a VTT
+                        caption file, but lessons have no caption-upload
+                        pipeline yet (no field on the Lesson model to hold
+                        one) — captioning self-hosted lesson video is tracked
+                        as future work, not something a lint fix can satisfy. */}
                     <video
                       key={activeLesson.id}
                       className="w-full h-full"

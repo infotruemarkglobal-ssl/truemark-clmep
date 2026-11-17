@@ -132,6 +132,15 @@ export default function NotificationsPage({ notifications }: { notifications: No
                     if (!n.read) markRead(n.id);
                     if (n.link) router.push(n.link);
                   }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      if (!n.read) markRead(n.id);
+                      if (n.link) router.push(n.link);
+                    }
+                  }}
                 >
                   <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", colorClass)}>
                     <Icon className="w-4 h-4" />

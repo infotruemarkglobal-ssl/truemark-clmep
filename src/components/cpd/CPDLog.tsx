@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -101,6 +102,7 @@ export default function CPDLog({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showModal, setShowModal] = useState(false);
+  const modalTrapRef = useFocusTrap<HTMLDivElement>(showModal, closeModal);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [preselectedSchemeId, setPreselectedSchemeId] = useState<string>("");
@@ -465,11 +467,19 @@ export default function CPDLog({
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+          role="presentation"
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] overflow-y-auto">
+          <div
+            ref={modalTrapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="log-cpd-modal-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] overflow-y-auto outline-none"
+          >
             {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl">
-              <h3 className="font-bold text-slate-900 text-lg">Log CPD Activity</h3>
+              <h3 id="log-cpd-modal-title" className="font-bold text-slate-900 text-lg">Log CPD Activity</h3>
               <button
                 onClick={closeModal}
                 className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors"

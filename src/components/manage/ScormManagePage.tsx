@@ -142,6 +142,15 @@ export default function ScormManagePage({
             setDragOver(false);
             handleFilePick(e.dataTransfer.files);
           }}
+          role="button"
+          tabIndex={0}
+          aria-label="Choose a SCORM package to upload"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileRef.current?.click();
+            }
+          }}
         >
           <input
             ref={fileRef}

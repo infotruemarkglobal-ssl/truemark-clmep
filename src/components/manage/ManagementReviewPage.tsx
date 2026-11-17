@@ -122,8 +122,9 @@ export default function ManagementReviewPage({
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
         <div className="flex flex-wrap items-end gap-4">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">From</label>
+            <label htmlFor="mgmt-review-from-date" className="block text-xs font-medium text-slate-600 mb-1">From</label>
             <input
+              id="mgmt-review-from-date"
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
@@ -131,8 +132,9 @@ export default function ManagementReviewPage({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">To</label>
+            <label htmlFor="mgmt-review-to-date" className="block text-xs font-medium text-slate-600 mb-1">To</label>
             <input
+              id="mgmt-review-to-date"
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}

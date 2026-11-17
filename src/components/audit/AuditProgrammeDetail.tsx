@@ -229,8 +229,9 @@ export default function AuditProgrammeDetail({
           <h2 className="font-semibold text-slate-900">Edit Audit Details</h2>
 
           <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Title</label>
+            <label htmlFor="audit-edit-title" className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Title</label>
             <input
+              id="audit-edit-title"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
@@ -238,8 +239,9 @@ export default function AuditProgrammeDetail({
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Scope</label>
+            <label htmlFor="audit-edit-scope" className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Scope</label>
             <textarea
+              id="audit-edit-scope"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
               rows={3}
               value={editScope}
@@ -249,8 +251,9 @@ export default function AuditProgrammeDetail({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Planned Date</label>
+              <label htmlFor="audit-edit-planned-date" className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Planned Date</label>
               <input
+                id="audit-edit-planned-date"
                 type="date"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 value={editPlannedDate}
@@ -258,8 +261,9 @@ export default function AuditProgrammeDetail({
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Lead Auditor</label>
+              <label htmlFor="audit-edit-lead-auditor" className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1">Lead Auditor</label>
               <select
+                id="audit-edit-lead-auditor"
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 value={editLeadAuditorId}
                 onChange={(e) => setEditLeadAuditorId(e.target.value)}

@@ -7,7 +7,7 @@ import * as Sentry from "@sentry/nextjs";
 import {
   Clock, Flag, ChevronLeft, ChevronRight, AlertTriangle,
   CheckCircle2, Send, Shield, Eye, Maximize2, X,
-  Camera, CameraOff, VideoOff,
+  Camera, CameraOff, VideoOff, LayoutGrid,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -80,6 +80,10 @@ export default function ExamInterface({
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Below `lg` the question-navigator sidebar is hidden entirely (see the
+  // `aside` below) — this drives a bottom-sheet substitute so a candidate on
+  // a phone still has a way to jump between questions.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const submittingRef = useRef(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Announces timer thresholds to screen readers without polluting every second
@@ -590,6 +594,41 @@ export default function ExamInterface({
   const unansweredCount = questions.filter((q) => !isAnswered(q.id)).length;
   const answeredCountActual = questions.length - unansweredCount;
 
+  // Shared between the desktop sidebar and the mobile bottom-sheet so both
+  // stay in sync without duplicating the button-grid markup.
+  function renderNavigatorGrid(onSelect: (i: number) => void) {
+    return (
+      <div className="grid grid-cols-5 gap-1.5">
+        {questions.map((q, i) => {
+          const answered = isAnswered(q.id);
+          const isFlagged = flagged.has(q.id);
+          const isCurrent = i === currentIndex;
+
+          return (
+            <button
+              key={q.id}
+              onClick={() => onSelect(i)}
+              aria-label={`Question ${i + 1}${isFlagged ? ", flagged" : ""}${answered ? ", answered" : ", not answered"}${isCurrent ? ", current" : ""}`}
+              aria-current={isCurrent ? "true" : undefined}
+              className={cn(
+                "aspect-square rounded-lg text-xs font-semibold flex items-center justify-center transition border",
+                isCurrent
+                  ? "bg-primary border-primary text-white"
+                  : isFlagged
+                    ? "bg-amber-500/20 border-amber-500/50 text-amber-400"
+                    : answered
+                      ? "bg-emerald-600/20 border-emerald-500/30 text-emerald-400"
+                      : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500"
+              )}
+            >
+              {isFlagged && !isCurrent ? <Flag className="w-2.5 h-2.5" aria-hidden="true" /> : i + 1}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-950 flex flex-col">
       {/* Hidden canvas for frame analysis */}
@@ -603,10 +642,17 @@ export default function ExamInterface({
       </div>
 
       {/* ── Top bar ── */}
-      <header className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center gap-4 shrink-0">
+      {/* flex-wrap is the overflow safety net: on a narrow phone the title
+          alone can approach the full viewport width, and with a proctoring
+          badge/violation counter/timer/fullscreen button all fixed-size and
+          un-shrinkable, a non-wrapping row would push the timer off-screen
+          and force the whole page to scroll horizontally — confirmed live at
+          375px before this fix. Wrapping to a second row keeps everything
+          reachable without any page-level horizontal scroll. */}
+      <header className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 shrink-0">
         <div className="flex items-center gap-2 text-white">
           <Shield className="w-5 h-5 text-primary shrink-0" />
-          <span className="font-semibold text-sm truncate max-w-xs">{examTitle}</span>
+          <span className="font-semibold text-sm truncate max-w-[140px] sm:max-w-xs">{examTitle}</span>
         </div>
 
         {/* Practice-mode indicator — unlimited attempts, never proctored, never
@@ -951,34 +997,7 @@ export default function ExamInterface({
           </div>
 
           <div className="flex-1 overflow-y-auto p-3">
-            <div className="grid grid-cols-5 gap-1.5">
-              {questions.map((q, i) => {
-                const answered = isAnswered(q.id);
-                const isFlagged = flagged.has(q.id);
-                const isCurrent = i === currentIndex;
-
-                return (
-                  <button
-                    key={q.id}
-                    onClick={() => setCurrentIndex(i)}
-                    aria-label={`Question ${i + 1}${isFlagged ? ", flagged" : ""}${answered ? ", answered" : ", not answered"}${isCurrent ? ", current" : ""}`}
-                    aria-current={isCurrent ? "true" : undefined}
-                    className={cn(
-                      "aspect-square rounded-lg text-xs font-semibold flex items-center justify-center transition border",
-                      isCurrent
-                        ? "bg-primary border-primary text-white"
-                        : isFlagged
-                          ? "bg-amber-500/20 border-amber-500/50 text-amber-400"
-                          : answered
-                            ? "bg-emerald-600/20 border-emerald-500/30 text-emerald-400"
-                            : "bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500"
-                    )}
-                  >
-                    {isFlagged && !isCurrent ? <Flag className="w-2.5 h-2.5" aria-hidden="true" /> : i + 1}
-                  </button>
-                );
-              })}
-            </div>
+            {renderNavigatorGrid(setCurrentIndex)}
           </div>
 
           {/* Legend */}
@@ -1009,6 +1028,59 @@ export default function ExamInterface({
           </div>
         </aside>
       </div>
+
+      {/* ── Mobile navigator trigger (the sidebar above is lg:flex-only) ── */}
+      <button
+        type="button"
+        onClick={() => setMobileNavOpen(true)}
+        aria-label={`Open question navigator — question ${currentIndex + 1} of ${questions.length}`}
+        className={cn(
+          "lg:hidden fixed right-4 z-40 flex items-center gap-2 rounded-full pl-3 pr-4 py-2.5 bg-primary text-white text-sm font-semibold shadow-lg",
+          requiresProctoring && cameraStatus === "denied" ? "bottom-24" : "bottom-4"
+        )}
+      >
+        <LayoutGrid className="w-4 h-4" aria-hidden="true" />
+        Q{currentIndex + 1}/{questions.length}
+      </button>
+
+      {/* ── Mobile navigator bottom sheet ── */}
+      {mobileNavOpen && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          <button
+            type="button"
+            aria-label="Close question navigator"
+            className="absolute inset-0 bg-black/70"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Question navigator"
+            className="absolute inset-x-0 bottom-0 max-h-[75vh] flex flex-col bg-slate-900 border-t border-slate-800 rounded-t-2xl"
+          >
+            <div className="flex items-center justify-between p-4 border-b border-slate-800 shrink-0">
+              <div>
+                <p className="text-slate-200 text-sm font-semibold">Navigator</p>
+                <p className="text-slate-500 text-xs">{answeredCountActual}/{questions.length} answered · {flaggedCount} flagged</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(false)}
+                aria-label="Close"
+                className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {renderNavigatorGrid((i) => {
+                setCurrentIndex(i);
+                setMobileNavOpen(false);
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Camera-denied persistent banner ── */}
       {requiresProctoring && cameraStatus === "denied" && (
