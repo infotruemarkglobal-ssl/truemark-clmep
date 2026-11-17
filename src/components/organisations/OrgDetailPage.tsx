@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import {
   Building2, Globe, MapPin, FileText, ShieldCheck, AlertCircle,
   Edit2, Save, X, Sparkles, ChevronLeft, Upload, Loader2, ExternalLink,
-  Users, BookOpen, CreditCard, Award, Mail, CheckCircle2, XCircle, Clock,
+  Users, BookOpen, CreditCard, Award, Mail,
+  Key, Plus, Trash2, Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +34,14 @@ type OrgMember = {
     status: string;
     lastLoginAt: string | null;
     enrolments: { courseId: string; status: string; progress: number }[];
+    certificates: {
+      certificateNumber: string;
+      status: string;
+      expiresAt: string | null;
+      schemeName: string;
+      schemeCode: string;
+      risk: "expired" | "at_risk" | "ok";
+    }[];
   };
 };
 
@@ -54,6 +64,31 @@ type Payment = {
   payer: { id: string; firstName: string; lastName: string; email: string } | null;
   courseTitle: string | null;
 };
+
+type ApiKeyRow = {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  lastUsedAt: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+  createdBy: { firstName: string; lastName: string };
+};
+
+type SsoConfigRow = {
+  id: string;
+  emailDomain: string;
+  issuerUrl: string;
+  clientId: string;
+  enabled: boolean;
+  hasClientSecret: boolean;
+};
+
+const AVAILABLE_SCOPES = [
+  { value: "members:read", label: "Read members" },
+  { value: "certificates:read", label: "Read certificate status" },
+];
 
 type Org = {
   id: string;
@@ -150,6 +185,137 @@ export default function OrgDetailPage({
   // Course assignment state (Members tab)
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [assigning, setAssigning] = useState(false);
+
+  // Compliance tab — flatten every member's certificates into one list,
+  // worst-first (expired, then soonest-to-expire, then everyone else), so
+  // the "at a glance" view actually leads with what needs attention.
+  const complianceRows = org.members
+    .flatMap((m) => m.user.certificates.map((c) => ({ member: m, cert: c })))
+    .sort((a, b) => {
+      const order = { expired: 0, at_risk: 1, ok: 2 };
+      if (order[a.cert.risk] !== order[b.cert.risk]) return order[a.cert.risk] - order[b.cert.risk];
+      if (!a.cert.expiresAt) return 1;
+      if (!b.cert.expiresAt) return -1;
+      return new Date(a.cert.expiresAt).getTime() - new Date(b.cert.expiresAt).getTime();
+    });
+  const atRiskCount = complianceRows.filter((r) => r.cert.risk === "expired" || r.cert.risk === "at_risk").length;
+
+  // API-keys tab
+  const [apiKeys, setApiKeys] = useState<ApiKeyRow[] | null>(null);
+  const [showCreateKey, setShowCreateKey] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [newKeyScopes, setNewKeyScopes] = useState<string[]>(["members:read"]);
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [createdKey, setCreatedKey] = useState<{ name: string; rawKey: string } | null>(null);
+  const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
+  const apiKeyTrapRef = useFocusTrap<HTMLDivElement>(showCreateKey, () => setShowCreateKey(false));
+
+  // SSO tab — "loading" (not fetched yet), "forbidden" (viewer isn't this
+  // org's manager), or the resolved config (null = none configured yet).
+  const [ssoConfig, setSsoConfig] = useState<SsoConfigRow | null | "loading" | "forbidden">("loading");
+  const [ssoForm, setSsoForm] = useState({ emailDomain: "", issuerUrl: "", clientId: "", clientSecret: "", enabled: true });
+  const [savingSso, setSavingSso] = useState(false);
+  const [removingSso, setRemovingSso] = useState(false);
+
+  async function loadSsoConfig() {
+    try {
+      const res = await fetch(`/api/organisations/${org.id}/sso-config`);
+      if (res.status === 403) { setSsoConfig("forbidden"); return; }
+      const data = await res.json();
+      setSsoConfig(data);
+      if (data) setSsoForm((f) => ({ ...f, emailDomain: data.emailDomain, issuerUrl: data.issuerUrl, clientId: data.clientId, enabled: data.enabled }));
+    } catch {
+      setSsoConfig("forbidden");
+    }
+  }
+
+  async function saveSsoConfig() {
+    setSavingSso(true);
+    try {
+      const res = await fetch(`/api/organisations/${org.id}/sso-config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emailDomain: ssoForm.emailDomain,
+          issuerUrl: ssoForm.issuerUrl,
+          clientId: ssoForm.clientId,
+          enabled: ssoForm.enabled,
+          ...(ssoForm.clientSecret ? { clientSecret: ssoForm.clientSecret } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save SSO configuration");
+      toast.success("SSO configuration saved");
+      setSsoForm((f) => ({ ...f, clientSecret: "" }));
+      loadSsoConfig();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save SSO configuration");
+    } finally {
+      setSavingSso(false);
+    }
+  }
+
+  async function removeSsoConfig() {
+    setRemovingSso(true);
+    try {
+      const res = await fetch(`/api/organisations/${org.id}/sso-config`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to remove SSO configuration");
+      toast.success("SSO configuration removed");
+      setSsoConfig(null);
+      setSsoForm({ emailDomain: "", issuerUrl: "", clientId: "", clientSecret: "", enabled: true });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove SSO configuration");
+    } finally {
+      setRemovingSso(false);
+    }
+  }
+
+  async function loadApiKeys() {
+    try {
+      const res = await fetch(`/api/organisations/${org.id}/api-keys`);
+      const data = await res.json();
+      if (res.ok) setApiKeys(data);
+    } catch {
+      // leave apiKeys null — the tab shows a loading/empty state either way
+    }
+  }
+
+  async function createApiKey() {
+    if (!newKeyName.trim() || newKeyScopes.length === 0) return;
+    setCreatingKey(true);
+    try {
+      const res = await fetch(`/api/organisations/${org.id}/api-keys`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newKeyName.trim(), scopes: newKeyScopes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to create API key");
+      setCreatedKey({ name: data.name, rawKey: data.rawKey });
+      setShowCreateKey(false);
+      setNewKeyName("");
+      setNewKeyScopes(["members:read"]);
+      loadApiKeys();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create API key");
+    } finally {
+      setCreatingKey(false);
+    }
+  }
+
+  async function revokeApiKey(keyId: string) {
+    setRevokingKeyId(keyId);
+    try {
+      const res = await fetch(`/api/organisations/${org.id}/api-keys/${keyId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to revoke API key");
+      toast.success("API key revoked");
+      loadApiKeys();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to revoke API key");
+    } finally {
+      setRevokingKeyId(null);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -491,6 +657,15 @@ export default function OrgDetailPage({
               className="border-2 border-dashed border-slate-200 hover:border-primary/40 rounded-xl p-8 text-center transition-colors cursor-pointer group"
               onClick={() => !uploadingDoc && fileInputRef.current?.click()}
               title="Click to select a PDF, JPG, or PNG document (max 10 MB)"
+              role="button"
+              tabIndex={0}
+              aria-label="Choose a CAC or Incorporation document to upload"
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === " ") && !uploadingDoc) {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
             >
               {uploadingDoc ? (
                 <Loader2 className="w-8 h-8 mx-auto mb-3 text-primary animate-spin" />
@@ -583,15 +758,23 @@ export default function OrgDetailPage({
       </div>
 
       {/* ── Management tabs ─────────────────────────────────────────────────── */}
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue="overview" onValueChange={(v) => {
+        if (v === "api-access" && apiKeys === null) loadApiKeys();
+        if (v === "sso" && ssoConfig === "loading") loadSsoConfig();
+      }}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="members">
             Members ({org.members.length})
           </TabsTrigger>
+          <TabsTrigger value="compliance">
+            Compliance {atRiskCount > 0 && <Badge className="ml-1.5 bg-amber-100 text-amber-700 border-0 px-1.5">{atRiskCount}</Badge>}
+          </TabsTrigger>
           <TabsTrigger value="payments">
             Payments {totalPayments > 0 && `(${totalPayments})`}
           </TabsTrigger>
+          <TabsTrigger value="api-access">API Access</TabsTrigger>
+          <TabsTrigger value="sso">Single Sign-On</TabsTrigger>
         </TabsList>
 
         {/* ── Overview tab ── */}
@@ -754,6 +937,62 @@ export default function OrgDetailPage({
           </div>
         </TabsContent>
 
+        {/* ── Compliance tab — live per-member certificate status & renewal risk ── */}
+        <TabsContent value="compliance">
+          <div className="pt-4">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              {complianceRows.length === 0 ? (
+                <div className="p-8 text-center text-sm text-slate-500">
+                  No certificates issued under this organisation&apos;s sponsorship yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50">
+                        <th className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wider">Employee</th>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wider">Certification</th>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wider">Expires</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {complianceRows.map(({ member, cert }) => {
+                        const riskStyle = cert.risk === "expired"
+                          ? "bg-red-100 text-red-700"
+                          : cert.risk === "at_risk"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-emerald-100 text-emerald-700";
+                        const riskLabel = cert.risk === "expired" ? "Expired" : cert.risk === "at_risk" ? "Renewal due soon" : cert.status;
+                        return (
+                          <tr key={`${member.id}-${cert.certificateNumber}`} className="hover:bg-slate-50">
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-slate-900">{member.user.firstName} {member.user.lastName}</p>
+                              <p className="text-xs text-slate-400">{member.user.email}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="text-slate-700">{cert.schemeName}</p>
+                              <p className="text-xs text-slate-400 font-mono">{cert.certificateNumber}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={cn("inline-flex px-2 py-0.5 rounded text-xs font-medium", riskStyle)}>
+                                {riskLabel}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                              {cert.expiresAt ? new Date(cert.expiresAt).toLocaleDateString("en-GB") : "No expiry"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
         {/* ── Payments tab ── */}
         <TabsContent value="payments">
           <div className="pt-4">
@@ -830,7 +1069,265 @@ export default function OrgDetailPage({
             </div>
           </div>
         </TabsContent>
+
+        {/* ── API Access tab ── */}
+        <TabsContent value="api-access">
+          <div className="pt-4 space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-semibold text-slate-900">Programmatic access</p>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Pull this organisation&apos;s member and certificate status into your own HR or LMS
+                    system. See the <code className="bg-slate-100 rounded px-1">/api/v1/organisations/members</code> and{" "}
+                    <code className="bg-slate-100 rounded px-1">/api/v1/organisations/certificates</code> endpoints —
+                    send <code className="bg-slate-100 rounded px-1">Authorization: Bearer &lt;key&gt;</code>.
+                  </p>
+                </div>
+                <Button size="sm" onClick={() => setShowCreateKey(true)} className="gap-2 shrink-0">
+                  <Plus className="w-3.5 h-3.5" /> New key
+                </Button>
+              </div>
+            </div>
+
+            {createdKey && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
+                <p className="font-semibold text-emerald-800 flex items-center gap-2">
+                  <Key className="w-4 h-4" /> &quot;{createdKey.name}&quot; created
+                </p>
+                <p className="text-sm text-emerald-700 mt-1">
+                  Copy this key now — it will not be shown again.
+                </p>
+                <div className="mt-3 flex items-center gap-2">
+                  <code className="flex-1 bg-white border border-emerald-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-700 overflow-x-auto">
+                    {createdKey.rawKey}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { navigator.clipboard.writeText(createdKey.rawKey); toast.success("Copied to clipboard"); }}
+                    className="gap-1.5 shrink-0"
+                  >
+                    <Copy className="w-3.5 h-3.5" /> Copy
+                  </Button>
+                </div>
+                <Button size="sm" variant="outline" className="mt-3" onClick={() => setCreatedKey(null)}>Done</Button>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              {apiKeys === null ? (
+                <div className="p-8 text-center text-sm text-slate-500">Loading…</div>
+              ) : apiKeys.length === 0 ? (
+                <div className="p-8 text-center text-sm text-slate-500">No API keys yet.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100 bg-slate-50">
+                        <th className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wider">Name</th>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wider">Key</th>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wider">Scopes</th>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wider">Last used</th>
+                        <th className="px-4 py-3 text-left font-semibold text-slate-500 text-xs uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {apiKeys.map((k) => (
+                        <tr key={k.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-slate-900">{k.name}</p>
+                            <p className="text-xs text-slate-400">by {k.createdBy.firstName} {k.createdBy.lastName}</p>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs text-slate-500">{k.keyPrefix}…</td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-1">
+                              {k.scopes.map((s) => <Badge key={s} className="bg-slate-100 text-slate-600 border-0 text-[10px]">{s}</Badge>)}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-slate-500">
+                            {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString("en-GB") : "Never"}
+                          </td>
+                          <td className="px-4 py-3">
+                            {k.revokedAt ? (
+                              <Badge className="bg-slate-100 text-slate-500 border-0 text-xs">Revoked</Badge>
+                            ) : (
+                              <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Active</Badge>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {!k.revokedAt && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => revokeApiKey(k.id)}
+                                disabled={revokingKeyId === k.id}
+                                className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+                              >
+                                {revokingKeyId === k.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />} Revoke
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── Single Sign-On tab ── */}
+        <TabsContent value="sso">
+          <div className="pt-4 space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <p className="font-semibold text-slate-900">Enterprise SSO (OIDC)</p>
+              <p className="text-sm text-slate-500 mt-1">
+                Let this organisation&apos;s employees sign in through their own identity provider (Okta, Azure AD,
+                Google Workspace, or any standards-compliant OIDC issuer) instead of a Truemark password. Resolved
+                automatically by email domain at{" "}
+                <a href="/login/sso" className="text-primary hover:underline">/login/sso</a>. SAML is not supported
+                yet — OIDC only.
+              </p>
+            </div>
+
+            {ssoConfig === "loading" ? (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center text-sm text-slate-500">Loading…</div>
+            ) : ssoConfig === "forbidden" ? (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center text-sm text-slate-500">
+                You don&apos;t have permission to configure SSO for this organisation — only the organisation&apos;s
+                own manager can.
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="sso-domain">Email domain</Label>
+                    <Input
+                      id="sso-domain"
+                      className="mt-1.5"
+                      placeholder="acme.com"
+                      value={ssoForm.emailDomain}
+                      onChange={(e) => setSsoForm((f) => ({ ...f, emailDomain: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="sso-issuer">Issuer URL</Label>
+                    <Input
+                      id="sso-issuer"
+                      className="mt-1.5"
+                      placeholder="https://acme.okta.com"
+                      value={ssoForm.issuerUrl}
+                      onChange={(e) => setSsoForm((f) => ({ ...f, issuerUrl: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="sso-client-id">Client ID</Label>
+                    <Input
+                      id="sso-client-id"
+                      className="mt-1.5"
+                      value={ssoForm.clientId}
+                      onChange={(e) => setSsoForm((f) => ({ ...f, clientId: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="sso-client-secret">
+                      Client secret {ssoConfig?.hasClientSecret && <span className="text-slate-400 font-normal">(leave blank to keep the current one)</span>}
+                    </Label>
+                    <Input
+                      id="sso-client-secret"
+                      type="password"
+                      className="mt-1.5"
+                      placeholder={ssoConfig?.hasClientSecret ? "••••••••" : ""}
+                      value={ssoForm.clientSecret}
+                      onChange={(e) => setSsoForm((f) => ({ ...f, clientSecret: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ssoForm.enabled}
+                    onChange={(e) => setSsoForm((f) => ({ ...f, enabled: e.target.checked }))}
+                    className="rounded"
+                  />
+                  Enabled
+                </label>
+                <div className="flex items-center gap-3 pt-2">
+                  <Button
+                    onClick={saveSsoConfig}
+                    disabled={savingSso || !ssoForm.emailDomain || !ssoForm.issuerUrl || !ssoForm.clientId}
+                    className="gap-2"
+                  >
+                    {savingSso ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save
+                  </Button>
+                  {ssoConfig && (
+                    <Button
+                      variant="outline"
+                      onClick={removeSsoConfig}
+                      disabled={removingSso}
+                      className="gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                    >
+                      {removingSso ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Remove SSO
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
+
+      {/* ── Create API key dialog ── */}
+      {showCreateKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div
+            ref={apiKeyTrapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-api-key-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md outline-none"
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <h2 id="create-api-key-title" className="font-bold text-slate-900 text-lg">New API key</h2>
+              <button type="button" onClick={() => setShowCreateKey(false)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <Label htmlFor="api-key-name">Name</Label>
+                <Input id="api-key-name" className="mt-1.5" placeholder="e.g. Workday sync" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} />
+              </div>
+              <div>
+                <Label>Scopes</Label>
+                <div className="mt-1.5 space-y-2">
+                  {AVAILABLE_SCOPES.map((s) => (
+                    <label key={s.value} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newKeyScopes.includes(s.value)}
+                        onChange={(e) => setNewKeyScopes((prev) => e.target.checked ? [...prev, s.value] : prev.filter((v) => v !== s.value))}
+                        className="rounded"
+                      />
+                      {s.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="px-6 pb-5 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setShowCreateKey(false)}>Cancel</Button>
+              <Button onClick={createApiKey} disabled={!newKeyName.trim() || newKeyScopes.length === 0 || creatingKey} className="gap-2">
+                {creatingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />} Create key
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

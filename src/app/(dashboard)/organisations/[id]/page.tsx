@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getCachedSession as auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { USER_ROLES } from "@/lib/constants";
+import { USER_ROLES, RENEWAL_WARNINGS_DAYS } from "@/lib/constants";
 import { can } from "@/lib/permissions";
 import OrgDetailPage from "@/components/organisations/OrgDetailPage";
 
@@ -26,7 +26,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
   // Run all primary queries in parallel — org notFound check gates the secondary
   // user/course resolution for payment history below.
-  const [org, assignableCourses, purchases, certCount, activeEnrolments, completedEnrolments, totalPayments] =
+  const [org, assignableCourses, purchases, certCount, activeEnrolments, completedEnrolments, totalPayments, certificates] =
     await Promise.all([
       db.organisation.findUnique({
         where: { id },
@@ -71,6 +71,19 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       db.enrolment.count({ where: { organisationId: id, status: "ACTIVE" } }),
       db.enrolment.count({ where: { organisationId: id, status: "COMPLETED" } }),
       db.purchase.count({ where: { organisationId: id } }),
+      // Every certificate sponsored by this org, live — the Compliance tab
+      // below is a real per-member view, not just the aggregate certCount.
+      db.certificate.findMany({
+        where: { organisationId: id, deletedAt: null },
+        select: {
+          userId: true,
+          certificateNumber: true,
+          status: true,
+          expiresAt: true,
+          scheme: { select: { name: true, code: true } },
+        },
+        orderBy: { expiresAt: "asc" },
+      }),
     ]);
 
   if (!org) notFound();
@@ -97,6 +110,24 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
   const payerMap = new Map(payerUsers.map((u) => [u.id, u]));
   const paymentCourseMap = new Map(paymentCourses.map((c) => [c.id, c]));
+
+  // Compliance tab: per-member certificate list with a live renewal-risk
+  // flag. Computed fresh on every request from real Certificate rows —
+  // never a cached/self-reported field, which is the point of this tab.
+  const now = new Date();
+  const nearestWarningDays = Math.max(...RENEWAL_WARNINGS_DAYS);
+  const certificatesByUser = new Map<string, typeof certificates>();
+  for (const cert of certificates) {
+    const list = certificatesByUser.get(cert.userId) ?? [];
+    list.push(cert);
+    certificatesByUser.set(cert.userId, list);
+  }
+  function riskLevel(cert: (typeof certificates)[number]): "expired" | "at_risk" | "ok" {
+    if (cert.status !== "ACTIVE" || !cert.expiresAt) return cert.status === "ACTIVE" ? "ok" : "expired";
+    if (cert.expiresAt < now) return "expired";
+    const daysLeft = (cert.expiresAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000);
+    return daysLeft <= nearestWarningDays ? "at_risk" : "ok";
+  }
 
   const serialised = {
     id: org.id,
@@ -128,6 +159,14 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         status: m.user.status,
         lastLoginAt: m.user.lastLoginAt?.toISOString() ?? null,
         enrolments: m.user.enrolments,
+        certificates: (certificatesByUser.get(m.user.id) ?? []).map((c) => ({
+          certificateNumber: c.certificateNumber,
+          status: c.status,
+          expiresAt: c.expiresAt?.toISOString() ?? null,
+          schemeName: c.scheme.name,
+          schemeCode: c.scheme.code,
+          risk: riskLevel(c),
+        })),
       },
     })),
   };

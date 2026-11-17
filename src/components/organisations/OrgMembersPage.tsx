@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import Papa from "papaparse";
 import {
   Users, Plus, Search, Trash2, BookOpen, ChevronDown, ChevronRight,
   CheckCircle2, AlertTriangle, UserPlus, Mail, X, Send, Building2,
-  Clock, Award, Loader2, UserCheck, ShieldAlert,
+  Clock, Award, Loader2, UserCheck, ShieldAlert, Upload, FileSpreadsheet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type MemberEnrolment = {
   courseId: string;
@@ -68,6 +70,9 @@ type SeatPool = {
 type AddMode = "add" | "create";
 type Tab = "members" | "seats";
 
+type BulkRow = { email: string; firstName?: string; lastName?: string };
+type BulkRowResult = { email: string; ok: boolean; action: string; error?: string };
+
 export default function OrgMembersPage({
   org,
   members: initialMembers,
@@ -92,6 +97,71 @@ export default function OrgMembersPage({
   const [assignSeat, setAssignSeat] = useState<SeatPool | null>(null);
   const [assignUserId, setAssignUserId] = useState("");
   const [seatAssigning, setSeatAssigning] = useState(false);
+
+  // Bulk-CSV upload state
+  const [bulkSeat, setBulkSeat] = useState<SeatPool | null>(null);
+  const [bulkRows, setBulkRows] = useState<BulkRow[]>([]);
+  const [bulkParseErrors, setBulkParseErrors] = useState<string[]>([]);
+  const [bulkResults, setBulkResults] = useState<BulkRowResult[] | null>(null);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const bulkFileRef = useRef<HTMLInputElement>(null);
+  const bulkTrapRef = useFocusTrap<HTMLDivElement>(!!bulkSeat, () => closeBulkModal());
+
+  function closeBulkModal() {
+    setBulkSeat(null);
+    setBulkRows([]);
+    setBulkParseErrors([]);
+    setBulkResults(null);
+  }
+
+  function handleBulkFile(file: File) {
+    setBulkResults(null);
+    Papa.parse<Record<string, string>>(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (h) => h.trim().toLowerCase(),
+      complete: (res) => {
+        const errors: string[] = [];
+        const rows: BulkRow[] = [];
+        res.data.forEach((raw, i) => {
+          const email = raw.email?.trim();
+          if (!email) { errors.push(`Row ${i + 2}: missing email`); return; }
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errors.push(`Row ${i + 2}: "${email}" is not a valid email`); return; }
+          rows.push({
+            email,
+            firstName: raw.firstname?.trim() || raw["first name"]?.trim() || undefined,
+            lastName: raw.lastname?.trim() || raw["last name"]?.trim() || undefined,
+          });
+        });
+        if (res.errors.length) errors.push(...res.errors.map((e) => e.message));
+        setBulkParseErrors(errors);
+        setBulkRows(rows);
+      },
+      error: (err) => setBulkParseErrors([err.message]),
+    });
+  }
+
+  async function submitBulkUpload() {
+    if (!bulkSeat || bulkRows.length === 0) return;
+    setBulkUploading(true);
+    try {
+      const res = await fetch(`/api/organisations/${org.id}/members/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seatId: bulkSeat.id, rows: bulkRows }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Bulk upload failed");
+      setBulkResults(data.results);
+      const succeeded = (data.results as BulkRowResult[]).filter((r) => r.ok).length;
+      toast.success(`${succeeded} of ${bulkRows.length} rows processed successfully`);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Bulk upload failed");
+    } finally {
+      setBulkUploading(false);
+    }
+  }
 
   async function handleAssignSeat() {
     if (!assignSeat || !assignUserId) return;
@@ -370,16 +440,27 @@ export default function OrgMembersPage({
                         </Button>
                       </div>
                     ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => { setAssignSeat(pool); setAssignUserId(""); }}
-                        className="gap-2"
-                        disabled={eligible.length === 0}
-                        title={eligible.length === 0 ? "All members already assigned" : undefined}
-                      >
-                        <UserCheck className="w-3 h-3" /> Assign a Seat
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setAssignSeat(pool); setAssignUserId(""); }}
+                          className="gap-2"
+                          disabled={eligible.length === 0}
+                          title={eligible.length === 0 ? "All members already assigned" : undefined}
+                        >
+                          <UserCheck className="w-3 h-3" /> Assign a Seat
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setBulkSeat(pool)}
+                          className="gap-2"
+                          title="Upload a CSV of emails to assign many seats at once"
+                        >
+                          <FileSpreadsheet className="w-3 h-3" /> Bulk assign via CSV
+                        </Button>
+                      </div>
                     )
                   )}
                 </div>
@@ -774,6 +855,134 @@ export default function OrgMembersPage({
         </div>
       )}
       </> /* end members tab */}
+
+      {/* ── Bulk seat assignment via CSV ─────────────────────────────────────── */}
+      {bulkSeat && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div
+            ref={bulkTrapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-upload-modal-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto outline-none"
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <div>
+                <h2 id="bulk-upload-modal-title" className="font-bold text-slate-900 text-lg">Bulk assign via CSV</h2>
+                <p className="text-xs text-slate-500 mt-0.5">{bulkSeat.courseTitle} · {bulkSeat.totalSeats - bulkSeat.usedSeats} seats available</p>
+              </div>
+              <button type="button" onClick={closeBulkModal} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {!bulkResults && (
+                <>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    <p className="font-medium text-slate-700 mb-1">CSV format</p>
+                    <p>One row per person. Required column: <code className="bg-white border border-slate-200 rounded px-1">email</code>. Optional: <code className="bg-white border border-slate-200 rounded px-1">firstName</code>, <code className="bg-white border border-slate-200 rounded px-1">lastName</code> — needed only for emails with no existing account, to create one.</p>
+                  </div>
+
+                  <input
+                    ref={bulkFileRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBulkFile(f); }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => bulkFileRef.current?.click()}
+                    className="w-full border-2 border-dashed border-slate-200 hover:border-primary/40 rounded-xl py-8 text-center transition-colors"
+                  >
+                    <Upload className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                    <p className="text-sm font-medium text-slate-600">Click to choose a CSV file</p>
+                  </button>
+
+                  {bulkParseErrors.length > 0 && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 space-y-1 max-h-32 overflow-y-auto">
+                      {bulkParseErrors.map((e, i) => <p key={i}>{e}</p>)}
+                    </div>
+                  )}
+
+                  {bulkRows.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-slate-700 mb-2">{bulkRows.length} row{bulkRows.length !== 1 ? "s" : ""} ready to upload</p>
+                      <div className="rounded-xl border border-slate-200 overflow-hidden max-h-56 overflow-y-auto">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-semibold text-slate-500">Email</th>
+                              <th className="px-3 py-2 text-left font-semibold text-slate-500">First name</th>
+                              <th className="px-3 py-2 text-left font-semibold text-slate-500">Last name</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {bulkRows.map((r, i) => (
+                              <tr key={i}>
+                                <td className="px-3 py-1.5 text-slate-700">{r.email}</td>
+                                <td className="px-3 py-1.5 text-slate-500">{r.firstName ?? "—"}</td>
+                                <td className="px-3 py-1.5 text-slate-500">{r.lastName ?? "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {bulkResults && (
+                <div>
+                  <p className="text-sm font-medium text-slate-700 mb-2">
+                    {bulkResults.filter((r) => r.ok).length} of {bulkResults.length} rows succeeded
+                  </p>
+                  <div className="rounded-xl border border-slate-200 overflow-hidden max-h-72 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold text-slate-500">Email</th>
+                          <th className="px-3 py-2 text-left font-semibold text-slate-500">Result</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {bulkResults.map((r, i) => (
+                          <tr key={i}>
+                            <td className="px-3 py-1.5 text-slate-700">{r.email}</td>
+                            <td className="px-3 py-1.5">
+                              {r.ok ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="w-3 h-3" /> {r.action.replace(/_/g, " ")}</span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-red-600"><AlertTriangle className="w-3 h-3" /> {r.error}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 pb-5 flex justify-end gap-3">
+              <Button variant="outline" onClick={closeBulkModal}>{bulkResults ? "Close" : "Cancel"}</Button>
+              {!bulkResults && (
+                <Button
+                  onClick={submitBulkUpload}
+                  disabled={bulkRows.length === 0 || bulkUploading}
+                  className="gap-2 min-w-32"
+                >
+                  {bulkUploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</> : <><Upload className="w-4 h-4" /> Upload {bulkRows.length || ""}</>}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
