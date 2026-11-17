@@ -17,7 +17,7 @@ export async function PATCH(
 
   const { id } = await params;
 
-  const existing = await db.certificationScheme.findUnique({ where: { id }, select: { id: true } });
+  const existing = await db.certificationScheme.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Scheme not found" }, { status: 404 });
 
   let body: Record<string, unknown>;
@@ -25,6 +25,26 @@ export async function PATCH(
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  // Formal version control (ISO 17024 Cl.7.3) — approving a scheme's current
+  // settings is a distinct action from editing them, same pattern as
+  // ExamPaper (src/app/api/manage/exams/[id]/route.ts).
+  if (body?.action === "approve") {
+    if (existing.approvalStatus === "APPROVED") {
+      return NextResponse.json({ error: "This scheme's current settings are already approved" }, { status: 409 });
+    }
+    const updated = await db.certificationScheme.update({
+      where: { id },
+      data: { approvalStatus: "APPROVED", approvedBy: session.user.id, approvedAt: new Date() },
+    });
+    await auditLog({
+      userId: session.user.id,
+      action: "SCHEME_APPROVED",
+      entityType: "CertificationScheme",
+      entityId: id,
+    });
+    return NextResponse.json(updated);
   }
 
   // Whitelist updatable fields — prevent accidental mutation of immutable keys (id, createdAt).
@@ -58,9 +78,18 @@ export async function PATCH(
     }
   }
 
+  // Substantive changes to the scheme's own definition invalidate the
+  // current approval — content-only fields, not eligibility/renewal toggles,
+  // which are configuration rather than the certifiable standard itself.
+  const CONTENT_FIELDS = ["name", "description", "validityMonths", "passMark", "maxAttempts", "cpdHoursRequired", "standardVersion"] as const;
+  const isContentEdit = CONTENT_FIELDS.some((f) => f in updateData);
+
   const updated = await db.certificationScheme.update({
     where: { id },
-    data: updateData as Parameters<typeof db.certificationScheme.update>[0]["data"],
+    data: {
+      ...(updateData as Parameters<typeof db.certificationScheme.update>[0]["data"]),
+      ...(isContentEdit ? { approvalStatus: "DRAFT", approvedBy: null, approvedAt: null } : {}),
+    },
   });
 
   await auditLog({

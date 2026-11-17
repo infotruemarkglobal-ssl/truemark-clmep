@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type Paper = {
   id: string;
@@ -23,6 +24,9 @@ type Paper = {
   requiresProctoring: boolean;
   isPractice: boolean;
   version: number;
+  approvalStatus: string;
+  approvedByName: string | null;
+  approvedAt: string | null;
   createdAt: string;
   creator: { firstName: string; lastName: string };
   scheme: { name: string; code: string } | null;
@@ -36,13 +40,17 @@ type Scheme = { id: string; name: string; code: string };
 export default function ManageExamsPage({
   papers,
   schemes,
+  canApprove,
 }: {
   papers: Paper[];
   schemes: Scheme[];
+  canApprove: boolean;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const closeModal = () => setShowModal(false);
+  const modalTrapRef = useFocusTrap<HTMLDivElement>(showModal, closeModal);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -90,6 +98,21 @@ export default function ManageExamsPage({
       toast.error(err instanceof Error ? err.message : "Failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function approvePaper(paper: Paper) {
+    try {
+      const res = await fetch(`/api/manage/exams/${paper.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve" }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      toast.success(`Version ${paper.version} approved`);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
     }
   }
 
@@ -198,10 +221,32 @@ export default function ManageExamsPage({
                       <ToggleLeft className="w-4 h-4 text-slate-400" />
                     )}
                   </Button>
+                  {canApprove && paper.approvalStatus !== "APPROVED" && (
+                    <Button variant="ghost" size="sm" onClick={() => approvePaper(paper)} title="Approve this version">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    </Button>
+                  )}
                 </div>
-                <div className="text-right text-xs text-slate-400 shrink-0 hidden sm:block">
-                  v{paper.version}<br />
-                  {format(new Date(paper.createdAt), "d MMM yyyy")}
+                <div className="text-right text-xs shrink-0 hidden sm:block">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span className="text-slate-400">v{paper.version}</span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px]",
+                        paper.approvalStatus === "APPROVED" ? "border-emerald-200 text-emerald-700 bg-emerald-50" : "border-amber-200 text-amber-700 bg-amber-50",
+                      )}
+                    >
+                      {paper.approvalStatus === "APPROVED" ? "Approved" : "Draft"}
+                    </Badge>
+                  </div>
+                  {paper.approvalStatus === "APPROVED" && paper.approvedByName && paper.approvedAt ? (
+                    <div className="text-slate-400 mt-0.5">
+                      by {paper.approvedByName} · {format(new Date(paper.approvedAt), "d MMM yyyy")}
+                    </div>
+                  ) : (
+                    <div className="text-slate-400 mt-0.5">{format(new Date(paper.createdAt), "d MMM yyyy")}</div>
+                  )}
                 </div>
               </div>
             ))}
@@ -212,12 +257,19 @@ export default function ManageExamsPage({
       {/* Create Exam Paper Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[85vh] overflow-y-auto">
-            <h3 className="font-bold text-slate-900 text-lg mb-5">New Exam Paper</h3>
+          <div
+            ref={modalTrapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-exam-paper-modal-title"
+            tabIndex={-1}
+            className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[85vh] overflow-y-auto outline-none"
+          >
+            <h3 id="new-exam-paper-modal-title" className="font-bold text-slate-900 text-lg mb-5">New Exam Paper</h3>
             <div className="space-y-3">
               <div><Label>Title *</Label><Input className="mt-1" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></div>
 
-              <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer bg-slate-50 rounded-lg p-3 border border-slate-200">
+              <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer bg-slate-50 rounded-lg p-3 border border-slate-200" aria-label="Practice paper — unlimited attempts, never proctored, never counts toward the real attempt limit or leads to a certification decision">
                 <input
                   type="checkbox"
                   checked={form.isPractice}
@@ -265,7 +317,7 @@ export default function ManageExamsPage({
               {!form.isPractice && (
                 <div className="border-t border-slate-100 pt-3">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Proctoring</p>
-                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer mb-3">
+                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer mb-3" aria-label="Require proctoring — camera monitoring plus tab-switch limits enforced">
                     <input
                       type="checkbox"
                       checked={form.requiresProctoring}

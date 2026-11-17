@@ -43,6 +43,15 @@ export default async function Page({
   const page = hasMore ? certificates.slice(0, PAGE_SIZE) : certificates;
   const nextCursor = hasMore ? page[page.length - 1].id : null;
 
+  // Surveillance is a separate, parallel state to Certificate.status (a cert
+  // stays ACTIVE while under surveillance) — batch-fetch which of these
+  // certs have an open review rather than an N+1 per row.
+  const openReviews = await db.surveillanceReview.findMany({
+    where: { certificateId: { in: page.map((c) => c.id) }, status: { in: ["SCHEDULED", "IN_PROGRESS"] } },
+    select: { certificateId: true },
+  });
+  const underSurveillance = new Set(openReviews.map((r) => r.certificateId));
+
   const serialised = page.map((c) => ({
     id: c.id,
     certificateNumber: c.certificateNumber,
@@ -54,6 +63,7 @@ export default async function Page({
     holderId: c.user.id,
     schemeName: c.scheme.name,
     schemeCode: c.scheme.code,
+    underSurveillance: underSurveillance.has(c.id),
   }));
 
   return (

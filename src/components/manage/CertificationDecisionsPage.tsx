@@ -16,6 +16,7 @@ import ProctoringReportPanel from "@/components/manage/ProctoringReportPanel";
 
 type PendingAttempt = {
   id: string;
+  status: string;
   candidateName: string;
   candidateEmail: string;
   examTitle: string;
@@ -195,10 +196,17 @@ export default function CertificationDecisionsPage({
                         {attempt.scheme && (
                           <Badge className="bg-primary/10 text-primary border-0 text-[10px]">{attempt.scheme.code}</Badge>
                         )}
-                        <Badge className={cn("border-0 text-[10px] gap-1", attempt.passed ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600")}>
-                          {attempt.passed ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                          {attempt.passed ? "Passed" : "Failed"}
-                        </Badge>
+                        {attempt.status === "COMPLETED" ? (
+                          <Badge className={cn("border-0 text-[10px] gap-1", attempt.passed ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600")}>
+                            {attempt.passed ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                            {attempt.passed ? "Passed" : "Failed"}
+                          </Badge>
+                        ) : (
+                          <Badge className={cn("border-0 text-[10px] gap-1", attempt.status === "VOIDED" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-700")}>
+                            <AlertCircle className="w-3 h-3" />
+                            {attempt.status === "VOIDED" ? "Voided by proctoring" : "Under review"}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500">
                         <span className="flex items-center gap-1"><FileText className="w-3 h-3" />{attempt.examTitle}</span>
@@ -292,32 +300,44 @@ export default function CertificationDecisionsPage({
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Score summary */}
-              <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-slate-500 mb-0.5">Exam Score</p>
-                  <p className={cn("text-2xl font-bold", selected.passed ? "text-emerald-600" : "text-red-500")}>
-                    {selected.percentageScore !== null ? `${selected.percentageScore.toFixed(1)}%` : "N/A"}
+              {selected.status !== "COMPLETED" ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <p className="text-sm text-amber-800">
+                    This attempt {selected.status === "VOIDED" ? "was voided by the proctoring system" : "is under human review after reinstatement"} and
+                    has no exam result to certify yet. Review the proctoring report below.
                   </p>
-                  <p className="text-xs text-slate-500">Pass mark: {selected.passMark}%</p>
                 </div>
-                <div className="text-right">
-                  {selected.scheme && (
-                    <>
-                      <p className="text-xs text-slate-400">{selected.scheme.code}</p>
-                      <p className="text-sm font-medium text-slate-700">{selected.scheme.name}</p>
-                    </>
-                  )}
-                  {selected.submittedAt && (
-                    <p className="text-xs text-slate-400 mt-1">{format(new Date(selected.submittedAt), "d MMM yyyy")}</p>
-                  )}
+              ) : (
+                /* Score summary */
+                <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-slate-500 mb-0.5">Exam Score</p>
+                    <p className={cn("text-2xl font-bold", selected.passed ? "text-emerald-600" : "text-red-500")}>
+                      {selected.percentageScore !== null ? `${selected.percentageScore.toFixed(1)}%` : "N/A"}
+                    </p>
+                    <p className="text-xs text-slate-500">Pass mark: {selected.passMark}%</p>
+                  </div>
+                  <div className="text-right">
+                    {selected.scheme && (
+                      <>
+                        <p className="text-xs text-slate-400">{selected.scheme.code}</p>
+                        <p className="text-sm font-medium text-slate-700">{selected.scheme.name}</p>
+                      </>
+                    )}
+                    {selected.submittedAt && (
+                      <p className="text-xs text-slate-400 mt-1">{format(new Date(selected.submittedAt), "d MMM yyyy")}</p>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Proctoring report */}
               <ProctoringReportPanel attemptId={selected.id} />
 
-              {/* Decision buttons */}
+              {/* Decision buttons — only meaningful once the attempt has an actual result */}
+              {selected.status === "COMPLETED" && (
+              <>
               <div>
                 <Label>Decision *</Label>
                 <div className="grid grid-cols-3 gap-2 mt-1">
@@ -371,17 +391,23 @@ export default function CertificationDecisionsPage({
                   </p>
                 </div>
               )}
+              </>
+              )}
             </div>
 
             <div className="flex gap-3 px-5 pb-5">
-              <Button variant="outline" className="flex-1" onClick={() => setSelected(null)}>Cancel</Button>
-              <Button
-                className={cn("flex-1", form.decision === "rejected" ? "bg-red-500 hover:bg-red-600" : form.decision === "referred" ? "bg-amber-500 hover:bg-amber-600" : "")}
-                onClick={submitDecision}
-                disabled={saving}
-              >
-                {saving ? "Processing…" : `Confirm — ${DECISION_CONFIG[form.decision].label}`}
+              <Button variant="outline" className="flex-1" onClick={() => setSelected(null)}>
+                {selected.status === "COMPLETED" ? "Cancel" : "Close"}
               </Button>
+              {selected.status === "COMPLETED" && (
+                <Button
+                  className={cn("flex-1", form.decision === "rejected" ? "bg-red-500 hover:bg-red-600" : form.decision === "referred" ? "bg-amber-500 hover:bg-amber-600" : "")}
+                  onClick={submitDecision}
+                  disabled={saving}
+                >
+                  {saving ? "Processing…" : `Confirm — ${DECISION_CONFIG[form.decision].label}`}
+                </Button>
+              )}
             </div>
           </div>
         </div>

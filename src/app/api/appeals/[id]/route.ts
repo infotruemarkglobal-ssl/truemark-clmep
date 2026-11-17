@@ -60,6 +60,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const resolved = ["UPHELD", "REJECTED", "CLOSED"].includes(body.data.status);
 
+  // Impartiality-risk process (ISO 17024 Cl.4.3) — a staff member with a
+  // declared, active conflict naming this candidate (or a blanket
+  // declaration) cannot be assigned to review their appeal. Same query
+  // shape as the certificate-issuance check in
+  // src/app/api/certificates/generate/route.ts.
+  if (body.data.assignedTo && body.data.assignedTo !== appeal.assignedTo) {
+    const coiConflict = await db.cOIDeclaration.findFirst({
+      where: {
+        userId: body.data.assignedTo,
+        hasConflict: true,
+        expiresAt: { gt: new Date() },
+        OR: [{ subjectUserId: appeal.userId }, { subjectUserId: null }],
+      },
+    });
+    if (coiConflict) {
+      return NextResponse.json(
+        { error: "Forbidden — ISO 17024 Cl.4.3: this staff member has an active conflict-of-interest declaration for this candidate." },
+        { status: 409 },
+      );
+    }
+  }
+
   try {
     const updated = await db.appeal.update({
       where: { id },

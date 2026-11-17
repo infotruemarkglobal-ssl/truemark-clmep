@@ -15,7 +15,11 @@ export default async function Page() {
 
   const [pendingAttempts, recentDecisions] = await Promise.all([
     db.examAttempt.findMany({
-      where: { status: "COMPLETED", certificationDecision: null, deletedAt: null },
+      // VOIDED/UNDER_REVIEW attempts belong here too — they're not ready for
+      // a pass/fail certification decision, but a CO must still be able to
+      // find and act on them (review incidents, reinstate) through this same
+      // real page, not only attempts that already completed cleanly.
+      where: { status: { in: ["COMPLETED", "VOIDED", "UNDER_REVIEW"] }, certificationDecision: null, deletedAt: null },
       orderBy: { submittedAt: "desc" },
       take: 100,
       include: {
@@ -48,6 +52,7 @@ export default async function Page() {
 
   const serialisedPending = pendingAttempts.map((a) => ({
     id: a.id,
+    status: a.status,
     candidateName: `${a.user.firstName} ${a.user.lastName}`,
     candidateEmail: a.user.email,
     examTitle: a.examPaper.title,

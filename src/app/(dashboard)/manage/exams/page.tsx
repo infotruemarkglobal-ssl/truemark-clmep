@@ -40,6 +40,15 @@ export default async function Page() {
     }),
   ]);
 
+  // approvedBy is a plain userId string (no FK relation, same convention as
+  // DocumentVersion.approvedBy) — batch-resolve names separately rather than
+  // an N+1 per-paper lookup.
+  const approverIds = [...new Set(papers.map((p) => p.approvedBy).filter((v): v is string => !!v))];
+  const approvers = approverIds.length
+    ? await db.user.findMany({ where: { id: { in: approverIds } }, select: { id: true, firstName: true, lastName: true } })
+    : [];
+  const approverById = new Map(approvers.map((a) => [a.id, `${a.firstName} ${a.lastName}`]));
+
   const serialised = papers.map((p) => ({
     id: p.id,
     title: p.title,
@@ -51,6 +60,9 @@ export default async function Page() {
     requiresProctoring: p.requiresProctoring,
     isPractice: p.isPractice,
     version: p.version,
+    approvalStatus: p.approvalStatus,
+    approvedByName: p.approvedBy ? (approverById.get(p.approvedBy) ?? "Unknown") : null,
+    approvedAt: p.approvedAt ? p.approvedAt.toISOString() : null,
     createdAt: p.createdAt.toISOString(),
     creator: p.creator,
     scheme: p.scheme,
@@ -59,5 +71,5 @@ export default async function Page() {
     attemptCount: p._count.attempts,
   }));
 
-  return <ManageExamsPage papers={serialised} schemes={schemes} />;
+  return <ManageExamsPage papers={serialised} schemes={schemes} canApprove={isSuperAdmin} />;
 }

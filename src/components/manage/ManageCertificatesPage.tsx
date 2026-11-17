@@ -6,10 +6,9 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   Award, Download, Search, Filter, ChevronRight, AlertTriangle,
-  CheckCircle2, Clock, XCircle, ShieldOff,
+  CheckCircle2, Clock, XCircle, ShieldOff, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +23,7 @@ type Certificate = {
   holderId: string;
   schemeName: string;
   schemeCode: string;
+  underSurveillance: boolean;
 };
 
 const STATUS_FILTERS = ["ACTIVE", "EXPIRED", "REVOKED", "SUSPENDED", "LAPSED"];
@@ -208,6 +208,12 @@ export default function ManageCertificatesPage({
                         <Icon className="w-3 h-3" />
                         {cfg.label}
                       </span>
+                      {cert.underSurveillance && (
+                        <span className="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                          <Eye className="w-3 h-3" />
+                          Under surveillance
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {!isReadOnly && (

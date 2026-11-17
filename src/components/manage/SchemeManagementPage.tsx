@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 type Scheme = {
   id: string;
@@ -39,6 +40,10 @@ type Scheme = {
   renewalRequiresExam: boolean;
   renewalRequiresCPD: boolean;
   renewalExamWindowMonths: number;
+  approvalStatus: string;
+  approvedBy: string | null;
+  approvedByName: string | null;
+  approvedAt: string | null;
 };
 
 // Helpers to convert between JSON array strings and comma-separated display text
@@ -70,6 +75,8 @@ function EditModal({
   onClose: () => void;
   onSaved: (updated: Scheme) => void;
 }) {
+  const trapRef = useFocusTrap<HTMLDivElement>(true, onClose);
+
   // Basic fields
   const [name, setName] = useState(scheme.name);
   const [description, setDescription] = useState(scheme.description ?? "");
@@ -141,8 +148,18 @@ function EditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
+      {/* role="presentation" marks this as a decorative click-to-dismiss
+          overlay, not an interactive control — a keyboard user closes via
+          the explicit Close button below, not by tabbing to the backdrop. */}
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} role="presentation" />
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-scheme-modal-title"
+        tabIndex={-1}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col outline-none"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
           <div>
@@ -150,7 +167,7 @@ function EditModal({
               <span className="font-mono text-xs text-slate-400">{scheme.code}</span>
               {!isActive && <Badge className="border-0 text-xs bg-slate-100 text-slate-500">Inactive</Badge>}
             </div>
-            <h2 className="font-bold text-slate-900">{scheme.name}</h2>
+            <h2 id="edit-scheme-modal-title" className="font-bold text-slate-900">{scheme.name}</h2>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100" aria-label="Close">
             <X className="w-4 h-4" />
@@ -184,25 +201,25 @@ function EditModal({
           {activeTab === "basic" && (
             <>
               <div>
-                <label className={labelClass}>Scheme Name</label>
-                <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
+                <label className={labelClass} htmlFor="scheme-edit-name">Scheme Name</label>
+                <input id="scheme-edit-name" className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div>
-                <label className={labelClass}>Description</label>
-                <textarea className={inputClass} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+                <label className={labelClass} htmlFor="scheme-edit-description">Description</label>
+                <textarea id="scheme-edit-description" className={inputClass} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className={labelClass}>Validity (months)</label>
-                  <input type="number" className={inputClass} min={1} value={validityMonths} onChange={(e) => setValidityMonths(e.target.value)} />
+                  <label className={labelClass} htmlFor="scheme-edit-validity">Validity (months)</label>
+                  <input id="scheme-edit-validity" type="number" className={inputClass} min={1} value={validityMonths} onChange={(e) => setValidityMonths(e.target.value)} />
                 </div>
                 <div>
-                  <label className={labelClass}>Pass Mark (%)</label>
-                  <input type="number" className={inputClass} min={0} max={100} value={passMark} onChange={(e) => setPassMark(e.target.value)} />
+                  <label className={labelClass} htmlFor="scheme-edit-pass-mark">Pass Mark (%)</label>
+                  <input id="scheme-edit-pass-mark" type="number" className={inputClass} min={0} max={100} value={passMark} onChange={(e) => setPassMark(e.target.value)} />
                 </div>
                 <div>
-                  <label className={labelClass}>Max Attempts</label>
-                  <input type="number" className={inputClass} min={1} value={maxAttempts} onChange={(e) => setMaxAttempts(e.target.value)} />
+                  <label className={labelClass} htmlFor="scheme-edit-max-attempts">Max Attempts</label>
+                  <input id="scheme-edit-max-attempts" type="number" className={inputClass} min={1} value={maxAttempts} onChange={(e) => setMaxAttempts(e.target.value)} />
                 </div>
               </div>
               <Toggle
@@ -237,8 +254,9 @@ function EditModal({
 
               {renewalRequiresExam && (
                 <div className="pl-4 border-l-2 border-primary/20">
-                  <label className={labelClass}>Exam must be passed within (months before renewal)</label>
+                  <label className={labelClass} htmlFor="scheme-edit-renewal-exam-window">Exam must be passed within (months before renewal)</label>
                   <input
+                    id="scheme-edit-renewal-exam-window"
                     type="number" min={1} max={120}
                     className={inputClass}
                     value={renewalExamWindowMonths}
@@ -277,8 +295,9 @@ function EditModal({
                 <div className="space-y-4 pl-4 border-l-2 border-primary/20">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className={labelClass}>Minimum Age (years)</label>
+                      <label className={labelClass} htmlFor="scheme-edit-min-age">Minimum Age (years)</label>
                       <input
+                        id="scheme-edit-min-age"
                         type="number" min={0} placeholder="Optional"
                         className={inputClass}
                         value={minAgeYears}
@@ -286,8 +305,9 @@ function EditModal({
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Minimum Experience (years)</label>
+                      <label className={labelClass} htmlFor="scheme-edit-min-experience">Minimum Experience (years)</label>
                       <input
+                        id="scheme-edit-min-experience"
                         type="number" min={0} placeholder="Optional"
                         className={inputClass}
                         value={minExperienceYears}
@@ -297,8 +317,9 @@ function EditModal({
                   </div>
 
                   <div>
-                    <label className={labelClass}>Required Qualifications</label>
+                    <label className={labelClass} htmlFor="scheme-edit-required-qualifications">Required Qualifications</label>
                     <input
+                      id="scheme-edit-required-qualifications"
                       className={inputClass}
                       placeholder="Comma-separated, e.g. BSc Engineering, HND"
                       value={requiredQualifications}
@@ -308,8 +329,9 @@ function EditModal({
                   </div>
 
                   <div>
-                    <label className={labelClass}>Required Prior Certifications (scheme codes)</label>
+                    <label className={labelClass} htmlFor="scheme-edit-required-prior-certs">Required Prior Certifications (scheme codes)</label>
                     <input
+                      id="scheme-edit-required-prior-certs"
                       className={inputClass}
                       placeholder="Comma-separated scheme codes, e.g. TMG-ELEC-L2"
                       value={requiredPriorCerts}
@@ -341,8 +363,9 @@ function EditModal({
                   </div>
 
                   <div>
-                    <label className={labelClass}>Eligibility Notes (shown to candidates)</label>
+                    <label className={labelClass} htmlFor="scheme-edit-eligibility-notes">Eligibility Notes (shown to candidates)</label>
                     <textarea
+                      id="scheme-edit-eligibility-notes"
                       className={inputClass} rows={3}
                       placeholder="Explain any additional requirements or guidance…"
                       value={eligibilityNotes}
@@ -351,8 +374,9 @@ function EditModal({
                   </div>
 
                   <div>
-                    <label className={labelClass}>Auto-approve after (minutes)</label>
+                    <label className={labelClass} htmlFor="scheme-edit-auto-approve-minutes">Auto-approve after (minutes)</label>
                     <input
+                      id="scheme-edit-auto-approve-minutes"
                       type="number" min={1}
                       className={inputClass}
                       value={autoApproveMinutes}
@@ -464,8 +488,9 @@ function CreateModal({
         <div className="max-h-[55vh] overflow-y-auto space-y-4 pr-1">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Code <span className="text-red-400">*</span></label>
+              <label className={labelClass} htmlFor="scheme-create-code">Code <span className="text-red-400">*</span></label>
               <input
+                id="scheme-create-code"
                 className={inputClass}
                 placeholder="e.g. CQA-001"
                 value={code}
@@ -474,8 +499,9 @@ function CreateModal({
               <p className="text-xs text-slate-400 mt-1">Must be unique. Auto-uppercased.</p>
             </div>
             <div>
-              <label className={labelClass}>Name <span className="text-red-400">*</span></label>
+              <label className={labelClass} htmlFor="scheme-create-name">Name <span className="text-red-400">*</span></label>
               <input
+                id="scheme-create-name"
                 className={inputClass}
                 placeholder="e.g. Certified Quality Auditor"
                 value={name}
@@ -485,8 +511,9 @@ function CreateModal({
           </div>
 
           <div>
-            <label className={labelClass}>Description</label>
+            <label className={labelClass} htmlFor="scheme-create-description">Description</label>
             <textarea
+              id="scheme-create-description"
               className={inputClass}
               rows={3}
               placeholder="Optional overview of the certification scheme…"
@@ -496,8 +523,9 @@ function CreateModal({
           </div>
 
           <div>
-            <label className={labelClass}>Standard Version</label>
+            <label className={labelClass} htmlFor="scheme-create-standard-version">Standard Version</label>
             <input
+              id="scheme-create-standard-version"
               className={inputClass}
               placeholder="ISO/IEC 17024:2012"
               value={standardVersion}
@@ -507,23 +535,23 @@ function CreateModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Validity (months) <span className="text-red-400">*</span></label>
-              <input type="number" min={1} className={inputClass} value={validityMonths} onChange={(e) => setValidityMonths(e.target.value)} />
+              <label className={labelClass} htmlFor="scheme-create-validity">Validity (months) <span className="text-red-400">*</span></label>
+              <input id="scheme-create-validity" type="number" min={1} className={inputClass} value={validityMonths} onChange={(e) => setValidityMonths(e.target.value)} />
             </div>
             <div>
-              <label className={labelClass}>Pass Mark (%) <span className="text-red-400">*</span></label>
-              <input type="number" min={0} max={100} className={inputClass} value={passMark} onChange={(e) => setPassMark(e.target.value)} />
+              <label className={labelClass} htmlFor="scheme-create-pass-mark">Pass Mark (%) <span className="text-red-400">*</span></label>
+              <input id="scheme-create-pass-mark" type="number" min={0} max={100} className={inputClass} value={passMark} onChange={(e) => setPassMark(e.target.value)} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Max Attempts <span className="text-red-400">*</span></label>
-              <input type="number" min={1} className={inputClass} value={maxAttempts} onChange={(e) => setMaxAttempts(e.target.value)} />
+              <label className={labelClass} htmlFor="scheme-create-max-attempts">Max Attempts <span className="text-red-400">*</span></label>
+              <input id="scheme-create-max-attempts" type="number" min={1} className={inputClass} value={maxAttempts} onChange={(e) => setMaxAttempts(e.target.value)} />
             </div>
             <div>
-              <label className={labelClass}>CPD Hours Required</label>
-              <input type="number" min={0} className={inputClass} value={cpdHoursRequired} onChange={(e) => setCpdHoursRequired(e.target.value)} />
+              <label className={labelClass} htmlFor="scheme-create-cpd-hours">CPD Hours Required</label>
+              <input id="scheme-create-cpd-hours" type="number" min={0} className={inputClass} value={cpdHoursRequired} onChange={(e) => setCpdHoursRequired(e.target.value)} />
             </div>
           </div>
 
@@ -595,7 +623,7 @@ function Toggle({
 
 // ── Main page component ───────────────────────────────────────────────────────
 
-export default function SchemeManagementPage({ schemes: initial }: { schemes: Scheme[] }) {
+export default function SchemeManagementPage({ schemes: initial, canApprove }: { schemes: Scheme[]; canApprove: boolean }) {
   const router = useRouter();
   const [schemes, setSchemes] = useState(initial);
   const [editing, setEditing] = useState<Scheme | null>(null);
@@ -609,6 +637,33 @@ export default function SchemeManagementPage({ schemes: initial }: { schemes: Sc
 
   function handleCreated(scheme: Scheme) {
     setSchemes((prev) => [scheme, ...prev]);
+  }
+
+  async function approveScheme(scheme: Scheme) {
+    try {
+      const res = await fetch(`/api/manage/schemes/${scheme.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Approve failed");
+      // Local list state is a one-time copy of the server props (see handleSaved
+      // above for the same pattern) — merge the response directly rather than
+      // relying on router.refresh() to update it. "You" is correct immediately
+      // after a self-approval; a later full navigation resolves the real name.
+      setSchemes((prev) =>
+        prev.map((s) =>
+          s.id === scheme.id
+            ? { ...s, approvalStatus: data.approvalStatus, approvedBy: data.approvedBy, approvedAt: data.approvedAt, approvedByName: "You" }
+            : s,
+        ),
+      );
+      toast.success("Scheme approved");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Approve failed");
+    }
   }
 
   return (
@@ -678,6 +733,15 @@ export default function SchemeManagementPage({ schemes: initial }: { schemes: Sc
                           No eligibility gate
                         </Badge>
                       )}
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-xs",
+                          scheme.approvalStatus === "APPROVED" ? "border-emerald-200 text-emerald-700 bg-emerald-50" : "border-amber-200 text-amber-700 bg-amber-50",
+                        )}
+                      >
+                        {scheme.approvalStatus === "APPROVED" ? "Approved" : "Draft"}
+                      </Badge>
                     </div>
                     <div className="flex gap-4 mt-1 text-xs text-slate-400">
                       <span>Validity: {scheme.validityMonths} months</span>
@@ -688,11 +752,27 @@ export default function SchemeManagementPage({ schemes: initial }: { schemes: Sc
                           Auto-approve: {scheme.autoApproveMinutes} min
                         </span>
                       )}
+                      {scheme.approvalStatus === "APPROVED" && scheme.approvedByName && scheme.approvedAt && (
+                        <span>
+                          Approved by {scheme.approvedByName} · {new Date(scheme.approvedAt).toLocaleDateString()}
+                        </span>
+                      )}
                     </div>
                     {scheme.description && (
                       <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{scheme.description}</p>
                     )}
                   </div>
+                  {canApprove && scheme.approvalStatus !== "APPROVED" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 shrink-0 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                      onClick={() => approveScheme(scheme)}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Approve
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"

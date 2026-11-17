@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { rateLimit } from "@/lib/rate-limit";
+import { prepareAuditEntry } from "@/lib/audit";
 
 const schema = z.object({
   reason: z.string().min(10).max(1000),
@@ -58,6 +59,19 @@ export async function PATCH(
     return NextResponse.json({ error: "Certificate is already revoked" }, { status: 409 });
   }
 
+  const auditEntry = await prepareAuditEntry({
+    userId: session.user.id,
+    action: "CERTIFICATE_REVOKED",
+    entityType: "Certificate",
+    entityId: id,
+    metadata: {
+      certificateNumber: existing.certificateNumber,
+      candidateId: existing.userId,
+      schemeId: existing.schemeId,
+      reason,
+      revokedBy: session.user.id,
+    },
+  });
   const [certificate] = await db.$transaction([
     db.certificate.update({
       where: { id },
@@ -67,21 +81,7 @@ export async function PATCH(
         revocationReason: reason,
       },
     }),
-    db.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: "CERTIFICATE_REVOKED",
-        entityType: "Certificate",
-        entityId: id,
-        metadata: JSON.stringify({
-          certificateNumber: existing.certificateNumber,
-          candidateId: existing.userId,
-          schemeId: existing.schemeId,
-          reason,
-          revokedBy: session.user.id,
-        }),
-      },
-    }),
+    db.auditLog.create({ data: auditEntry }),
   ]);
 
   // Notify the certificate holder — best-effort, must not undo revocation

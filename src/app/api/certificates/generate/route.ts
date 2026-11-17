@@ -93,14 +93,17 @@ export async function POST(req: NextRequest) {
     // ISO 17024 Cl.4.3 — impartiality obligations require that a declared COI
     // blocks certification decisions regardless of role separation.
     // Only non-expired declarations where hasConflict is true are blocking.
+    // Prefer a subject-specific match (this declaration names THIS candidate)
+    // over a blanket block — a structured impartiality-risk process, not just
+    // "any active COI blocks everything regardless of who it's actually about".
+    // A blanket declaration (subjectUserId: null) still blocks every case,
+    // matching the original conservative behaviour.
     const coiConflict = await db.cOIDeclaration.findFirst({
       where: {
         userId: session.user.id,
         hasConflict: true,
         expiresAt: { gt: new Date() }, // only active declarations
-        // conflictDetails may reference the candidateId — we block on any active
-        // COI rather than trying to parse free-text details, so the officer must
-        // re-declare a "no conflict" to proceed.
+        OR: [{ subjectUserId: attempt.userId }, { subjectUserId: null }],
       },
     });
     if (coiConflict) {
@@ -288,14 +291,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    await db.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: "CERTIFICATE_ISSUED",
-        entityType: "Certificate",
-        entityId: certificate.id,
-        metadata: JSON.stringify({ certNumber, schemeCode: scheme.code, candidateId: attempt.userId, expiresAt }),
-      },
+    await auditLog({
+      userId: session.user.id,
+      action: "CERTIFICATE_ISSUED",
+      entityType: "Certificate",
+      entityId: certificate.id,
+      metadata: { certNumber, schemeCode: scheme.code, candidateId: attempt.userId, expiresAt },
     });
   } catch (err) {
     // Compensate: delete the certificate row so the issuance is not untracked.

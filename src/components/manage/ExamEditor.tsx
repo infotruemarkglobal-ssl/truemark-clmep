@@ -7,6 +7,7 @@ import {
   ChevronLeft, Plus, Trash2, ChevronDown, ChevronRight,
   GripVertical, Shield, ShieldOff, Save, Eye, EyeOff,
   FileText, CheckCircle2, AlignLeft, Hash, Pencil, Sparkles, X,
+  Copy, Loader2, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,7 +138,7 @@ function AIGenerateModal({
             <Label className="text-sm">Topic / Subject *</Label>
             <Input value={form.topic} onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))} placeholder="e.g. Risk Assessment Principles" className="mt-1.5" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label className="text-sm">Question Type</Label>
               <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} className="mt-1.5 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
@@ -151,7 +152,7 @@ function AIGenerateModal({
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label className="text-sm">Difficulty</Label>
               <select value={form.difficulty} onChange={(e) => setForm((f) => ({ ...f, difficulty: e.target.value }))} className="mt-1.5 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
@@ -258,7 +259,7 @@ function QuestionEditInline({
         <button onClick={onCancel} className="ml-auto text-slate-400 hover:text-slate-600 text-xs">Cancel</button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Label className="text-xs">Type</Label>
           <select value={form.type} onChange={(e) => {
@@ -325,7 +326,7 @@ function QuestionEditInline({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Label className="text-xs">Domain / Topic (optional)</Label>
           <Input value={form.domain} onChange={(e) => setForm((f) => ({ ...f, domain: e.target.value }))} className="mt-1 h-8 text-xs" placeholder="e.g. Risk Management" />
@@ -435,7 +436,7 @@ function QuestionForm({
         <button onClick={() => setOpen(false)} className="ml-auto text-slate-400 hover:text-slate-600 text-xs">Cancel</button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Label className="text-xs">Type</Label>
           <select
@@ -531,7 +532,7 @@ function QuestionForm({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Label className="text-xs">Domain / Topic (optional)</Label>
           <Input value={form.domain} onChange={(e) => setForm((f) => ({ ...f, domain: e.target.value }))} className="mt-1 h-8 text-xs" placeholder="e.g. Risk Management" />
@@ -700,18 +701,47 @@ export default function ExamEditor({
   }
 
   // ── Toggle Active ───────────────────────────────────────────────────────
-  async function toggleActive() {
+  async function toggleActive(acknowledgeSimilarity = false) {
     try {
       const res = await fetch(`/api/manage/exams/${paper.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !paper.isActive }),
+        body: JSON.stringify({ isActive: !paper.isActive, ...(acknowledgeSimilarity ? { acknowledgeSimilarity: true } : {}) }),
       });
-      if (!res.ok) throw new Error();
+      const body = await res.json();
+      if (!res.ok) {
+        if (body.similarPairs) {
+          setSimilarPairs(body.similarPairs);
+          toast.error(body.error ?? "Similar questions found", {
+            action: { label: "Activate anyway", onClick: () => toggleActive(true) },
+          });
+          return;
+        }
+        throw new Error(body.error ?? "Failed to update status");
+      }
+      setSimilarPairs(null);
       setPaper((p) => ({ ...p, isActive: !p.isActive }));
       toast.success(paper.isActive ? "Paper deactivated" : "Paper activated");
-    } catch {
-      toast.error("Failed to update status");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update status");
+    }
+  }
+
+  // ── Duplicate/similarity check ─────────────────────────────────────────
+  const [checkingSimilarity, setCheckingSimilarity] = useState(false);
+  const [similarPairs, setSimilarPairs] = useState<{ score: number; questionA: { id: string; text: string }; questionB: { id: string; text: string } }[] | null>(null);
+  async function checkSimilarity() {
+    setCheckingSimilarity(true);
+    try {
+      const res = await fetch(`/api/manage/exams/${paper.id}/questions/similarity`);
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      const body = await res.json();
+      setSimilarPairs(body.pairs);
+      if (body.pairs.length === 0) toast.success("No overly-similar questions found");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setCheckingSimilarity(false);
     }
   }
 
@@ -743,15 +773,40 @@ export default function ExamEditor({
             {totalQuestions} questions · {paper.sections.length} sections · {paper.durationMins} min · Pass: {paper.passMark}%
           </p>
         </div>
+        <Button variant="outline" size="sm" onClick={checkSimilarity} disabled={checkingSimilarity} className="gap-1.5">
+          {checkingSimilarity ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
+          Check for duplicates
+        </Button>
         <Button
           variant="outline"
           size="sm"
-          onClick={toggleActive}
+          onClick={() => toggleActive(false)}
           className={cn(paper.isActive ? "text-red-600 border-red-200 hover:bg-red-50" : "text-emerald-600 border-emerald-200 hover:bg-emerald-50")}
         >
           {paper.isActive ? <><EyeOff className="w-3.5 h-3.5 mr-1.5" /> Deactivate</> : <><Eye className="w-3.5 h-3.5 mr-1.5" /> Activate</>}
         </Button>
       </div>
+
+      {/* Similarity check results */}
+      {similarPairs && similarPairs.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+            <p className="text-sm font-semibold text-amber-800">
+              {similarPairs.length} question pair{similarPairs.length !== 1 ? "s" : ""} flagged as too similar
+            </p>
+          </div>
+          <div className="space-y-2">
+            {similarPairs.map((p, i) => (
+              <div key={i} className="bg-white rounded-lg border border-amber-100 p-3 text-xs space-y-1">
+                <p className="font-semibold text-amber-700">{Math.round(p.score * 100)}% similar</p>
+                <p className="text-slate-600">&ldquo;{p.questionA.text}&rdquo;</p>
+                <p className="text-slate-600">&ldquo;{p.questionB.text}&rdquo;</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 gap-1">
@@ -951,7 +1006,7 @@ export default function ExamEditor({
             </select>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div><Label>Duration (mins)</Label><Input type="number" min="15" className="mt-1" value={settings.durationMins} onChange={(e) => setSettings((s) => ({ ...s, durationMins: e.target.value }))} /></div>
             <div><Label>Pass Mark (%)</Label><Input type="number" min="0" max="100" className="mt-1" value={settings.passMark} onChange={(e) => setSettings((s) => ({ ...s, passMark: e.target.value }))} /></div>
             <div><Label>Total Marks</Label><Input type="number" min="1" className="mt-1" value={settings.totalMarks} onChange={(e) => setSettings((s) => ({ ...s, totalMarks: e.target.value }))} /></div>
@@ -974,7 +1029,7 @@ export default function ExamEditor({
 
           <div className="border-t border-slate-100 pt-4">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Proctoring</p>
-            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer mb-3">
+            <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer mb-3" aria-label="Require proctoring — camera monitoring and tab-switch limits enforced">
               <input type="checkbox" checked={settings.requiresProctoring} onChange={(e) => setSettings((s) => ({ ...s, requiresProctoring: e.target.checked }))} className="rounded" />
               <span><strong>Require proctoring</strong><span className="text-slate-400 font-normal"> — camera monitoring and tab-switch limits enforced</span></span>
             </label>

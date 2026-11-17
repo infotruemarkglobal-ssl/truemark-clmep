@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { auditLog } from "@/lib/audit";
+import { auditLog, prepareAuditEntry } from "@/lib/audit";
 import { generateCertificateNumber, generateOpenBadgeJwt, generateQrCode } from "@/lib/certificates";
 import { can } from "@/lib/permissions";
 import { USER_ROLES, RENEWAL_WARNINGS_DAYS } from "@/lib/constants";
@@ -343,7 +343,23 @@ export async function POST(
   // Update the existing certificate in-place rather than creating a new record.
   // A new Certificate requires a CertificationDecision FK (which renewals don't have),
   // so we extend the original cert with new badge data and a fresh expiry date instead.
-  // Array form is PgBouncer transaction-pooling compatible (Supabase).
+  // Array form is PgBouncer transaction-pooling compatible (Supabase). The
+  // audit row's hash+chain fields are computed just beforehand via
+  // prepareAuditEntry() so the array can still include a correctly-chained
+  // db.auditLog.create() rather than an unprotected raw insert.
+  const auditEntry = await prepareAuditEntry({
+    userId: session.user.id,
+    action: "CERTIFICATE_RENEWED",
+    entityType: "Certificate",
+    entityId: cert.id,
+    metadata: {
+      previousCertNumber: cert.certificateNumber,
+      newCertNumber,
+      schemeCode: cert.scheme.code,
+      cpdHoursLogged,
+      expiresAt: expiresAt.toISOString(),
+    },
+  });
   const [updatedCert] = await db.$transaction([
     db.certificate.update({
       where: { id: cert.id },
@@ -369,21 +385,7 @@ export async function POST(
         notes: body.data.notes ?? null,
       },
     }),
-    db.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: "CERTIFICATE_RENEWED",
-        entityType: "Certificate",
-        entityId: cert.id,
-        metadata: JSON.stringify({
-          previousCertNumber: cert.certificateNumber,
-          newCertNumber,
-          schemeCode: cert.scheme.code,
-          cpdHoursLogged,
-          expiresAt: expiresAt.toISOString(),
-        }),
-      },
-    }),
+    db.auditLog.create({ data: auditEntry }),
   ]);
 
   // Notify the holder (best-effort — outside transaction)
