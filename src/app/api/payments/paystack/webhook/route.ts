@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { auditLog } from "@/lib/audit";
+import { prepareAuditEntry } from "@/lib/audit";
 import { inngest, EVENTS } from "@/inngest/client";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -56,6 +56,17 @@ export async function POST(req: NextRequest) {
       paid_at: string;
       customer: { email: string };
       metadata: { courseId?: string; userId?: string; purchaseId?: string };
+      // Present when the card supports future off-session charges — this is
+      // the entire basis for instalments (see src/lib/paystack.ts).
+      authorization?: {
+        authorization_code: string;
+        reusable: boolean;
+        card_type?: string;
+        last4?: string;
+        bank?: string;
+        exp_month?: string;
+        exp_year?: string;
+      };
     };
   };
   try {
@@ -128,12 +139,21 @@ export async function POST(req: NextRequest) {
   // update for that row simply matches zero rows and we skip it. This closes
   // the same race the original single-purchase code guarded against, extended
   // to a multi-item cart's whole set of purchases.
+  const authorization = event.data.authorization;
   const newlyPaid: typeof purchases = [];
   for (const p of purchases) {
     if (p.status === "PAID") continue;
     const claim = await db.purchase.updateMany({
       where: { id: p.id, status: { not: "PAID" } },
-      data: { status: "PAID", paidAt: new Date(paid_at) },
+      data: {
+        status: "PAID",
+        paidAt: new Date(paid_at),
+        // Only stored when reusable — a non-reusable authorization_code
+        // cannot be charged again, so keeping it would be actively
+        // misleading to the instalment-plan creation step below.
+        ...(authorization?.reusable ? { paystackAuthorizationCode: authorization.authorization_code } : {}),
+        ...(authorization ? { paystackAuthorizationJson: JSON.stringify(authorization) } : {}),
+      },
     });
     if (claim.count === 1) newlyPaid.push(p);
   }
@@ -145,7 +165,9 @@ export async function POST(req: NextRequest) {
   for (const purchase of newlyPaid) {
     if (!purchase.userId || !purchase.courseId) continue;
 
-    const meta = purchase.metadata ? (JSON.parse(purchase.metadata) as { organisationId?: string | null }) : {};
+    const meta = purchase.metadata
+      ? (JSON.parse(purchase.metadata) as { organisationId?: string | null; numberOfInstalments?: number; totalAmount?: number })
+      : {};
     const [course, candidate] = await Promise.all([
       db.course.findUnique({ where: { id: purchase.courseId }, select: { title: true, slug: true } }),
       db.user.findUnique({ where: { id: purchase.userId }, select: { email: true, firstName: true } }),
@@ -154,44 +176,101 @@ export async function POST(req: NextRequest) {
     // Array form is PgBouncer transaction-pooling compatible (Supabase).
     // The interactive callback form is not — it holds a connection open across
     // async ticks, which conflicts with PgBouncer's connection reuse model.
+    // The audit row's hash+chain fields are computed just beforehand via
+    // prepareAuditEntry() (its own short transaction, same shape auditLog()
+    // already uses) so the array here can still include a correctly-chained
+    // db.auditLog.create() rather than an unprotected raw insert.
     if (purchase.seats > 1 && (purchase.organisationId || meta.organisationId)) {
       const organisationId = purchase.organisationId ?? meta.organisationId!;
       const existingSeat = await db.courseSeat.findFirst({
         where: { organisationId, courseId: purchase.courseId, purchaseId: purchase.id },
       });
       if (!existingSeat) {
+        const auditEntry = await prepareAuditEntry({
+          userId: purchase.userId,
+          action: "PAYMENT_RECEIVED",
+          entityType: "Purchase",
+          entityId: purchase.id,
+          metadata: { reference, amountPaidKobo: paidSmallestUnit, currency: event.data.currency, courseId: purchase.courseId, seats: purchase.seats },
+        });
         await db.$transaction([
           db.courseSeat.create({
             data: { organisationId, courseId: purchase.courseId, purchaseId: purchase.id, totalSeats: purchase.seats },
           }),
-          db.auditLog.create({
-            data: {
-              userId: purchase.userId,
-              action: "PAYMENT_RECEIVED",
-              entityType: "Purchase",
-              entityId: purchase.id,
-              metadata: JSON.stringify({ reference, amountPaidKobo: paidSmallestUnit, currency: event.data.currency, courseId: purchase.courseId, seats: purchase.seats }),
-            },
-          }),
+          db.auditLog.create({ data: auditEntry }),
         ]);
       }
     } else {
+      const auditEntry = await prepareAuditEntry({
+        userId: purchase.userId,
+        action: "PAYMENT_RECEIVED",
+        entityType: "Purchase",
+        entityId: purchase.id,
+        metadata: { reference, amountPaidKobo: paidSmallestUnit, currency: event.data.currency, courseId: purchase.courseId },
+      });
       await db.$transaction([
         db.enrolment.upsert({
           where: { userId_courseId: { userId: purchase.userId, courseId: purchase.courseId } },
           create: { userId: purchase.userId, courseId: purchase.courseId, purchaseId: purchase.id, status: "ACTIVE", progress: 0 },
           update: { status: "ACTIVE" },
         }),
-        db.auditLog.create({
-          data: {
-            userId: purchase.userId,
-            action: "PAYMENT_RECEIVED",
-            entityType: "Purchase",
-            entityId: purchase.id,
-            metadata: JSON.stringify({ reference, amountPaidKobo: paidSmallestUnit, currency: event.data.currency, courseId: purchase.courseId }),
-          },
-        }),
+        db.auditLog.create({ data: auditEntry }),
       ]);
+    }
+
+    // ── Instalment plan setup ──────────────────────────────────────────────
+    // The purchase itself IS instalment #1 (already charged and paid above);
+    // this schedules the remaining N-1 charges, 30 days apart, against the
+    // authorization captured above. If the authorization came back
+    // non-reusable, Paystack cannot be asked to charge this card again —
+    // the candidate keeps the access they already paid for, but the
+    // remaining balance has to be collected outside this system.
+    if (purchase.isInstalment && meta.numberOfInstalments && meta.totalAmount) {
+      const n = meta.numberOfInstalments;
+      const total = meta.totalAmount;
+      const perInstalment = Math.round((total / n) * 100) / 100;
+      const lastInstalment = Math.round((total - perInstalment * (n - 1)) * 100) / 100;
+
+      const plan = await db.instalmentPlan.create({
+        data: {
+          purchaseId: purchase.id,
+          totalAmount: total,
+          numberOfInstalments: n,
+          status: authorization?.reusable ? "ACTIVE" : "NEEDS_MANUAL_PAYMENT",
+        },
+      });
+
+      await db.instalmentCharge.create({
+        data: {
+          planId: plan.id,
+          instalmentNumber: 1,
+          amount: purchase.amount,
+          dueDate: new Date(paid_at),
+          status: "PAID",
+          paidAt: new Date(paid_at),
+          paystackReference: reference,
+        },
+      });
+
+      if (authorization?.reusable) {
+        const remaining = Array.from({ length: n - 1 }, (_, i) => {
+          const instalmentNumber = i + 2;
+          return db.instalmentCharge.create({
+            data: {
+              planId: plan.id,
+              instalmentNumber,
+              amount: instalmentNumber === n ? lastInstalment : perInstalment,
+              // 30 days between instalments — first future due date is 30
+              // days after the down payment, not 30 days from "now" (a
+              // delayed webhook delivery shouldn't compress the schedule).
+              dueDate: new Date(new Date(paid_at).getTime() + (instalmentNumber - 1) * 30 * 24 * 60 * 60 * 1000),
+            },
+          });
+        });
+        await Promise.all(remaining);
+      } else {
+        console.warn(`[webhook] Instalment plan ${plan.id} created with non-reusable authorization — remaining ${n - 1} instalments need manual collection.`);
+      }
     }
 
     // Notification and email are best-effort — outside the transaction so a

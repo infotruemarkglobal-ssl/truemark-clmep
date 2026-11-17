@@ -6,6 +6,7 @@ import {
   AlertTriangle, ClipboardList, FileText, ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 
 export type Requirements = {
   minExperienceYears: number | null;
@@ -83,6 +84,7 @@ export default function ApplicationModal({
   requirements,
   previousRejection,
 }: Props) {
+  const trapRef = useFocusTrap<HTMLDivElement>(open, onClose);
   const [step, setStep] = useState(0);
   const [understood, setUnderstood] = useState(false);
   const [experience, setExperience] = useState<string>(
@@ -199,13 +201,21 @@ export default function ApplicationModal({
       <div
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
         onClick={onClose}
+        role="presentation"
       />
 
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden">
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="application-modal-title"
+        tabIndex={-1}
+        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden outline-none"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Application — {schemeName}</h2>
+            <h2 id="application-modal-title" className="text-base font-bold text-slate-900">Application — {schemeName}</h2>
             <div className="mt-1.5">
               <StepIndicator step={step} total={totalSteps} />
             </div>
@@ -356,11 +366,12 @@ export default function ApplicationModal({
                   {requirements.minExperienceYears !== null &&
                     requirements.minExperienceYears !== undefined && (
                       <div className="space-y-1.5">
-                        <label className="block text-sm font-medium text-slate-700">
+                        <label htmlFor="application-experience-years" className="block text-sm font-medium text-slate-700">
                           Years of relevant experience
                           <span className="text-red-500 ml-1">*</span>
                         </label>
                         <input
+                          id="application-experience-years"
                           type="number"
                           min={0}
                           max={60}
@@ -374,11 +385,12 @@ export default function ApplicationModal({
 
                   {!!requirements.requiredQualifications?.length && (
                     <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-slate-700">
+                      <label htmlFor="application-qualification" className="block text-sm font-medium text-slate-700">
                         Highest relevant qualification
                         <span className="text-red-500 ml-1">*</span>
                       </label>
                       <select
+                        id="application-qualification"
                         value={qualification}
                         onChange={(e) => setQualification(e.target.value)}
                         className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"

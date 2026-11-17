@@ -65,3 +65,51 @@ export function toSmallestUnit(amount: number, currency: string): number {
   // All Paystack supported currencies use 2 decimal places
   return Math.round(amount * 100);
 }
+
+// Paystack has no BNPL/instalment product — this is how every "charge the
+// customer again later" integration is actually built: against a reusable
+// authorization_code captured from a prior successful charge. The response's
+// `status` field is the HTTP-call status, not the transaction outcome — that
+// is `data.status` ("success" | "failed", occasionally others for edge-case
+// bank responses), always inspect data.status before treating a charge as
+// having succeeded.
+//
+// `data` is genuinely optional, not just theoretically: confirmed live
+// against Paystack's real API — a validation-error response (e.g. an
+// unrecognised authorization_code) comes back as
+// `{status:false, message, meta, type, code}` with NO `data` key at all.
+// Every caller must handle that shape, not just a present-but-failed data.
+export async function paystackChargeAuthorization(params: {
+  email: string;
+  amount: number; // smallest unit
+  currency: string;
+  authorization_code: string;
+  reference: string;
+  metadata?: Record<string, unknown>;
+}): Promise<{
+  status: boolean;
+  message: string;
+  data?: {
+    status: string;
+    reference: string;
+    amount: number;
+    currency: string;
+    gateway_response?: string;
+    paid_at?: string | null;
+  };
+}> {
+  if (!SECRET) {
+    return { status: false, message: "PAYSTACK_SECRET_KEY not configured", data: { status: "failed", reference: params.reference, amount: params.amount, currency: params.currency } };
+  }
+  const res = await fetch(`${PAYSTACK_BASE}/transaction/charge_authorization`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(params),
+  });
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { status: false, message: `Paystack returned unexpected response (HTTP ${res.status})`, data: { status: "failed", reference: params.reference, amount: params.amount, currency: params.currency } };
+  }
+}

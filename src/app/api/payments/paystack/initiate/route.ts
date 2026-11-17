@@ -19,8 +19,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { courseId } = await req.json();
+  const { courseId, numberOfInstalments: rawInstalments } = await req.json();
   if (!courseId) return NextResponse.json({ error: "courseId required" }, { status: 400 });
+
+  // 1 = pay in full (the default, unchanged path below). 2-4 are the only
+  // supported splits — anything else is rejected rather than silently
+  // clamped, since a client sending e.g. 12 almost certainly has a bug.
+  const numberOfInstalments = rawInstalments ? Number(rawInstalments) : 1;
+  if (![1, 2, 3, 4].includes(numberOfInstalments)) {
+    return NextResponse.json({ error: "numberOfInstalments must be 1, 2, 3, or 4" }, { status: 400 });
+  }
 
   const course = await db.course.findFirst({
     where: { id: courseId, status: "PUBLISHED" },
@@ -83,17 +91,32 @@ export async function POST(req: NextRequest) {
   // Generate a unique reference
   const reference = `CLMEP-${session.user.id.slice(0, 8)}-${courseId.slice(0, 8)}-${Date.now()}`;
 
+  // The Purchase row's own `amount` is only ever what's charged AT CHECKOUT —
+  // for an instalment plan that's the first instalment, not the full price.
+  // The last instalment absorbs the rounding remainder so the sum always
+  // equals course.price exactly (see the matching split in the webhook).
+  const firstInstalmentAmount = numberOfInstalments > 1
+    ? Math.round((course.price / numberOfInstalments) * 100) / 100
+    : course.price;
+
   // Create pending purchase record
   const purchase = await db.purchase.create({
     data: {
       userId: session.user.id,
       courseId,
       paystackReference: reference,
-      amount: course.price,
+      amount: firstInstalmentAmount,
       currency: course.currency || "NGN",
       status: "PENDING",
-      description: `Enrolment: ${course.title}`,
-      metadata: JSON.stringify({ courseId, userId: session.user.id }),
+      isInstalment: numberOfInstalments > 1,
+      description: numberOfInstalments > 1
+        ? `Enrolment: ${course.title} (instalment 1 of ${numberOfInstalments})`
+        : `Enrolment: ${course.title}`,
+      metadata: JSON.stringify({
+        courseId,
+        userId: session.user.id,
+        ...(numberOfInstalments > 1 ? { numberOfInstalments, totalAmount: course.price } : {}),
+      }),
     },
   });
 
@@ -105,7 +128,7 @@ export async function POST(req: NextRequest) {
 
   const result = await paystackInitialize({
     email: session.user.email!,
-    amount: toSmallestUnit(course.price, course.currency || "NGN"),
+    amount: toSmallestUnit(firstInstalmentAmount, course.currency || "NGN"),
     currency: course.currency || "NGN",
     reference,
     callback_url: `${appUrl}/payments/callback?reference=${reference}&courseId=${courseId}`,
@@ -135,15 +158,18 @@ export async function POST(req: NextRequest) {
     metadata: {
       reference,
       courseId,
-      amount: course.price,
+      amount: firstInstalmentAmount,
       currency: course.currency || "NGN",
+      numberOfInstalments,
     },
   }).catch(() => {});
 
   return NextResponse.json({
     authorizationUrl: result.data.authorization_url,
     reference,
-    amount: course.price,
+    amount: firstInstalmentAmount,
+    totalAmount: course.price,
+    numberOfInstalments,
     currency: course.currency || "NGN",
   });
 }
