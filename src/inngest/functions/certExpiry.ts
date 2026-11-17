@@ -25,8 +25,9 @@ import { inngest } from "@/inngest/client";
 import { db } from "@/lib/db";
 import { sendCertificateExpiryWarningEmail } from "@/lib/email";
 import { addDays, startOfDay, endOfDay } from "date-fns";
+import { RENEWAL_WARNINGS_DAYS } from "@/lib/constants";
 
-const WARNING_DAYS = [180, 90, 30] as const;
+const WARNING_DAYS = RENEWAL_WARNINGS_DAYS;
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
 
