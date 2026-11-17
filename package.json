@@ -33,7 +33,7 @@
     "@prisma/client": "^7.7.0",
     "@react-pdf/renderer": "^4.4.1",
     "@sentry/nextjs": "^10.48.0",
-    "@signpdf/placeholder-pdf-lib": "^3.3.0",
+    "@signpdf/placeholder-pdf-lib": "^4.0.0",
     "@signpdf/signer-p12": "^3.3.0",
     "@signpdf/signpdf": "^3.3.0",
     "@stripe/stripe-js": "^9.4.0",
