@@ -242,6 +242,12 @@ export default function LoginForm() {
         <p className="text-center text-xs text-slate-400 mt-3">
           Social login requires additional configuration. Contact your administrator to enable it.
         </p>
+        <a
+          href="/login/sso"
+          className="mt-3 flex items-center justify-center gap-1.5 text-sm text-primary font-medium hover:text-primary/80"
+        >
+          <Building2 className="w-4 h-4" /> Sign in with your organisation
+        </a>
       </div>
 
       {/* Register link */}

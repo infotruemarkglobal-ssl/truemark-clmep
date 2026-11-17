@@ -10,6 +10,7 @@ import { z } from "zod";
 import { ACCOUNT_STATUS, MFA_REQUIRED_ROLES, SECURITY } from "@/lib/constants";
 import type { UserRole } from "@/lib/constants";
 import { serializePermissions } from "@/lib/permissions";
+import { auditLog } from "@/lib/audit";
 
 const loginSchema = z.object({
   // Registration and every other email-lookup route in this codebase already
@@ -64,29 +65,25 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             },
           });
           // ISO 27001 A.8.15 — log failed credential attempt
-          await db.auditLog.create({
-            data: {
-              userId: user.id,
-              action: "USER_LOGIN_FAILED",
-              entityType: "User",
-              entityId: user.id,
-              metadata: JSON.stringify({ method: "credentials", failedCount: newCount }),
-            },
-          }).catch(() => {});
+          await auditLog({
+            userId: user.id,
+            action: "USER_LOGIN_FAILED",
+            entityType: "User",
+            entityId: user.id,
+            metadata: { method: "credentials", failedCount: newCount },
+          });
           // ISO 27001 A.8.15 — log account lockout as a separate security event
           if (willLock) {
-            await db.auditLog.create({
-              data: {
-                userId: user.id,
-                action: "ACCOUNT_LOCKED",
-                entityType: "User",
-                entityId: user.id,
-                metadata: JSON.stringify({
-                  reason: "MAX_LOGIN_ATTEMPTS_EXCEEDED",
-                  lockedUntil: new Date(Date.now() + SECURITY.LOCKOUT_MINS * 60 * 1000).toISOString(),
-                }),
+            await auditLog({
+              userId: user.id,
+              action: "ACCOUNT_LOCKED",
+              entityType: "User",
+              entityId: user.id,
+              metadata: {
+                reason: "MAX_LOGIN_ATTEMPTS_EXCEEDED",
+                lockedUntil: new Date(Date.now() + SECURITY.LOCKOUT_MINS * 60 * 1000).toISOString(),
               },
-            }).catch(() => {});
+            });
           }
           return null;
         }
@@ -97,15 +94,13 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         });
 
         // Audit log is best-effort — a write failure must never block a valid login.
-        await db.auditLog.create({
-          data: {
-            userId: user.id,
-            action: "USER_LOGIN",
-            entityType: "User",
-            entityId: user.id,
-            metadata: JSON.stringify({ method: "credentials" }),
-          },
-        }).catch(() => {});
+        await auditLog({
+          userId: user.id,
+          action: "USER_LOGIN",
+          entityType: "User",
+          entityId: user.id,
+          metadata: { method: "credentials" },
+        });
 
         return {
           id: user.id,
@@ -128,6 +123,50 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
       allowDangerousEmailAccountLinking: true,
       clientId: process.env.AUTH_MICROSOFT_ENTRA_ID ?? "",
       clientSecret: process.env.AUTH_MICROSOFT_ENTRA_SECRET ?? "",
+    }),
+    // Enterprise SSO bridge — NOT a public sign-in method. The real identity
+    // check already happened against the org's own IdP in
+    // src/app/api/auth/sso/callback/route.ts; this provider only redeems the
+    // single-use ticket that callback minted. A direct POST to this
+    // provider's callback URL with a guessed/stale token fails because the
+    // ticket lookup requires an unexpired, not-yet-used row created by a
+    // real completed OIDC exchange.
+    Credentials({
+      id: "org-sso",
+      name: "Organisation SSO",
+      credentials: { ticket: { type: "text" } },
+      async authorize(credentials) {
+        const ticketToken = typeof credentials?.ticket === "string" ? credentials.ticket : null;
+        if (!ticketToken) return null;
+
+        const ticket = await db.ssoLoginTicket.findUnique({ where: { token: ticketToken } });
+        if (!ticket || ticket.usedAt || ticket.expiresAt < new Date()) return null;
+
+        // Claim it immediately — a second redemption attempt (double
+        // submission, replay) must never succeed even if this one does.
+        const claim = await db.ssoLoginTicket.updateMany({
+          where: { id: ticket.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+        if (claim.count !== 1) return null;
+
+        const user = await db.user.findUnique({ where: { id: ticket.userId } });
+        if (!user) return null;
+        if (user.status === ACCOUNT_STATUS.SUSPENDED || user.status === ACCOUNT_STATUS.PENDING_VERIFICATION) return null;
+
+        await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: `${user.firstName} ${user.lastName}`,
+          image: user.photoUrl,
+          role: user.role as UserRole,
+          mfaEnabled: user.mfaEnabled,
+          mfaVerified: false,
+          mustChangePassword: user.mustChangePassword,
+        };
+      },
     }),
   ],
   callbacks: {
@@ -239,27 +278,23 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
     // ISO 27001 A.8.15 — log successful OAuth sign-in (credentials are logged inside authorize())
     async signIn({ user, account }) {
       if (account?.provider && account.provider !== "credentials" && user.id) {
-        await db.auditLog.create({
-          data: {
-            userId: user.id,
-            action: "USER_LOGIN_OAUTH",
-            entityType: "User",
-            entityId: user.id,
-            metadata: JSON.stringify({ provider: account.provider }),
-          },
-        }).catch(() => {});
+        await auditLog({
+          userId: user.id,
+          action: "USER_LOGIN_OAUTH",
+          entityType: "User",
+          entityId: user.id,
+          metadata: { provider: account.provider },
+        });
       }
     },
     async signOut(message) {
       const token = "token" in message ? message.token : null;
       if (token?.id) {
-        await db.auditLog.create({
-          data: {
-            userId: token.id as string,
-            action: "USER_LOGOUT",
-            entityType: "User",
-            entityId: token.id as string,
-          },
+        await auditLog({
+          userId: token.id as string,
+          action: "USER_LOGOUT",
+          entityType: "User",
+          entityId: token.id as string,
         });
       }
     },
