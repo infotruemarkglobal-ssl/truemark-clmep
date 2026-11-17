@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
+import { rateLimit } from "@/lib/rate-limit";
 
 const schema = z.object({
   proctoringSessionId: z.string(),
@@ -14,6 +15,14 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Real cadence is 1/30s per candidate — this is generous headroom for
+  // jitter/retries without opening the door to a scripted flood. Discovered
+  // unprotected during the Tier 5 exam-day load-testing exercise.
+  const rl = await rateLimit(session.user.id, "proctoring-heartbeat", { limit: 4, windowMs: 30_000 });
+  if (!rl.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(rl.retryAfterSecs) } });
+  }
 
   const body = schema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: body.error.flatten() }, { status: 400 });

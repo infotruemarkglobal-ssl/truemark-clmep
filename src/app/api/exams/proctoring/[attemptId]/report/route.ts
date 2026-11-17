@@ -24,6 +24,8 @@ export async function GET(
     return NextResponse.json({ hasSession: false });
   }
 
+  const attempt = await db.examAttempt.findUnique({ where: { id: attemptId }, select: { status: true } });
+
   const sessionStart = procSession.startedAt;
 
   const incidents = procSession.incidents.map((inc) => ({
@@ -50,6 +52,7 @@ export async function GET(
 
   return NextResponse.json({
     hasSession: true,
+    attemptStatus: attempt?.status ?? null,
     session: {
       id: procSession.id,
       status: procSession.status,

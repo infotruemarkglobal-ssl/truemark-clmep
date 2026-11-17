@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   ChevronDown, Shield, TabletSmartphone, Monitor, MessageCircle,
-  UserX, Users, Minimize, XCircle, Printer, Loader2,
+  UserX, Users, Minimize, XCircle, Printer, Loader2, CheckCircle2, RotateCcw,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 // ── Incident metadata ─────────────────────────────────────────────────────────
@@ -66,6 +68,7 @@ type ReportData =
   | { hasSession: false }
   | {
       hasSession: true;
+      attemptStatus: string | null;
       session: SessionSummary;
       incidents: Incident[];
       counts: Record<string, number>;
@@ -122,6 +125,9 @@ export default function ProctoringReportPanel({ attemptId }: { attemptId: string
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ReportData | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [reinstateJustification, setReinstateJustification] = useState("");
+  const [reinstating, setReinstating] = useState(false);
 
   async function load() {
     if (data !== null) return;
@@ -135,6 +141,58 @@ export default function ProctoringReportPanel({ attemptId }: { attemptId: string
       setFetchError(e instanceof Error ? e.message : "Failed to load proctoring data");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // ISO/IEC 17024:2026 human-oversight requirement — a real reviewer marks
+  // an AI/rule-based proctoring signal as reviewed. Fields have existed on
+  // ProctoringIncident since day one; this is the first code path that ever
+  // writes them.
+  async function markReviewed(incidentId: string) {
+    setReviewingId(incidentId);
+    try {
+      const res = await fetch(`/api/exams/proctoring/incident/${incidentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      setData((prev) =>
+        prev && prev.hasSession
+          ? { ...prev, incidents: prev.incidents.map((i) => (i.id === incidentId ? { ...i, reviewed: true } : i)) }
+          : prev,
+      );
+      toast.success("Incident marked reviewed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
+  // Human-oversight override for the automated void — reverses a decision
+  // the AI-signal circuit-breaker made unilaterally, moving the attempt to
+  // UNDER_REVIEW for a Certification Officer to decide the actual remedy.
+  async function reinstate() {
+    if (reinstateJustification.trim().length < 10) {
+      toast.error("Explain the reinstatement in at least 10 characters");
+      return;
+    }
+    setReinstating(true);
+    try {
+      const res = await fetch(`/api/manage/exams/attempts/${attemptId}/reinstate`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ justification: reinstateJustification }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      setData((prev) => (prev && prev.hasSession ? { ...prev, attemptStatus: "UNDER_REVIEW" } : prev));
+      toast.success("Attempt reinstated for review");
+      setReinstateJustification("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setReinstating(false);
     }
   }
 
@@ -213,6 +271,45 @@ export default function ProctoringReportPanel({ attemptId }: { attemptId: string
           {/* Report */}
           {data?.hasSession && (
             <>
+              {/* Human-oversight override — the AI/rule-based auto-void is a
+                  real-time circuit-breaker, not a final adjudication. */}
+              {data.attemptStatus === "VOIDED" && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <XCircle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-700">
+                        This attempt was automatically voided by the proctoring system
+                      </p>
+                      <p className="text-xs text-red-600 mt-0.5">
+                        ISO/IEC 17024:2026 requires human oversight of AI-assisted assessment decisions. Review the
+                        violations below, then reinstate for a Certification Officer to decide the remedy (re-sit or
+                        manual re-grade) if the void was not warranted.
+                      </p>
+                    </div>
+                  </div>
+                  <Textarea
+                    placeholder="Justification for reinstating this attempt (required)…"
+                    rows={2}
+                    value={reinstateJustification}
+                    onChange={(e) => setReinstateJustification(e.target.value)}
+                    className="bg-white"
+                  />
+                  <Button size="sm" variant="outline" className="gap-2 text-red-700 border-red-300 hover:bg-red-100" disabled={reinstating} onClick={reinstate}>
+                    {reinstating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    Reinstate for review
+                  </Button>
+                </div>
+              )}
+              {data.attemptStatus === "UNDER_REVIEW" && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4 text-amber-600 shrink-0" />
+                  <p className="text-sm font-medium text-amber-700">
+                    Reinstated for human review — pending a Certification Officer&apos;s decision on the remedy.
+                  </p>
+                </div>
+              )}
+
               {/* Session summary grid */}
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -333,6 +430,20 @@ export default function ProctoringReportPanel({ attemptId }: { attemptId: string
                                 <Badge className={cn("text-[9px] border-0 px-1.5 py-0", sev.color)}>
                                   {sev.label}
                                 </Badge>
+                                {inc.reviewed ? (
+                                  <Badge className="text-[9px] border-0 px-1.5 py-0 bg-emerald-100 text-emerald-700 gap-0.5">
+                                    <CheckCircle2 className="w-2.5 h-2.5" /> Reviewed
+                                  </Badge>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => markReviewed(inc.id)}
+                                    disabled={reviewingId === inc.id}
+                                    className="text-[9px] font-medium text-indigo-600 hover:text-indigo-800 underline decoration-dotted disabled:opacity-50"
+                                  >
+                                    {reviewingId === inc.id ? "Marking…" : "Mark reviewed"}
+                                  </button>
+                                )}
                               </div>
                               {inc.description && (
                                 <p className="text-xs text-slate-500 mt-0.5">{inc.description}</p>
