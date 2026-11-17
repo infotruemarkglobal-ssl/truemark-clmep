@@ -140,7 +140,11 @@ export const breachDpaReminder = inngest.createFunction(
       );
 
       await auditLog({
-        userId: "system",
+        // AuditLog.userId has a real FK to User — "system" is not a real
+        // user id and silently failed this write (auditLog() is best-effort
+        // and swallows the error). null is the schema-supported way to
+        // record a system-initiated event.
+        userId: null,
         action: "BREACH_DPA_REMINDER_SENT",
         entityType: "BreachIncident",
         entityId: breachId,

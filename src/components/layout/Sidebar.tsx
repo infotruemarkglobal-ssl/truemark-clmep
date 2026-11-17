@@ -91,6 +91,7 @@ const NAV_SECTIONS: NavSection[] = [
     heading: "Compliance & Audit",
     items: [
       { label: "ISO 17024 Status",  href: "/compliance",      icon: ShieldCheck,    requiredPermission: "compliance:read" },
+      { label: "Surveillance Reviews", href: "/manage/surveillance", icon: Eye,     requiredPermission: "surveillance:read" },
       { label: "Audit Programme",   href: "/audit-programme", icon: ClipboardCheck, requiredPermission: "auditProgramme:read" },
       { label: "Audit Log",         href: "/audit",           icon: ClipboardList,  requiredPermission: "audit:read" },
       { label: "Reports",           href: "/reports",         icon: BarChart3,      requiredPermission: "reports:read" },

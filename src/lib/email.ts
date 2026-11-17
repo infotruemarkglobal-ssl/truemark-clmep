@@ -606,3 +606,165 @@ export async function sendBreachReminderEmail({
     ].join("\n"),
   });
 }
+
+// ─── Email: Instalment payments (transactional, no unsubscribe) ──────────────
+//
+// These are payment/account notices, not marketing — sent regardless of
+// MARKETING consent, same as the breach reminder above.
+
+export async function sendInstalmentChargeSuccessEmail({
+  to,
+  firstName,
+  courseTitle,
+  instalmentNumber,
+  numberOfInstalments,
+  amount,
+  currency,
+  remainingBalance,
+}: {
+  to: string;
+  firstName: string;
+  courseTitle: string;
+  instalmentNumber: number;
+  numberOfInstalments: number;
+  amount: number;
+  currency: string;
+  remainingBalance: number;
+}) {
+  const isLast = instalmentNumber === numberOfInstalments;
+  const html = wrap(`
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a;">Instalment ${instalmentNumber} of ${numberOfInstalments} received</h2>
+    <p style="margin:0 0 20px;color:#64748b;font-size:14px;">Hi ${firstName}, we've successfully charged the next instalment for your course.</p>
+
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:20px;margin-bottom:20px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:28px;font-weight:800;color:#15803d;">${currency} ${amount.toLocaleString()}</p>
+      <p style="margin:0;font-size:14px;font-weight:600;color:#15803d;">${courseTitle}</p>
+    </div>
+
+    ${isLast
+      ? `<p style="margin:0;font-size:14px;color:#374151;">That was the final instalment — your course is now fully paid.</p>`
+      : `<p style="margin:0;font-size:14px;color:#374151;">Remaining balance: <strong>${currency} ${remainingBalance.toLocaleString()}</strong>, collected automatically over the rest of your instalment plan.</p>`
+    }
+  `);
+
+  await transporter.sendMail({
+    from: `"${APP_NAME}" <${FROM}>`,
+    to,
+    subject: `Instalment ${instalmentNumber}/${numberOfInstalments} received — ${courseTitle}`,
+    html,
+    text: [
+      `Hi ${firstName},`,
+      ``,
+      `Instalment ${instalmentNumber} of ${numberOfInstalments} for "${courseTitle}" was charged successfully: ${currency} ${amount.toLocaleString()}.`,
+      isLast ? `That was the final instalment — your course is now fully paid.` : `Remaining balance: ${currency} ${remainingBalance.toLocaleString()}.`,
+      ``,
+      POSTAL_ADDRESS,
+    ].join("\n"),
+  });
+}
+
+export async function sendInstalmentChargeFailedEmail({
+  to,
+  firstName,
+  courseTitle,
+  instalmentNumber,
+  numberOfInstalments,
+  amount,
+  currency,
+  retryDate,
+  attemptsRemaining,
+}: {
+  to: string;
+  firstName: string;
+  courseTitle: string;
+  instalmentNumber: number;
+  numberOfInstalments: number;
+  amount: number;
+  currency: string;
+  retryDate: Date;
+  attemptsRemaining: number;
+}) {
+  const html = wrap(`
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#d97706;">Instalment payment didn't go through</h2>
+    <p style="margin:0 0 20px;color:#64748b;font-size:14px;">Hi ${firstName}, we tried to charge instalment ${instalmentNumber} of ${numberOfInstalments} for your course and it was declined.</p>
+
+    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:20px;margin-bottom:20px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:28px;font-weight:800;color:#d97706;">${currency} ${amount.toLocaleString()}</p>
+      <p style="margin:0;font-size:14px;font-weight:600;color:#92400e;">${courseTitle}</p>
+    </div>
+
+    <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
+      We'll automatically try again on <strong>${retryDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</strong>
+      (${attemptsRemaining} attempt${attemptsRemaining === 1 ? "" : "s"} remaining after this). To avoid a lapse, make sure the card on file has
+      sufficient funds, or contact us to pay this instalment manually.
+    </p>
+  `);
+
+  await transporter.sendMail({
+    from: `"${APP_NAME}" <${FROM}>`,
+    to,
+    subject: `Instalment ${instalmentNumber}/${numberOfInstalments} payment failed — ${courseTitle}`,
+    html,
+    text: [
+      `Hi ${firstName},`,
+      ``,
+      `Instalment ${instalmentNumber} of ${numberOfInstalments} for "${courseTitle}" (${currency} ${amount.toLocaleString()}) was declined.`,
+      `We'll retry on ${retryDate.toLocaleDateString()} (${attemptsRemaining} attempt(s) remaining after this).`,
+      ``,
+      POSTAL_ADDRESS,
+    ].join("\n"),
+  });
+}
+
+export async function sendInstalmentPlanDefaultedEmail({
+  to,
+  firstName,
+  courseTitle,
+  instalmentNumber,
+  numberOfInstalments,
+  amount,
+  currency,
+}: {
+  to: string;
+  firstName: string;
+  courseTitle: string;
+  instalmentNumber: number;
+  numberOfInstalments: number;
+  amount: number;
+  currency: string;
+}) {
+  const html = wrap(`
+    <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#dc2626;">We couldn't collect instalment ${instalmentNumber} of ${numberOfInstalments}</h2>
+    <p style="margin:0 0 20px;color:#64748b;font-size:14px;">Hi ${firstName}, after several attempts we were unable to charge your card for the next instalment on your course.</p>
+
+    <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:20px;margin-bottom:20px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:28px;font-weight:800;color:#dc2626;">${currency} ${amount.toLocaleString()}</p>
+      <p style="margin:0;font-size:14px;font-weight:600;color:#991b1b;">${courseTitle}</p>
+    </div>
+
+    <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
+      Automatic retries have stopped for this instalment. Please contact us to arrange payment and keep your
+      instalment plan active — your existing course access is not affected while we sort this out.
+    </p>
+
+    <a href="mailto:${process.env.SUPPORT_EMAIL ?? "support@truemarkglobal.com"}"
+       style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;">
+      Contact us →
+    </a>
+  `);
+
+  await transporter.sendMail({
+    from: `"${APP_NAME}" <${FROM}>`,
+    to,
+    subject: `Action needed — instalment ${instalmentNumber}/${numberOfInstalments} could not be collected`,
+    html,
+    text: [
+      `Hi ${firstName},`,
+      ``,
+      `After several attempts, instalment ${instalmentNumber} of ${numberOfInstalments} for "${courseTitle}" (${currency} ${amount.toLocaleString()}) could not be collected.`,
+      `Please contact us to arrange payment. Your existing course access is not affected.`,
+      ``,
+      POSTAL_ADDRESS,
+    ].join("\n"),
+  });
+}

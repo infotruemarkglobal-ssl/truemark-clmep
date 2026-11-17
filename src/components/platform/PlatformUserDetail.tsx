@@ -400,8 +400,9 @@ export default function PlatformUserDetail({
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-600">First Name</label>
+              <label htmlFor="platform-user-first-name" className="text-xs font-medium text-slate-600">First Name</label>
               <input
+                id="platform-user-first-name"
                 type="text"
                 value={editForm.firstName}
                 onChange={(e) => setEditForm((f) => ({ ...f, firstName: e.target.value }))}
@@ -409,8 +410,9 @@ export default function PlatformUserDetail({
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-600">Last Name</label>
+              <label htmlFor="platform-user-last-name" className="text-xs font-medium text-slate-600">Last Name</label>
               <input
+                id="platform-user-last-name"
                 type="text"
                 value={editForm.lastName}
                 onChange={(e) => setEditForm((f) => ({ ...f, lastName: e.target.value }))}
@@ -418,8 +420,9 @@ export default function PlatformUserDetail({
               />
             </div>
             <div className="flex flex-col gap-1 sm:col-span-2">
-              <label className="text-xs font-medium text-slate-600">Email</label>
+              <label htmlFor="platform-user-email" className="text-xs font-medium text-slate-600">Email</label>
               <input
+                id="platform-user-email"
                 type="email"
                 value={editForm.email}
                 onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}

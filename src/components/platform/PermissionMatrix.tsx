@@ -252,8 +252,9 @@ export default function PermissionMatrix({
               onKeyDown={(e) => e.key === "Enter" && handleCreateRole()}
             />
             <div className="flex flex-col gap-0.5">
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide pl-1">Base access level</label>
+              <label htmlFor="new-role-base-access" className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide pl-1">Base access level</label>
               <select
+                id="new-role-base-access"
                 value={newRoleBase}
                 onChange={(e) => setNewRoleBase(e.target.value)}
                 className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
@@ -324,7 +325,12 @@ export default function PermissionMatrix({
                       <>
                         {/* Base role selector for custom roles */}
                         {editingBaseRole === role.id ? (
+                          // User just triggered inline-edit mode via their own
+                          // click; moving focus into the control that
+                          // appeared is the expected response to that action,
+                          // not an unprompted page-load steal.
                           <select
+                            // eslint-disable-next-line jsx-a11y/no-autofocus -- see above
                             autoFocus
                             defaultValue={role.baseRole}
                             onBlur={(e) => handleUpdateBaseRole(role.id, e.target.value)}

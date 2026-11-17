@@ -47,7 +47,7 @@ export async function makeS3Client() {
   });
 }
 
-function getBucket(): string {
+export function getBucket(): string {
   const bucket = process.env.AWS_S3_BUCKET;
   if (!bucket) throw new Error("AWS_S3_BUCKET is not configured");
   return bucket;

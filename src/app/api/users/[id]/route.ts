@@ -3,7 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { USER_ROLES } from "@/lib/constants";
-import { auditLog } from "@/lib/audit";
+import { auditLog, prepareAuditEntry } from "@/lib/audit";
 import { can } from "@/lib/permissions";
 
 // PATCH /api/users/[id]
@@ -92,6 +92,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     where: { userId: id, status: "ACTIVE" },
   });
 
+  const auditEntry = await prepareAuditEntry({
+    userId: session.user.id,
+    action: "USER_WITHDRAWN",
+    entityType: "User",
+    entityId: id,
+    metadata: {
+      certsRevoked: activeCertCount,
+      reason: "ISO 17024 Cl.7.6 — withdrawal triggers automatic cert revocation",
+    },
+  });
   await db.$transaction([
     db.user.update({ where: { id }, data: { status: "INACTIVE" } }),
     db.certificate.updateMany({
@@ -102,18 +112,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         revocationReason: "Account withdrawn — automatic revocation per ISO 17024 Cl.7.6",
       },
     }),
-    db.auditLog.create({
-      data: {
-        userId: session.user.id,
-        action: "USER_WITHDRAWN",
-        entityType: "User",
-        entityId: id,
-        metadata: JSON.stringify({
-          certsRevoked: activeCertCount,
-          reason: "ISO 17024 Cl.7.6 — withdrawal triggers automatic cert revocation",
-        }),
-      },
-    }),
+    db.auditLog.create({ data: auditEntry }),
   ]);
 
   return NextResponse.json({ ok: true });
