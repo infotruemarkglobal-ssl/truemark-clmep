@@ -31,12 +31,32 @@ const AUTH_EXEMPT_PREFIXES = [
   // Liveness probe — must be reachable by Vercel health checks and uptime
   // monitors without a session. Contains no sensitive data.
   "/api/health",
+  // Public status page — candidates/staff checking platform health during an
+  // incident should never be blocked by a login wall. Rate-limited below
+  // (shared "status-page" bucket) since it's a real DB round-trip and is
+  // exactly the kind of route that gets hammered during exam-day anxiety.
+  // NOTE: /api/status-incidents is deliberately NOT listed here — its GET
+  // already reaches an unauthenticated caller fine (API routes fall through
+  // to their own 401 handling below, unlike pages), and exempting the whole
+  // prefix would also skip the MFA-required gate for its POST/PATCH admin
+  // actions, which must stay MFA-gated like every other privileged mutation.
+  "/status",
   // Password-change API is called during the force-change-password flow,
   // before a full session is established.
   "/api/profile/change-password",
   // Next.js internals
   "/_next",
   "/favicon",
+  // PWA shell — the service worker script, the manifest it's registered
+  // from, and its offline fallback page must all be reachable regardless of
+  // auth state. The service worker can install (and cache "/offline") before
+  // a visitor ever logs in, and a browser refuses to install a worker script
+  // served via redirect — routing any of these through the /login redirect
+  // breaks installability and can poison the offline-fallback cache entry
+  // with a login-page response instead of the real offline page.
+  "/manifest.json",
+  "/sw.js",
+  "/offline",
 ];
 
 // API routes that MFA-required roles may call BEFORE completing MFA
@@ -162,6 +182,23 @@ export async function proxy(req: NextRequest) {
       return NextResponse.json(
         { error: "Too many login attempts. Please wait before trying again." },
         { status: 429, headers: { "Retry-After": String(loginRl.retryAfterSecs) } },
+      );
+    }
+  }
+
+  // ── Status/health rate limit ──────────────────────────────────────────────
+  // /status and /api/health are both public and both do a real DB round-trip
+  // on every hit. "Exam days concentrate load" applies to anxious status
+  // checks too — a shared bucket keeps either one from becoming a DB-ping
+  // amplifier during an actual incident, when this is exactly the page
+  // people refresh repeatedly.
+  if (pathname === "/status" || pathname === "/api/health" || pathname === "/api/status-incidents") {
+    const ip = getClientIp(req);
+    const statusRl = await rateLimit(ip, "status-page", { limit: 30, windowMs: 60_000 });
+    if (!statusRl.success) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait before checking again." },
+        { status: 429, headers: { "Retry-After": String(statusRl.retryAfterSecs) } },
       );
     }
   }
