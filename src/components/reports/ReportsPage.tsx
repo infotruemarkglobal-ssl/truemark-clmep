@@ -1,7 +1,8 @@
 "use client";
 
-import { Award, Users, BookOpen, FileText, TrendingUp, BarChart3, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { Award, Users, BookOpen, FileText, TrendingUp, BarChart3, CheckCircle2, Clock, AlertCircle, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
@@ -78,9 +79,18 @@ export default function ReportsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Reports &amp; Analytics</h1>
-        <p className="text-slate-500 text-sm mt-1">Platform-wide performance overview</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Reports &amp; Analytics</h1>
+          <p className="text-slate-500 text-sm mt-1">Platform-wide performance overview</p>
+        </div>
+        <a
+          href="/api/reports/export"
+          title="Download exactly what's shown below as a CSV file"
+          className={cn(buttonVariants({ variant: "outline" }), "gap-2")}
+        >
+          <Download className="w-4 h-4" /> Export CSV
+        </a>
       </div>
 
       {/* Key Metrics */}
